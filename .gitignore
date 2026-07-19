@@ -1,0 +1,10 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+*.sqlite3
+reader.db
+web/node_modules/
+web/.next/
+web/out/
+.idea/
