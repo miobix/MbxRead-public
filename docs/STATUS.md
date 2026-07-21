@@ -188,6 +188,87 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   **Do that whenever ready to actually rely on this day-to-day**; until then,
   treat the ops setup as written-but-unexercised.
 
+## Cycle 2 — content sourcing
+
+Epics 0–8 built the reading *machine*; its value now hinges on **content**: sourcing
+Korean texts the user cares about and knowing a text's difficulty *before* committing to
+it. The vision, tradeoffs, and open questions live in `docs/NEXT_STAGE_OPTIONS.md` — read
+it before starting Epic 10. Guiding caution from that doc: **build the interest list
+before the automation**, or the queue fills with lukewarm content and the app becomes a
+chore. Automation (RSS/YouTube feeds + a daily fetch job) is deliberately deferred to a
+later epic until the real sources are known.
+
+- [~] **Epic 9 — Difficulty scorer** — code-complete and green (83/83) but **uncommitted
+  and undocumented**; needs closeout (docs + `web/` lint/build + commit) before it counts
+  as done. Difficulty = the relationship between a text and what the user already knows,
+  not a fixed property of the text. Built: `server/difficulty.py` (`score_text` →
+  coverage %, new-lemmas, new-per-page; `known_lemmas` treats every saved term as known
+  regardless of status — `learning`/`known` are met, `ignored` won't be studied);
+  `server/routes/difficulty.py` (`POST /api/score` for ad-hoc candidate text);
+  `books.py` `POST /api/books/{id}/score` (caches `coverage`/`new_per_page`/`scored_at`
+  onto the book row); `db.py` idempotent `_apply_migrations` adding those three columns
+  so an existing `reader.db` upgrades in place; frontend "Check difficulty" in the
+  add-book modal, per-book score line + Score/re-score button, and an "Easiest unread"
+  sort on the home page. **Closeout TODO:** run `npm run build`/`npm run lint`; add a
+  SPEC §10 Epic 9 entry + a DECISIONS.md note on the additive-migration approach and the
+  "all statuses count as known" call; write this STATUS entry up as `[x]`; commit
+  `Epic 9: difficulty scorer`.
+- [ ] **Epic 10 — Content catalog** (non-code; do this before 11/12). Answer
+  `NEXT_STAGE_OPTIONS.md`'s open questions (Korean reading level; register to automate
+  first; specific news sites / communities / YouTubers / fitness sources; which English
+  reads want a Korean equivalent). Produce the source catalog — one row per source:
+  name/URL · type (RSS | YouTube | needs-scraper) · feed available? · topic tag · rough
+  difficulty tier — ranked into "definitely automate" vs. "needs a custom scraper, do
+  later". Also catalog learner-friendly ramp sources, since the user's stated interests
+  (news, games, guides, gym) skew native-adult/fast-register and may sit below the
+  comfortable coverage zone early. **Two data-sourcing sub-tasks the user explicitly
+  wants:** (a) list **TOPIK past-exam reading passages** as a learner-ramp *content*
+  source (published, level-appropriate) alongside the harder native sources; (b) identify
+  a graded **TOPIK/frequency word-list file** to feed Epic 13's cold-start scorer signal
+  (a reference vocab list, not reading material). **Acceptance:** a committed catalog doc
+  the later automation epic can iterate over.
+- [ ] **Epic 11 — DB expansion + library UX.** Schema for a managed content queue.
+  `books`: `topic`/`tags` (JSON or comma text — single-user, a join table is overkill,
+  matches the `settings.decks` JSON pattern), `source_url`, `source_ref` (stable id:
+  video id / feed guid, with a **UNIQUE index** so the future daily job never
+  re-imports), `fetched` date, `archived`/`read` flag. New `feeds` table (`id, name,
+  type (rss|youtube|scraper), url_or_channel_id, topic, enabled, difficulty_min,
+  difficulty_max, last_fetched`) — the model a future settings page edits and the daily
+  script iterates (the *table* lands here; the fetch job is a later epic). All via the
+  same idempotent additive-migration path Epic 9 introduced. Library UX: filter/sort the
+  book list by topic + difficulty + read/archived state (extends the existing "Easiest
+  unread" sort). **Acceptance:** existing `reader.db` upgrades in place; can tag a book
+  and filter to it; `source_ref` uniqueness enforced.
+- [ ] **Epic 12 — Import wiring.** Bring the existing CLI importers into the app so
+  content can be pulled in-app instead of by hand. Wire `import_tools/yt_subs.py`
+  (YouTube subs) and `import_tools/pdf_text.py` (PDF → cleaned `.txt`) — currently
+  working standalone scripts — behind API endpoints + add-book UI options, plus an
+  article/URL extractor. Each import sets `source_url`/`source_ref` and dedupes on the
+  Epic 11 unique index. **Acceptance:** paste a YouTube URL / upload a PDF / paste an
+  article URL in-app → a scored book, no duplicate on re-import.
+
+- [ ] **Epic 13 — Cold-start difficulty signal.** Import the graded TOPIK/frequency
+  word list (sourced in Epic 10) into a reference table via the Epic 11 additive-migration
+  pattern; tag lemmas with TOPIK level / frequency rank; extend `score_text` to fall back
+  to that signal when the personal known-set is too thin to be informative. Secondary to
+  personal coverage — it only matters early, while the known-set is small. **Acceptance:**
+  a text of rare/advanced words scores harder than one of common words even with an empty
+  known-set. *(Placement note: value is highest early — could be pulled to right after
+  Epic 10 for earlier payoff, at the cost of delaying import wiring. Left at 13 for now.)*
+- [ ] **Epic 14 — Daily fetch job (capstone).** Windows Task Scheduler script: fetch
+  feeds → clean (Epic 12 importers) → score (Epics 9 + 13) → dedup (`source_ref`) →
+  auto-create a topic-tagged book within a `feeds` difficulty band. Deferred until 10–13
+  exist — it's blocked by its own dependencies (importers, `source_ref` dedup, `feeds`
+  band columns, scorer) and by the doc's "interest list before automation" caution, not
+  by priority. **Acceptance:** a scheduled run auto-imports new items from a `feeds` row
+  within its band, never a duplicate.
+- [ ] **Epic 15 — UI makeover + go-live (final stage).** Fuller per-page UI makeover over
+  the now-complete screen set (library filters, feeds, imports) — done last so screens are
+  polished once. Then execute Epic 8's still-pending cold-start + Tailscale verification
+  and go live day-to-day. **Acceptance:** the makeover the user has wanted since the Epic 8
+  "paper" palette baseline, plus a verified cold-start `start.ps1` run reachable from the
+  phone over Tailscale.
+
 ## Known issues / deviations
 
 - **2026-07-21 — server port changed from 8000 to 8002.** The user's Android app
@@ -203,11 +284,12 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 ## Notes for the next session
 
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- **All 9 planned epics (0-8) are now done.** Lute is retired (Epic 8, see above)
-  and the user said they want to keep developing korean-reader further — so
-  future sessions should expect ad-hoc feature/polish work rather than another
-  item off this original epic list. Check with the user for what's next; there's
-  no more "next epic" to default to.
+- **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
+  A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
+  above (Epics 9-12, with the daily-fetch automation deferred beyond that). The
+  next actionable item is **closing out Epic 9** (the difficulty scorer is
+  code-complete and green but uncommitted/undocumented — see its `[~]` entry for
+  the closeout TODO), then Epic 10 (content catalog).
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,
