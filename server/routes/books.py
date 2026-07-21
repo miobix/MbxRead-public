@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from .. import db as db_module
+from ..difficulty import known_lemmas, score_text
 from ..paging import split_pages
 from ..tokenizer import tokenize
 
@@ -36,6 +37,9 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "current_page": row["current_page"],
         "page_count": page_count,
         "created": row["created"],
+        "coverage": row["coverage"],
+        "new_per_page": row["new_per_page"],
+        "scored_at": row["scored_at"],
     }
 
 
@@ -99,6 +103,24 @@ def delete_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
     _get_book_or_404(conn, book_id)
     conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
     conn.commit()
+
+
+@router.post("/{book_id}/score")
+def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
+    """Compute the book's difficulty against the user's vocab and cache it on the row."""
+    _get_book_or_404(conn, book_id)
+    rows = conn.execute(
+        "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
+    ).fetchall()
+    text = "\n".join(row["content"] for row in rows)
+    result = score_text(text, known_lemmas(conn))
+    conn.execute(
+        "UPDATE books SET coverage = ?, new_per_page = ?, scored_at = CURRENT_TIMESTAMP "
+        "WHERE id = ?",
+        (result["coverage"], result["new_per_page"], book_id),
+    )
+    conn.commit()
+    return _book_dict(conn, book_id)
 
 
 @router.get("/{book_id}/pages/{page_no}")

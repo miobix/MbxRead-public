@@ -5,6 +5,16 @@ export type Book = {
   current_page: number;
   page_count: number;
   created: string;
+  coverage: number | null;
+  new_per_page: number | null;
+  scored_at: string | null;
+};
+
+export type ScoreResult = {
+  coverage: number | null;
+  new_lemmas: number;
+  total_lemmas: number;
+  new_per_page: number;
 };
 
 export type BookDetail = {
@@ -103,6 +113,11 @@ export const api = {
     request<Book>("/books", { method: "POST", body: JSON.stringify(body) }),
 
   getBook: (id: number) => request<BookDetail>(`/books/${id}`),
+
+  scoreText: (text: string) =>
+    request<ScoreResult>("/score", { method: "POST", body: JSON.stringify({ text }) }),
+
+  scoreBook: (id: number) => request<Book>(`/books/${id}/score`, { method: "POST" }),
 
   patchBook: (id: number, body: { current_page?: number; title?: string }) =>
     request<BookDetail>(`/books/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

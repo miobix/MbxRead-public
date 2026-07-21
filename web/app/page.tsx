@@ -2,12 +2,39 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Book } from "@/lib/api";
+import { api, type Book, type ScoreResult } from "@/lib/api";
+
+type Sort = "recent" | "easiest";
+
+// Coverage bands from docs/NEXT_STAGE_OPTIONS.md: ~0.95+ comfortable, 0.90-0.95
+// productive study zone, <0.85 a slog. Colour the % so difficulty reads at a glance.
+function coverageClass(coverage: number): string {
+  if (coverage >= 0.95) return "text-accent";
+  if (coverage < 0.85) return "text-danger";
+  return "text-ink";
+}
+
+function ScoreLine({ book }: { book: Book }) {
+  if (!book.scored_at) return null;
+  return (
+    <span className="text-xs text-muted">
+      {book.coverage !== null && (
+        <span className={coverageClass(book.coverage)}>
+          {Math.round(book.coverage * 100)}% known
+        </span>
+      )}
+      {book.coverage !== null && book.new_per_page !== null && " · "}
+      {book.new_per_page !== null && `${book.new_per_page} new/pg`}
+    </span>
+  );
+}
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [sort, setSort] = useState<Sort>("recent");
+  const [scoring, setScoring] = useState<number | null>(null);
 
   const refresh = () => {
     api
@@ -17,6 +44,33 @@ export default function HomePage() {
   };
 
   useEffect(refresh, []);
+
+  const score = async (id: number) => {
+    setScoring(id);
+    try {
+      const updated = await api.scoreBook(id);
+      setBooks((prev) => prev?.map((b) => (b.id === id ? updated : b)) ?? prev);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to score book.");
+    } finally {
+      setScoring(null);
+    }
+  };
+
+  // "Easiest unread" sorts by new-words-per-page ascending; unscored books sink
+  // to the bottom (unknown difficulty). "recent" keeps the API's id order reversed.
+  const displayed = books ? [...books] : books;
+  if (displayed) {
+    if (sort === "easiest") {
+      displayed.sort((a, b) => {
+        const av = a.new_per_page ?? Infinity;
+        const bv = b.new_per_page ?? Infinity;
+        return av - bv;
+      });
+    } else {
+      displayed.sort((a, b) => b.id - a.id);
+    }
+  }
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
@@ -46,18 +100,54 @@ export default function HomePage() {
         <p className="text-muted">No books yet. Add one to get started.</p>
       )}
 
+      {books && books.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 text-sm">
+          <span className="text-muted">Sort:</span>
+          <button
+            onClick={() => setSort("recent")}
+            className={sort === "recent" ? "text-ink font-medium" : "text-muted hover:text-ink"}
+          >
+            Recent
+          </button>
+          <span className="text-border">·</span>
+          <button
+            onClick={() => setSort("easiest")}
+            className={sort === "easiest" ? "text-ink font-medium" : "text-muted hover:text-ink"}
+          >
+            Easiest unread
+          </button>
+        </div>
+      )}
+
       <ul className="flex flex-col gap-3">
-        {books?.map((book) => (
-          <li key={book.id}>
+        {displayed?.map((book) => (
+          <li
+            key={book.id}
+            className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+          >
             <Link
               href={`/read/?id=${book.id}`}
-              className="block rounded-xl border border-border bg-surface p-4 shadow-sm hover:border-accent transition-colors"
+              className="block hover:text-accent transition-colors"
             >
               <div className="font-medium">{book.title}</div>
               <div className="text-sm text-muted">
                 {book.current_page} / {book.page_count} pages
               </div>
             </Link>
+            <div className="mt-2 flex items-center gap-3">
+              <ScoreLine book={book} />
+              <button
+                onClick={() => score(book.id)}
+                disabled={scoring === book.id}
+                className="text-xs text-muted hover:text-ink transition-colors disabled:opacity-50"
+              >
+                {scoring === book.id
+                  ? "Scoring…"
+                  : book.scored_at
+                    ? "re-score"
+                    : "Score difficulty"}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -87,12 +177,28 @@ function AddBookModal({
   const [source, setSource] = useState<"paste" | "txt">("paste");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ScoreResult | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const handleFile = async (file: File) => {
     const content = await file.text();
     setText(content);
     setSource("txt");
+    setPreview(null);
     if (!title.trim()) setTitle(file.name.replace(/\.txt$/i, ""));
+  };
+
+  const checkDifficulty = async () => {
+    if (!text.trim()) return;
+    setChecking(true);
+    setError(null);
+    try {
+      setPreview(await api.scoreText(text));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to score text.");
+    } finally {
+      setChecking(false);
+    }
   };
 
   const submit = async () => {
@@ -134,6 +240,7 @@ function AddBookModal({
           onChange={(e) => {
             setText(e.target.value);
             setSource("paste");
+            setPreview(null);
           }}
           placeholder="Paste Korean text here…"
           rows={8}
@@ -152,6 +259,27 @@ function AddBookModal({
             className="text-sm"
           />
         </label>
+
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            onClick={checkDifficulty}
+            disabled={checking || !text.trim()}
+            className="text-muted hover:text-ink transition-colors disabled:opacity-50"
+          >
+            {checking ? "Checking…" : "Check difficulty"}
+          </button>
+          {preview && (
+            <span className="text-muted">
+              {preview.coverage !== null && (
+                <span className={coverageClass(preview.coverage)}>
+                  {Math.round(preview.coverage * 100)}% known
+                </span>
+              )}
+              {preview.coverage !== null && " · "}
+              {preview.new_per_page} new/pg
+            </span>
+          )}
+        </div>
 
         {error && <p className="text-danger text-sm">{error}</p>}
 

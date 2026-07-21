@@ -236,3 +236,27 @@ Tailwind's built-in `font-serif` utility (zero new fonts, no network dependency)
 for a little "reading app" character; body/UI text stays on the default sans stack.
 **User has confirmed the palette but still wants a fuller per-page UI makeover
 later** — this redesign is a baseline, not a final pass.
+
+## 2026-07-21 — Epic 9: difficulty counts every saved term as "known", all statuses
+`difficulty.known_lemmas()` is `SELECT lemma FROM terms` with no status filter — a
+`learning`, `known`, or `ignored` term all count toward coverage. Rationale: difficulty
+is "how much of this text is *not new to me*." `learning`/`known` are words the user has
+already met (whether or not mastered), and `ignored` words won't be studied, so counting
+any of them as new would overstate difficulty. The alternative (only `known` counts)
+would make coverage track *mastery* rather than *familiarity*, which is the wrong signal
+for "should I pick up this text" — a text of words you're mid-learning isn't as hard as
+one of words you've never seen. `new_per_page` (unknown-unique / reader-page-count) is
+the headline cold-start metric since it's meaningful even from an empty known-set;
+`coverage` is `None` (not 0) when a text has no resolvable lemmas, to keep "undefined"
+distinct from "0% known".
+
+## 2026-07-21 — Epic 9: additive schema changes via idempotent ALTER, not a rewrite
+The three new `books` columns (`coverage`, `new_per_page`, `scored_at`) are applied by
+`db._apply_migrations()`, called from `init_db` right after `executescript(SCHEMA)`.
+SQLite has no `ADD COLUMN IF NOT EXISTS`, so it guards each `ALTER TABLE ... ADD COLUMN`
+on a `PRAGMA table_info()` check. This upgrades an existing `reader.db` in place (the
+user has real data) without a destructive recreate and without a migration framework
+(overkill for a single-user app). `_ADDED_COLUMNS` is a plain `{table: {col: decl}}` map
+so future additive columns (Epic 11's `topic`/`source_ref`/etc.) extend the same path.
+Idempotent by construction — re-running `init_db` never double-adds (covered by
+`test_migration_is_idempotent`).

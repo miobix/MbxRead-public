@@ -198,21 +198,23 @@ before the automation**, or the queue fills with lukewarm content and the app be
 chore. Automation (RSS/YouTube feeds + a daily fetch job) is deliberately deferred to a
 later epic until the real sources are known.
 
-- [~] **Epic 9 — Difficulty scorer** — code-complete and green (83/83) but **uncommitted
-  and undocumented**; needs closeout (docs + `web/` lint/build + commit) before it counts
-  as done. Difficulty = the relationship between a text and what the user already knows,
-  not a fixed property of the text. Built: `server/difficulty.py` (`score_text` →
-  coverage %, new-lemmas, new-per-page; `known_lemmas` treats every saved term as known
-  regardless of status — `learning`/`known` are met, `ignored` won't be studied);
+- [x] **Epic 9 — Difficulty scorer** — done (2026-07-21). Difficulty = the relationship
+  between a text and what the user already knows, not a fixed property of the text.
+  `server/difficulty.py` (`score_text` → coverage %, new-lemmas, total-lemmas,
+  new-per-page; `known_lemmas` treats every saved term as known regardless of status —
+  `learning`/`known` are met, `ignored` won't be studied; see DECISIONS.md);
   `server/routes/difficulty.py` (`POST /api/score` for ad-hoc candidate text);
   `books.py` `POST /api/books/{id}/score` (caches `coverage`/`new_per_page`/`scored_at`
   onto the book row); `db.py` idempotent `_apply_migrations` adding those three columns
-  so an existing `reader.db` upgrades in place; frontend "Check difficulty" in the
-  add-book modal, per-book score line + Score/re-score button, and an "Easiest unread"
-  sort on the home page. **Closeout TODO:** run `npm run build`/`npm run lint`; add a
-  SPEC §10 Epic 9 entry + a DECISIONS.md note on the additive-migration approach and the
-  "all statuses count as known" call; write this STATUS entry up as `[x]`; commit
-  `Epic 9: difficulty scorer`.
+  so an existing `reader.db` upgrades in place (the additive-migration path Epics 11+
+  reuse); frontend "Check difficulty" in the add-book modal, per-book score line +
+  Score/re-score button, and an "Easiest unread" sort on the home page. 83/83 tests
+  green (11 new in `test_difficulty.py`); `npm run build`/`npm run lint` clean. SPEC §10
+  Epic 9 entry + two DECISIONS.md notes (additive migration; "all statuses count as
+  known") added. **Not verified in a browser** (no browser tooling in this environment):
+  the score line / "Check difficulty" / "Easiest unread" sort were verified at the
+  data-contract level and via the passing suite, not watched on a phone — do a quick real
+  pass when convenient.
 - [ ] **Epic 10 — Content catalog** (non-code; do this before 11/12). Answer
   `NEXT_STAGE_OPTIONS.md`'s open questions (Korean reading level; register to automate
   first; specific news sites / communities / YouTubers / fitness sources; which English
@@ -287,9 +289,9 @@ later epic until the real sources are known.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
   above (Epics 9-12, with the daily-fetch automation deferred beyond that). The
-  next actionable item is **closing out Epic 9** (the difficulty scorer is
-  code-complete and green but uncommitted/undocumented — see its `[~]` entry for
-  the closeout TODO), then Epic 10 (content catalog).
+  next actionable item is **Epic 10 — content catalog** (non-code: answer the
+  open questions in `docs/NEXT_STAGE_OPTIONS.md` and produce the ranked source
+  catalog). Epic 9 (difficulty scorer) shipped 2026-07-21.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

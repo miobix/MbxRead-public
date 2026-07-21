@@ -124,7 +124,8 @@ def test_list_books_shape(client):
     assert len(books) == 2
     for book in books:
         assert set(book.keys()) == {
-            "id", "title", "source", "current_page", "page_count", "created"
+            "id", "title", "source", "current_page", "page_count", "created",
+            "coverage", "new_per_page", "scored_at",
         }
 
 

@@ -38,6 +38,25 @@ CREATE TABLE IF NOT EXISTS terms (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
+# Additive columns introduced after the initial schema. Applied idempotently by
+# init_db so an existing reader.db upgrades in place (SQLite has no ADD COLUMN IF
+# NOT EXISTS, so we guard on PRAGMA table_info). Epic 9: cached difficulty scores.
+_ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "books": {
+        "coverage": "REAL",
+        "new_per_page": "REAL",
+        "scored_at": "TIMESTAMP",
+    },
+}
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
 
 def get_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -50,6 +69,7 @@ def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
     conn = get_connection(db_path)
     try:
         conn.executescript(SCHEMA)
+        _apply_migrations(conn)
         conn.commit()
     finally:
         conn.close()
