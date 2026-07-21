@@ -161,7 +161,32 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   (lemma/translation/notes/deck/status, including a lemma rename that should
   409 against an existing lemma — confirm the term list updates and Anki
   dirty-flag rules still hold) and delete a term.
-- [ ] Epic 8 — Ops & Lute retirement
+- [x] Epic 8 — Ops & Lute retirement — done (2026-07-21), docs/launcher only, not
+  gone live yet (see below). User confirmed they've fully switched off Lute, so
+  `translate_svc/main.py` (Lute's HTML tooltip page) is deleted; nothing else
+  imported it. `start.ps1` rewritten: rebuilds `web/` only if its source is
+  newer than the last build (plain `LastWriteTime` comparison, no hash
+  tracking), then launches `uvicorn server.main:app --host 0.0.0.0 --port 8002`
+  and opens the browser — `--host 0.0.0.0` (not the implicit loopback) is what
+  makes the Tailscale/phone access actually reachable. `README.md` fully
+  rewritten for korean-reader: daily use, `.env` setup, a pointer to `ANKI.md`,
+  and full Tailscale phone-access steps (install on PC + phone, find the
+  MagicDNS name, the Windows Firewall prompt for `--host 0.0.0.0`, the actual
+  phone URL) — written as full from-scratch install steps since the user
+  hasn't set up Tailscale yet. `%LOCALAPPDATA%\Lute3` (Lute's own data)
+  deliberately untouched — the user's data, not this repo's to manage.
+  `CLAUDE.md`'s "don't touch Lute stuff" hard rule updated to reflect that
+  Lute is now retired.
+  **User explicitly asked NOT to go live yet** (wants to keep developing —
+  this isn't the project's final epic in spirit, just its ops chapter), so
+  SPEC §10's Epic 8 accept criterion ("fresh `start.ps1` run serves the full
+  app on :8002 from a cold start") was **not executed** this session. The
+  script's logic was reasoned through against already-verified pieces from
+  prior epics (`npm run build`, `uvicorn server.main:app --port 8002`), but
+  nobody has actually double-clicked `start.ps1` from a cold start, hit the
+  Windows Firewall prompt, installed Tailscale, or connected from a phone yet.
+  **Do that whenever ready to actually rely on this day-to-day**; until then,
+  treat the ops setup as written-but-unexercised.
 
 ## Known issues / deviations
 
@@ -177,15 +202,23 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 ## Notes for the next session
 
-- The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 7 — Terms & settings pages, polish. `web/app/terms/page.tsx`
-  currently exists only as Epic 6's bare-bones Sync-button stub; replace its
-  contents with the real filterable/editable table (the Sync button/logic can
-  move in as-is). Also build `GET/PUT /api/settings` (`server/routes/settings.py`,
-  not yet created) and swap `TokenPopover.tsx`'s hardcoded `DECKS = ["Korean"]`
-  for real settings-backed deck list + default deck (see the Epic 5 deck-select
-  and Epic 6 `/terms`-stub entries in `docs/DECISIONS.md`).
+- **All 9 planned epics (0-8) are now done.** Lute is retired (Epic 8, see above)
+  and the user said they want to keep developing korean-reader further — so
+  future sessions should expect ad-hoc feature/polish work rather than another
+  item off this original epic list. Check with the user for what's next; there's
+  no more "next epic" to default to.
+- **Epic 8's live cold-start + Tailscale verification is still pending** — the
+  user asked for docs/launcher only, not to go live yet. Before relying on this
+  day-to-day: close everything, double-click `start.ps1` from a cold start,
+  confirm it rebuilds `web/` correctly and opens `http://localhost:8002`; set up
+  Tailscale on the PC and phone per the new `README.md`; confirm the Windows
+  Firewall prompt appears and allowing it lets the phone actually connect.
+- A Tailwind-based visual redesign (warm "paper" palette — see `web/app/
+  globals.css`'s `@theme` block and the matching `docs/DECISIONS.md` entry)
+  landed this session across all four pages; the user confirmed they're happy
+  with the palette but said a **fuller per-page UI makeover is still wanted
+  later** — treat the current styling as a baseline, not final.
 - **Epic 6's Anki sync is verified against a live Anki desktop** (2026-07-21,
   by the user) — new-note add, in-place update on re-sync, deck assignment all
   confirmed working. `ANKI.md` at the repo root is the user-facing how-to.

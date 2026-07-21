@@ -18,19 +18,21 @@ korean-reader/
     routes/
       books.py  terms.py  translate.py  anki_sync.py  settings.py
   server/tests/            pytest suite
-  translate_svc/           existing, used as a library
+  translate_svc/           used as a library (translators.py, cache.py, krdict.py,
+                           config.py) — main.py (Lute's HTML tooltip page) deleted
+                           in Epic 8, Lute is fully retired
   web/                     Next.js app (TypeScript, Tailwind, output: 'export')
   import_tools/            existing
   docs/                    living design docs (see Executor conventions)
   requirements.txt         direct Python deps
-  start.ps1                (Epic 8) single-server launcher
+  start.ps1                single-server launcher — rewritten in Epic 8
   reader.db                app data — never commit
 ```
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
   `fastapi`, `uvicorn`, `httpx` already in `.venv`.
-- Port **8002** (Lute keeps 5001 and translate_svc 8001 during the transition — no
-  clashes).
+- Port **8002**, `--host 0.0.0.0` (Tailscale/LAN reachable). Lute used to keep 5001/8001
+  during the transition; those are free now that Lute is retired (Epic 8).
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
 
@@ -329,3 +331,33 @@ pattern as `translate.py`'s `krdict` module-level patching), plus one test patch
 AnkiConnect HTTP layer" wording. `web/app/terms/page.tsx` is a bare-bones stub (just
 a "Sync to Anki" button + `{added, updated, failed}` result) — the full filterable
 table is Epic 7 scope; see `docs/DECISIONS.md`.
+
+## Ops & Lute retirement (Epic 8 — implemented)
+
+`translate_svc/main.py` (Lute's HTML tooltip page, served on :8001) is deleted — the
+user confirmed they've fully switched to korean-reader, so it's no longer live and
+nothing else imports it (`server/routes/translate.py` only ever imported
+`translate_svc.translators`/`translate_svc.krdict`, never `.main`). `translate_svc/`'s
+other modules (`translators.py`, `cache.py`, `krdict.py`, `config.py`) are unchanged,
+still imported as a library. `%LOCALAPPDATA%\Lute3` (Lute's own reading-history DB) was
+deliberately left alone — it's the user's data, nothing in this repo touches it, and
+deleting it isn't this repo's call to make.
+
+`start.ps1` rewritten from a two-process Lute+translator launcher into a single-app
+one: rebuilds `web/` only if any source file under `web/` (excluding
+`node_modules`/`.next`/`out`) is newer than the newest file in `web/out` (a plain
+`LastWriteTime` comparison — no build-hash tracking, since a single-user local app
+doesn't need one), then launches `uvicorn server.main:app --host 0.0.0.0 --port 8002`
+in its own window and opens the browser at `http://localhost:8002`. `--host 0.0.0.0`
+(rather than the implicit `127.0.0.1`) is what makes the server reachable from a phone
+over Tailscale/LAN at all — binding to loopback only would make the Tailscale setup in
+`README.md` a dead end.
+
+`README.md` rewritten for korean-reader (daily use, `.env` setup, a pointer to
+`ANKI.md`, and full Tailscale phone-access steps: install on PC and phone, find the
+MagicDNS name, the Windows Firewall prompt for `--host 0.0.0.0`, the actual phone URL).
+Import-tools usage (`yt_subs.py`, `pdf_text.py`) carried over unchanged.
+
+**Not yet done, deliberately:** the user asked for retirement + deployment docs without
+actually "going live" yet — so the end-to-end cold-start run (`start.ps1` from a closed
+state → server up → phone over Tailscale) has not been executed. See `docs/STATUS.md`.

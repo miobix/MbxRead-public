@@ -195,3 +195,44 @@ once our test uvicorn instance briefly occupied the port). korean-reader now use
 code needed to change since the port was never hardcoded anywhere (only passed via
 `uvicorn --port` on the command line, and will be passed to `web/next.config`'s dev
 rewrite target once that's written in Epic 4).
+
+## 2026-07-21 — Epic 8: Lute retired, on the user's explicit confirmation
+The user confirmed they've fully switched to korean-reader and no longer use Lute
+day-to-day, and explicitly chose to fully replace `start.ps1` (rather than keep a
+separate `start-lute.ps1` fallback). Per SPEC §10 Epic 8's gating condition ("delete
+`translate_svc/main.py`'s Lute-HTML role only after confirming the user has stopped
+using Lute"), `translate_svc/main.py` is deleted. `%LOCALAPPDATA%\Lute3` (Lute's own
+data) is explicitly out of scope — not touched, not this repo's to manage.
+
+## 2026-07-21 — Epic 8: docs/launcher done, live cold-start verification deferred
+The user asked to prepare for deployment (retire Lute, rewrite `start.ps1`/`README.md`,
+add Tailscale docs) but explicitly not to "go live yet," and said they want to keep
+developing afterward — so this isn't treated as the project's final epic in spirit,
+just the ops chapter. SPEC §10's Epic 8 accept criterion ("fresh `start.ps1` run serves
+the full app on :8002 from a cold start") was not executed in this session on that
+basis — `start.ps1`'s build-staleness check and the `--host 0.0.0.0` uvicorn launch
+were reasoned through and match the already-verified individual pieces (`npm run
+build`, `uvicorn server.main:app --port 8002`) from prior epics' manual checks, but the
+actual double-click-to-browser flow, the Windows Firewall prompt, and the Tailscale
+phone connection are all still the user's to run when they're ready. See
+`docs/STATUS.md`.
+
+## 2026-07-21 — Warm "paper" palette via Tailwind v4 @theme + dark-mode variable override
+Ad-hoc visual redesign (not tied to a SPEC epic — the user asked directly, after
+trying Claude Design and deciding it wasn't the right tool for polishing an
+already-working app; see the "not going live yet" Epic 8 entry above for the
+session's broader arc). `web/app/globals.css` defines semantic color tokens
+(`--color-paper`, `-surface`, `-ink`, `-muted`, `-border`, `-accent`, `-accent-ink`,
+`-highlight`, `-danger`, `-danger-soft`) inside Tailwind v4's `@theme` block, which
+auto-generates `bg-*`/`text-*`/`border-*` utilities from them. A single
+`@media (prefers-color-scheme: dark)` block re-declares the same custom-property
+names on `:root` with dark values. Because that block sits outside any `@layer`
+(unlike Tailwind's own generated rules, which are layered), it wins the cascade
+whenever the media query matches, regardless of source order — so every consumer
+utility (`bg-paper`, `text-muted`, etc.) tracks the swap automatically. This let
+almost every page in `web/app/` drop its old paired `dark:bg-zinc-950
+dark:text-zinc-50`-style classes down to a single semantic class. Headings use
+Tailwind's built-in `font-serif` utility (zero new fonts, no network dependency)
+for a little "reading app" character; body/UI text stays on the default sans stack.
+**User has confirmed the palette but still wants a fuller per-page UI makeover
+later** — this redesign is a baseline, not a final pass.

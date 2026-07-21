@@ -23,8 +23,12 @@ frontend (static export), phone access via Tailscale.
 - Python is `.venv\Scripts\python.exe` (Windows). New deps: pip install **and** add to
   `requirements.txt`.
 - Never commit or modify: `.env`, `*.sqlite3`, `reader.db`, `.venv/`.
-- Don't touch the legacy Lute setup (`start.ps1` old version, `translate_svc/main.py`,
-  `%LOCALAPPDATA%\Lute3`) before Epic 8 — the user still reads with it daily.
+- **Lute is retired (Epic 8, 2026-07-21).** The user has fully switched to
+  korean-reader. `translate_svc/main.py` (the old Lute-HTML tooltip page) is
+  deleted; `start.ps1` now launches only korean-reader. `%LOCALAPPDATA%\Lute3`
+  (the user's old Lute reading history/database) was deliberately left
+  untouched — it's their data, not ours to delete, and nothing in this repo
+  depends on it.
 - Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP,
   temp sqlite per test.
 - The new server runs on port **8002** (5001/8001 belong to the legacy setup; 8000 is
