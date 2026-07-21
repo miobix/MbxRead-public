@@ -70,25 +70,25 @@ export default function TermsPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-zinc-500 self-start">
+      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
         ← Books
       </Link>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Terms</h1>
+        <h1 className="text-2xl font-semibold font-serif">Terms</h1>
         <button
           onClick={sync}
           disabled={syncing}
-          className="rounded-full bg-zinc-900 text-white px-4 py-2 text-sm font-medium dark:bg-white dark:text-zinc-900 disabled:opacity-50"
+          className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {syncing ? "Syncing…" : "Sync to Anki"}
         </button>
       </div>
 
-      {syncError && <p className="text-red-600 dark:text-red-400 text-sm">{syncError}</p>}
+      {syncError && <p className="text-danger text-sm">{syncError}</p>}
 
       {syncResult && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm flex flex-col gap-2">
+        <div className="rounded-xl border border-border bg-surface shadow-sm p-4 text-sm flex flex-col gap-2">
           <p>
             Added <b>{syncResult.added}</b>, updated <b>{syncResult.updated}</b>
             {syncResult.failed.length > 0 && (
@@ -99,7 +99,7 @@ export default function TermsPage() {
             .
           </p>
           {syncResult.failed.length > 0 && (
-            <ul className="list-disc list-inside text-red-600 dark:text-red-400">
+            <ul className="list-disc list-inside text-danger">
               {syncResult.failed.map((f, i) => (
                 <li key={i}>
                   {f.lemma}: {f.error}
@@ -114,7 +114,7 @@ export default function TermsPage() {
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as TermStatus | "")}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -127,7 +127,7 @@ export default function TermsPage() {
         <select
           value={deck}
           onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           <option value="">All decks</option>
           {(settings?.decks ?? []).map((d) => (
@@ -141,15 +141,15 @@ export default function TermsPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search lemma / translation…"
-          className="flex-1 min-w-[10rem] rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="flex-1 min-w-[10rem] rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
       </div>
 
-      {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-danger text-sm">{error}</p>}
 
-      {terms === null && !error && <p className="text-zinc-500">Loading…</p>}
+      {terms === null && !error && <p className="text-muted">Loading…</p>}
 
-      {terms?.length === 0 && <p className="text-zinc-500">No terms match.</p>}
+      {terms?.length === 0 && <p className="text-muted">No terms match.</p>}
 
       <ul className="flex flex-col gap-2">
         {terms?.map((term) =>
@@ -166,17 +166,17 @@ export default function TermsPage() {
             <li
               key={term.id}
               onClick={() => setEditingId(term.id)}
-              className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-sm cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600"
+              className="rounded-xl border border-border bg-surface shadow-sm p-3 text-sm cursor-pointer hover:border-accent transition-colors"
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium">{term.lemma}</span>
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted">
                   {term.status}
                   {term.deck && ` · ${term.deck}`}
                 </span>
               </div>
               {term.translation && (
-                <div className="text-zinc-600 dark:text-zinc-400 mt-1">{term.translation}</div>
+                <div className="text-muted mt-1">{term.translation}</div>
               )}
             </li>
           )
@@ -246,14 +246,14 @@ function TermEditRow({
 
   return (
     <li
-      className="rounded-xl border border-zinc-400 dark:border-zinc-600 p-3 text-sm flex flex-col gap-2"
+      className="rounded-xl border border-accent bg-surface shadow-sm p-3 text-sm flex flex-col gap-2"
       onClick={(e) => e.stopPropagation()}
     >
       <input
         value={lemma}
         onChange={(e) => setLemma(e.target.value)}
         placeholder="Dictionary form (lemma)"
-        className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm font-medium"
+        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
       />
 
       <textarea
@@ -261,7 +261,7 @@ function TermEditRow({
         onChange={(e) => setTranslation(e.target.value)}
         placeholder="Translation"
         rows={3}
-        className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm resize-none"
+        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
       />
 
       <textarea
@@ -269,14 +269,14 @@ function TermEditRow({
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Notes"
         rows={2}
-        className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm resize-none"
+        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
       />
 
       <div className="flex gap-2 flex-wrap">
         <select
           value={deck}
           onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           {deckOptions.map((d) => (
             <option key={d} value={d}>
@@ -288,7 +288,7 @@ function TermEditRow({
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as TermStatus)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           {STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -298,13 +298,13 @@ function TermEditRow({
         </select>
       </div>
 
-      {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-danger text-sm">{error}</p>}
 
       <div className="flex gap-2 justify-between mt-1">
         <button
           onClick={remove}
           disabled={busy}
-          className="px-3 py-1.5 text-sm rounded-full border border-red-300 text-red-600 dark:border-red-800 dark:text-red-400 disabled:opacity-50"
+          className="px-3 py-1.5 text-sm rounded-full border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
         >
           Delete
         </button>
@@ -312,14 +312,14 @@ function TermEditRow({
           <button
             onClick={onCancel}
             disabled={busy}
-            className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={busy}
-            className="px-4 py-2 text-sm rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {busy ? "Saving…" : "Save"}
           </button>

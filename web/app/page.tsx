@@ -21,29 +21,29 @@ export default function HomePage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Korean Reader</h1>
+        <h1 className="text-2xl font-semibold font-serif">Korean Reader</h1>
         <div className="flex items-center gap-3">
-          <Link href="/terms" className="text-sm text-zinc-500">
+          <Link href="/terms" className="text-sm text-muted hover:text-ink transition-colors">
             Terms
           </Link>
-          <Link href="/settings" className="text-sm text-zinc-500">
+          <Link href="/settings" className="text-sm text-muted hover:text-ink transition-colors">
             Settings
           </Link>
           <button
             onClick={() => setModalOpen(true)}
-            className="rounded-full bg-zinc-900 text-white px-4 py-2 text-sm font-medium dark:bg-white dark:text-zinc-900"
+            className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
             + Add book
           </button>
         </div>
       </div>
 
-      {error && <p className="text-red-600 dark:text-red-400 text-sm mb-4">{error}</p>}
+      {error && <p className="text-danger text-sm mb-4">{error}</p>}
 
-      {books === null && !error && <p className="text-zinc-500">Loading…</p>}
+      {books === null && !error && <p className="text-muted">Loading…</p>}
 
       {books?.length === 0 && (
-        <p className="text-zinc-500">No books yet. Add one to get started.</p>
+        <p className="text-muted">No books yet. Add one to get started.</p>
       )}
 
       <ul className="flex flex-col gap-3">
@@ -51,10 +51,10 @@ export default function HomePage() {
           <li key={book.id}>
             <Link
               href={`/read/?id=${book.id}`}
-              className="block rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+              className="block rounded-xl border border-border bg-surface p-4 shadow-sm hover:border-accent transition-colors"
             >
               <div className="font-medium">{book.title}</div>
-              <div className="text-sm text-zinc-500">
+              <div className="text-sm text-muted">
                 {book.current_page} / {book.page_count} pages
               </div>
             </Link>
@@ -117,16 +117,16 @@ function AddBookModal({
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold">Add a book</h2>
+        <h2 className="text-lg font-semibold font-serif">Add a book</h2>
 
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title"
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
         <textarea
@@ -137,10 +137,10 @@ function AddBookModal({
           }}
           placeholder="Paste Korean text here…"
           rows={8}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm resize-none"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
-        <label className="text-sm text-zinc-500 flex flex-col gap-1">
+        <label className="text-sm text-muted flex flex-col gap-1">
           or upload a .txt file
           <input
             type="file"
@@ -153,19 +153,19 @@ function AddBookModal({
           />
         </label>
 
-        {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-danger text-sm">{error}</p>}
 
         <div className="flex gap-2 justify-end mt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700"
+            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={submitting}
-            className="px-4 py-2 text-sm rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {submitting ? "Adding…" : "Add"}
           </button>

@@ -132,47 +132,47 @@ export function TokenPopover({
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-3 max-h-[90vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-3 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-sm text-zinc-500">{target.surface}</div>
+        <div className="text-sm text-muted">{target.surface}</div>
 
         <input
           value={lemma}
           onChange={(e) => setLemma(e.target.value)}
           placeholder="Dictionary form (lemma)"
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm font-medium"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={translateWord}
             disabled={busy !== null}
-            className="px-3 py-1.5 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
           >
             {busy === "translate" ? "Translating…" : "Translate"}
           </button>
           <button
             onClick={lookupDictionary}
             disabled={busy !== null}
-            className="px-3 py-1.5 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
           >
             {busy === "dict" ? "Looking up…" : "Dictionary"}
           </button>
         </div>
 
-        {target.sentence && <p className="text-xs text-zinc-500 italic">{target.sentence}</p>}
+        {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
 
         {dictEntries && (
-          <div className="flex flex-col gap-2 max-h-40 overflow-y-auto border-t border-zinc-200 dark:border-zinc-800 pt-2">
+          <div className="flex flex-col gap-2 max-h-40 overflow-y-auto border-t border-border pt-2">
             {dictEntries.length === 0 && (
-              <p className="text-xs text-zinc-500">No dictionary entries found.</p>
+              <p className="text-xs text-muted">No dictionary entries found.</p>
             )}
             {dictEntries.map((entry, i) => (
               <div key={i} className="text-xs">
                 <span className="font-medium">{entry.word}</span>{" "}
-                <span className="text-zinc-500">{entry.pos}</span>
-                <ul className="list-disc list-inside text-zinc-600 dark:text-zinc-400">
+                <span className="text-muted">{entry.pos}</span>
+                <ul className="list-disc list-inside text-muted">
                   {entry.definitions.map((d, j) => (
                     <li key={j}>
                       <b>{d.en_word}</b> — {d.en_def}
@@ -189,13 +189,13 @@ export function TokenPopover({
           onChange={(e) => setTranslation(e.target.value)}
           placeholder="Translation / notes…"
           rows={4}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm resize-none"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
         <select
           value={deck}
           onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           {deckOptions.map((d) => (
             <option key={d} value={d}>
@@ -204,28 +204,28 @@ export function TokenPopover({
           ))}
         </select>
 
-        {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-danger text-sm">{error}</p>}
 
         {isEditing && (
           <div className="flex gap-2 flex-wrap text-sm">
             <button
               onClick={() => setStatus("known")}
               disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
             >
               Mark known
             </button>
             <button
               onClick={() => setStatus("ignored")}
               disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
             >
               Ignore
             </button>
             <button
               onClick={remove}
               disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-red-300 text-red-600 dark:border-red-800 dark:text-red-400 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-full border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
             >
               Delete
             </button>
@@ -235,14 +235,14 @@ export function TokenPopover({
         <div className="flex gap-2 justify-end mt-1">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700"
+            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={busy !== null}
-            className="px-4 py-2 text-sm rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {busy === "save" ? "Saving…" : "Save"}
           </button>

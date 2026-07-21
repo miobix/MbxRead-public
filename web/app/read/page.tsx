@@ -16,7 +16,7 @@ import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
 export default function ReadPage() {
   return (
-    <Suspense fallback={<main className="flex-1 px-4 py-6 text-zinc-500">Loading…</main>}>
+    <Suspense fallback={<main className="flex-1 px-4 py-6 text-muted">Loading…</main>}>
       <ReadPageContent />
     </Suspense>
   );
@@ -142,18 +142,18 @@ function ReadPageContent() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-zinc-500 self-start">
+      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
         ← Books
       </Link>
 
       {bookId === null && (
-        <p className="text-red-600 dark:text-red-400 text-sm">No book selected.</p>
+        <p className="text-danger text-sm">No book selected.</p>
       )}
 
-      {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-danger text-sm">{error}</p>}
 
       {bookId !== null && !page && !error && (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-muted">Loading…</p>
       )}
 
       {page && (
@@ -165,21 +165,21 @@ function ReadPageContent() {
             {renderContent(page.content, page.tokens, page.terms)}
           </article>
 
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
             <button
               onClick={() => goToPage(page.page_no - 1)}
               disabled={page.page_no <= 1 || loading}
-              className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-40"
+              className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
             >
               ← Prev
             </button>
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted">
               {page.page_no} / {page.page_count}
             </span>
             <button
               onClick={() => goToPage(page.page_no + 1)}
               disabled={page.page_no >= page.page_count || loading}
-              className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-40"
+              className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
             >
               Next →
             </button>
@@ -218,11 +218,7 @@ function renderContent(
       <span
         key={i}
         data-token-index={i}
-        className={
-          isLearning
-            ? "bg-amber-200/70 dark:bg-amber-300/25 rounded-sm"
-            : undefined
-        }
+        className={isLearning ? "bg-highlight/70 rounded-sm" : undefined}
       >
         {content.slice(tok.s, tok.e)}
       </span>

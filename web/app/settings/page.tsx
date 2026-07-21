@@ -49,36 +49,36 @@ export default function SettingsPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-zinc-500 self-start">
+      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
         ← Books
       </Link>
 
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-semibold font-serif">Settings</h1>
 
-      {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-danger text-sm">{error}</p>}
 
-      {!settings && !error && <p className="text-zinc-500">Loading…</p>}
+      {!settings && !error && <p className="text-muted">Loading…</p>}
 
       {settings && (
         <>
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-zinc-500">Decks</h2>
+            <h2 className="text-sm font-medium text-muted">Decks</h2>
             <ul className="flex flex-col gap-2">
               {settings.decks.map((deck) => (
                 <li
                   key={deck}
-                  className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                 >
                   <span>
                     {deck}
                     {deck === settings.default_deck && (
-                      <span className="ml-2 text-xs text-zinc-500">(default)</span>
+                      <span className="ml-2 text-xs text-muted">(default)</span>
                     )}
                   </span>
                   <button
                     onClick={() => removeDeck(deck)}
                     disabled={saving}
-                    className="text-red-600 dark:text-red-400 text-xs disabled:opacity-50"
+                    className="text-danger text-xs hover:underline disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -94,12 +94,12 @@ export default function SettingsPage() {
                   if (e.key === "Enter") addDeck();
                 }}
                 placeholder="New deck name"
-                className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+                className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
               />
               <button
                 onClick={addDeck}
                 disabled={saving || !newDeck.trim()}
-                className="px-4 py-2 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+                className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
               >
                 Add
               </button>
@@ -107,12 +107,12 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-zinc-500">Default deck</h2>
+            <h2 className="text-sm font-medium text-muted">Default deck</h2>
             <select
               value={settings.default_deck}
               onChange={(e) => save({ ...settings, default_deck: e.target.value })}
               disabled={saving || settings.decks.length === 0}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
             >
               {settings.decks.map((deck) => (
                 <option key={deck} value={deck}>
@@ -123,21 +123,21 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-zinc-500">Translator backend</h2>
+            <h2 className="text-sm font-medium text-muted">Translator backend</h2>
             <select
               value={settings.translator_backend}
               onChange={(e) =>
                 save({ ...settings, translator_backend: e.target.value as Settings["translator_backend"] })
               }
               disabled={saving}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
             >
               <option value="deepl">DeepL</option>
               <option value="claude">Claude</option>
             </select>
           </section>
 
-          {saved && !saving && <p className="text-sm text-zinc-500">Saved.</p>}
+          {saved && !saving && <p className="text-sm text-accent">Saved.</p>}
         </>
       )}
     </main>
