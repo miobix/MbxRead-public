@@ -110,16 +110,33 @@ book has at least one (possibly empty) page.
 | PATCH `/api/books/{id}` | `{current_page?, title?}` | updated book — **implemented (Epic 2)** |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
-| GET `/api/terms` | `?status=&deck=&q=` | `[term]` |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?}` | created term (409 if lemma exists) |
-| PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` |
-| DELETE `/api/terms/{id}` | – | 204 |
-| POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) |
-| GET `/api/dict?word=…` | – | krdict entries as JSON list |
+| GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?}` | created term (409 if lemma exists) — **implemented (Epic 3)** |
+| PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3)** |
+| DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
+| POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
+| GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` |
 | GET/PUT `/api/settings` | PUT: `{key: value, …}` | full settings dict |
 
-Terms/translate/dict/anki-sync/settings routes remain unimplemented (Epic 3+).
+Anki-sync/settings routes remain unimplemented (Epic 6+/7).
+
+**Epic 3 status:** `server/routes/terms.py` — full CRUD. `POST` and lemma-renaming
+`PATCH` both 409 on a duplicate lemma (DB `UNIQUE` constraint caught via
+`sqlite3.IntegrityError` on create; pre-checked with a `SELECT` on rename to give a
+clean 409 instead of a 500). `PATCH`'s dirty-flag rule is literal to the spec table:
+only a changed `translation`/`notes`/`deck`/`sentence` value sets `anki_dirty=1`, and
+only when `anki_note_id IS NOT NULL` — a lemma or status edit never sets it, even
+post-sync, and setting a field to its existing value doesn't either. `updated` is
+bumped via `CURRENT_TIMESTAMP` in the same `UPDATE` statement on every patch.
+
+`server/routes/translate.py` imports `translate` and `TranslationError` directly
+from `translate_svc.translators`, and the `krdict` module (not just its `lookup`
+function) from `translate_svc` — tests monkeypatch `server.routes.translate.translate`
+and `server.routes.translate.krdict.lookup` respectively, which never touches the
+real `translate_cache.sqlite3` or requires `.env` keys. `POST /api/translate` catches
+`TranslationError` and returns `502 {"error": "..."}` via `JSONResponse` (not
+FastAPI's default `{"detail": ...}` shape, to match the spec's contract exactly).
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

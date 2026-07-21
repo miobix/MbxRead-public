@@ -35,7 +35,19 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   current_page/title patch, cascade delete, 404s). Manual check: POSTed a Korean
   story via a live `uvicorn` instance, GET page 1 returned correct token lemmas
   (입다, 나가다, 좋다, 가다) with offsets round-tripping.
-- [ ] Epic 3 — Terms & translate APIs
+- [x] Epic 3 — Terms & translate APIs — done (2026-07-21). `server/routes/terms.py`
+  (full CRUD, 409 on duplicate/renamed-into-duplicate lemma, dirty-flag rule exactly
+  as spec'd: only `translation/notes/deck/sentence` changes mark `anki_dirty=1`, and
+  only once `anki_note_id` is set — lemma/status edits never dirty). `server/routes/
+  translate.py` wraps `translate_svc.translators.translate` (502 + `{"error": ...}`
+  on `TranslationError`) and `translate_svc.krdict.lookup`. 62/62 tests green (19
+  new). Tests mock at the `server.routes.translate` module boundary (not `httpx`),
+  so the real `translate_cache.sqlite3` / `.env` are never touched — confirmed
+  neither file exists after a full test run.
+  **Deferred:** the spec's manual accept check ("with real `.env` keys, POST
+  `/api/translate {"text":"사랑"}` returns a translation") needs API keys this
+  environment doesn't have; `.env` doesn't exist here (only `.env.example`). Do this
+  manually once `.env` is populated.
 - [ ] Epic 4 — Frontend: scaffold, book list, reader rendering
 - [ ] Epic 5 — Tooltip flow (tap → translate → edit → save)
 - [ ] Epic 6 — Anki sync (AnkiConnect add/update)
@@ -50,9 +62,14 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 3 — `routes/terms.py` (CRUD, unique-lemma 409, dirty-flag rule) and
-  `routes/translate.py` (`/api/translate`, `/api/dict` wrapping `translate_svc`).
-  Run tests with `.venv\Scripts\python.exe -m pytest server/tests -q`.
+- Next up: Epic 4 — scaffold `web/` (Next.js, TS, Tailwind, App Router,
+  `output:'export'`), book list + add-book modal, `/read/[bookId]` rendering pages
+  from token offsets with learning-term highlights + pagination. `npm run build`
+  must be clean from this epic on. Needs Node.js — check it's installed before
+  starting; if missing, stop and ask the user to install Node LTS per SPEC §3.
+- Manual verification of `POST /api/translate` with a live translation backend is
+  still outstanding — needs a populated `.env` (`DEEPL_API_KEY` or
+  `ANTHROPIC_API_KEY`), which doesn't exist in this dev environment yet.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
   `&` jobs can outlive the Bash tool call that started them and squat on :8000;
   check `netstat -ano | grep :8000` and `taskkill //PID <pid> //F` if a fresh

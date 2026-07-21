@@ -48,6 +48,16 @@ the limit), it takes the next available break point past the limit rather than
 cutting the sentence. An oversized page is a minor UX cost; a torn sentence would
 break tokenizer offsets' usefulness to the reader.
 
+## 2026-07-21 — Translate/dict tests mock at the route module boundary, not httpx
+`server/routes/translate.py` imports the `translate` function by name from
+`translate_svc.translators`, so tests monkeypatch `server.routes.translate.translate`
+directly rather than `translate_svc.translators.translate` (patching the latter
+wouldn't affect the already-bound name in the route module) or `httpx.post` (which
+would still exercise `translate_svc.cache`, writing to the real
+`translate_cache.sqlite3` — forbidden by CLAUDE.md). `krdict` is imported as a
+module, not a bare function, so `server.routes.translate.krdict.lookup` and
+`translate_svc.krdict.lookup` are the same object and either patch target works.
+
 ## 2026-07-21 — DB init moved to FastAPI lifespan, not app-factory call time
 `create_app()` only registers a `lifespan` handler that calls `db.init_db(path)`;
 init doesn't run at import/factory-call time. This lets `server/main.py` be imported
