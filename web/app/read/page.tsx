@@ -58,12 +58,35 @@ function ReadPageContent() {
     if (selectionText) {
       window.getSelection()?.removeAllRanges();
       const centerIndex = Math.max(page.content.indexOf(selectionText), 0);
-      setTarget({
-        surface: selectionText,
-        lemma: selectionText,
-        sentence: extractSentence(page.content, centerIndex),
-        existing: page.terms[selectionText] ?? null,
-      });
+      const sentence = extractSentence(page.content, centerIndex);
+
+      const known = page.terms[selectionText] ?? null;
+      if (known) {
+        setTarget({ surface: selectionText, lemma: selectionText, sentence, existing: known });
+        return;
+      }
+
+      // Multi-word phrase lemmas never match a tokenizer lemma, so they never show up
+      // in page.terms even when saved — fall back to an exact-match terms search.
+      api
+        .listTerms(selectionText)
+        .then((matches) => matches.find((t) => t.lemma === selectionText) ?? null)
+        .catch(() => null)
+        .then((exact) => {
+          setTarget({
+            surface: selectionText,
+            lemma: selectionText,
+            sentence,
+            existing: exact
+              ? {
+                  id: exact.id,
+                  translation: exact.translation,
+                  status: exact.status,
+                  deck: exact.deck,
+                }
+              : null,
+          });
+        });
       return;
     }
 

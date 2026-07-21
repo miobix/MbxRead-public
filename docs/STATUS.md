@@ -130,15 +130,17 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   build the sync button as a small addition to `/` or a bare-bones `/terms` stub
   rather than fully building Epic 7's page early; use judgment and log whatever's
   decided in DECISIONS.md, same as the Epic 5 deck-select interim call.
-- **A real visual/touch pass over Epics 4 and 5 together is overdue.** No browser
-  automation tool has been available in this environment through either epic (the
-  `claude-in-chrome` skill is listed but its MCP tools never loaded — no configured
-  extension). Everything shipped so far was verified at the API/data-contract
-  level only. Before going much further, someone with a browser should actually
-  tap through: add a book, tap an unlearned word, translate, save, confirm the
-  highlight appears and every inflection of that lemma highlights too, tap it
-  again and mark it known, try a phrase selection. If a browser tool becomes
-  available, use it; otherwise keep being explicit about what's unverified.
+- **Visual/touch pass over Epics 4-5 done (2026-07-21), by the user on a real
+  phone/browser** (no browser automation tool has been available in this
+  environment). Result: book list, reader rendering, pagination (incl. returning
+  to `current_page`), tap-to-translate-and-save, per-token highlighting, and
+  mark-known/ignore/delete all confirmed working. Three bugs found and fixed
+  same-day — see the "Bugs found during the Epic 4/5 manual visual/touch pass"
+  entry in `docs/DECISIONS.md` (sqlite cross-thread `check_same_thread` crash on
+  first request; saved phrase/sentence terms not recoverable on reselect; redundant
+  non-functional-looking "Translate sentence" button removed). Phrase/sentence
+  *highlighting* still intentionally doesn't light up — that's the pre-existing,
+  correct-per-spec per-token-lemma rule, not a bug.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
   `&` jobs can outlive the Bash tool call that started them and squat on the port;
   check `netstat -ano | grep :8002` and `taskkill //PID <pid> //F` if a fresh

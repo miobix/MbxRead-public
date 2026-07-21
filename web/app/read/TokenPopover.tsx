@@ -35,9 +35,8 @@ export function TokenPopover({
   const [lemma, setLemma] = useState(target.lemma);
   const [translation, setTranslation] = useState(target.existing?.translation ?? "");
   const [deck, setDeck] = useState(target.existing?.deck || DEFAULT_DECK);
-  const [sentenceTranslation, setSentenceTranslation] = useState<string | null>(null);
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
-  const [busy, setBusy] = useState<"translate" | "dict" | "sentence" | "save" | null>(null);
+  const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const translateWord = async () => {
@@ -62,20 +61,6 @@ export function TokenPopover({
       setDictEntries(await api.dictLookup(lemma.trim()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dictionary lookup failed.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const translateSentence = async () => {
-    if (!target.sentence) return;
-    setBusy("sentence");
-    setError(null);
-    try {
-      const { translation: result } = await api.translate(target.sentence);
-      setSentenceTranslation(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sentence translation failed.");
     } finally {
       setBusy(null);
     }
@@ -173,19 +158,9 @@ export function TokenPopover({
           >
             {busy === "dict" ? "Looking up…" : "Dictionary"}
           </button>
-          <button
-            onClick={translateSentence}
-            disabled={busy !== null}
-            className="px-3 py-1.5 text-sm rounded-full border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
-          >
-            {busy === "sentence" ? "Translating…" : "Translate sentence"}
-          </button>
         </div>
 
         {target.sentence && <p className="text-xs text-zinc-500 italic">{target.sentence}</p>}
-        {sentenceTranslation && (
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">{sentenceTranslation}</p>
-        )}
 
         {dictEntries && (
           <div className="flex flex-col gap-2 max-h-40 overflow-y-auto border-t border-zinc-200 dark:border-zinc-800 pt-2">

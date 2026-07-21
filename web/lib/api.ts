@@ -113,6 +113,8 @@ export const api = {
 
   deleteTerm: (id: number) => request<void>(`/terms/${id}`, { method: "DELETE" }),
 
+  listTerms: (q: string) => request<Term[]>(`/terms?q=${encodeURIComponent(q)}`),
+
   translate: (text: string, backend?: string) =>
     request<TranslateResult>("/translate", {
       method: "POST",

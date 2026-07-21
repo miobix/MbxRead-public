@@ -142,6 +142,34 @@ default output (`out/read.html`) isn't resolvable by Starlette's
 not `<name>.html` for a bare path) — `trailingSlash: true` makes export emit
 `out/read/index.html` instead, which does resolve for `GET /read/`.
 
+## 2026-07-21 — Bugs found during the Epic 4/5 manual visual/touch pass
+The user did the overdue browser pass and hit three real issues, fixed same-day:
+1. **`sqlite3.ProgrammingError` on the very first request after boot.** FastAPI runs
+   sync generator dependencies (`db.get_db`) in a worker-thread pool via anyio, and
+   the pool doesn't guarantee the thread that opens the connection is the same one
+   that later closes it — `sqlite3.connect()` defaults to `check_same_thread=True`
+   and refuses that. Fixed by passing `check_same_thread=False` in
+   `db.get_connection()`; safe here because a given connection is still only ever
+   touched by one logical request at a time, never concurrently from two threads.
+2. **Saved phrase/sentence terms never highlighted and couldn't be "recovered"**
+   (reselecting showed an empty popover, then Save 409'd because the term already
+   existed). Root cause: `GET /api/books/{id}/pages/{n}` only returns terms whose
+   lemma matches a *tokenizer-produced* lemma (`server/routes/books.py`), so a
+   multi-word phrase's lemma — which never matches any single token — is invisible
+   in `page.terms` even though it's in the `terms` table. The no-highlight half is
+   correct per SPEC's literal per-token rule (matches the earlier 착용하다 decision
+   above) and was left as-is. The no-recovery half was a real gap: `web/app/read/
+   page.tsx`'s phrase-selection branch now falls back to `GET /api/terms?q=<text>`
+   (added as `api.listTerms` in `lib/api.ts`) and filters for an exact lemma match
+   when `page.terms` doesn't have the selection, so a saved phrase term now reopens
+   pre-filled.
+3. **Removed the "Translate sentence" button.** It worked (network tab confirmed a
+   response), but wrote to a separate `sentenceTranslation` paragraph above the
+   textarea instead of into the editable translation field, which read as broken
+   and was redundant with "Translate" per the user's own call. Deleted the button,
+   handler, and state from `TokenPopover.tsx`; the italic sentence-context line
+   (used for the saved `sentence` field) stays.
+
 ## 2026-07-21 — Server port changed 8000 → 8002
 Discovered while manually testing Epic 2/3: the user's Android app syncs content via
 a Docker-based service already listening on `localhost:8000` on this machine (it was
