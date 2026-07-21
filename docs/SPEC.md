@@ -35,7 +35,7 @@ Repo root: `C:\Users\<user>\PycharmProjects\korean-reader` (venv at `.venv`, Pyt
 
 ```
 korean-reader/
-  server/                  FastAPI app, port 8000
+  server/                  FastAPI app, port 8002
     __init__.py
     main.py                app factory; mounts /api routers; serves web/out statically at /
     db.py                  sqlite (reader.db): connection, schema init, query helpers
@@ -54,7 +54,8 @@ korean-reader/
 ```
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing `fastapi`, `uvicorn`, `httpx` already in `.venv`.
-- Port **8000** (Lute keeps 5001 and translate_svc 8001 during the transition — no clashes).
+- Port **8002** (Lute keeps 5001 and translate_svc 8001 during the transition; 8000 is
+  reserved on this machine by an unrelated Android app's Docker sync service — no clashes).
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the user to install Node LTS and stop (`needs input`), don't work around it.
 
 ## 4. Data model (`reader.db`, created by `server/db.py` on startup)
@@ -140,7 +141,7 @@ Return `list[Token]` with `surface` (full eojeol text), `s`, `e`, `lemma`, `pos`
 
 ## 7. Frontend spec (`web/`)
 
-Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** — primary device is a phone. Clean, modern, uncluttered (the user found Jinja UIs "ugly and clunky"; visual quality matters). Config: `output: 'export'`; dev uses `next.config` rewrites `/api/* → http://localhost:8000/api/*`.
+Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** — primary device is a phone. Clean, modern, uncluttered (the user found Jinja UIs "ugly and clunky"; visual quality matters). Config: `output: 'export'`; dev uses `next.config` rewrites `/api/* → http://localhost:8002/api/*`.
 
 Routes:
 - `/` — book list (title, progress `current_page/page_count`), "Add book" modal: title + paste-textarea or `.txt` upload.
@@ -185,7 +186,7 @@ Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new
 
 ### Epic 0 — Repo, scaffolding, docs
 Init git in `korean-reader` (no repo exists); `.gitignore` (`.venv/`, `.env`, `*.sqlite3`, `reader.db`, `__pycache__/`, `web/node_modules/`, `web/.next/`, `web/out/`); initial commit of existing files. Create `requirements.txt` (direct deps: fastapi, uvicorn, httpx, python-dotenv if used by config, kiwipiepy — check `translate_svc/config.py` for what it actually imports). Install `kiwipiepy` + `pytest`. Create `server/` package skeleton with `main.py` exposing `GET /api/health`, `db.py` creating the section-4 schema, empty `routes/`. Create `docs/ARCHITECTURE.md` (copy of sections 3–8), `docs/STATUS.md` (epic checklist), `docs/DECISIONS.md`. Smoke test: health endpoint 200 via TestClient; schema creates on a temp DB.
-**Accept:** `pytest` green; `git log` shows init + epic commits; app boots with `uvicorn server.main:app --port 8000`.
+**Accept:** `pytest` green; `git log` shows init + epic commits; app boots with `uvicorn server.main:app --port 8002`.
 
 ### Epic 1 — Tokenizer
 `server/tokenizer.py` per section 6, plus the full table-driven test set (section 6) in `server/tests/test_tokenizer.py`.
@@ -200,8 +201,8 @@ Init git in `korean-reader` (no repo exists); `.gitignore` (`.venv/`, `.env`, `*
 **Accept:** tests green; with real `.env` keys, `POST /api/translate {"text":"사랑"}` returns a translation (manual check).
 
 ### Epic 4 — Frontend: scaffold, book list, reader rendering
-Scaffold `web/` (`create-next-app` — TypeScript, Tailwind, App Router, no src-dir preference left to executor; `output:'export'`; dev rewrite `/api`→8000). Build `/` (book list + add-book modal with paste/.txt upload) and `/read/[bookId]` rendering pages from token offsets with learning-term highlights and pagination + current_page persistence. Wire FastAPI to serve `web/out` at `/` when the directory exists. No tooltip yet.
-**Accept:** `npm run build` clean; served at :8000 the story renders, saved learning lemmas (insert one via API by hand) highlight all their inflections; usable on a phone-width viewport.
+Scaffold `web/` (`create-next-app` — TypeScript, Tailwind, App Router, no src-dir preference left to executor; `output:'export'`; dev rewrite `/api`→8002). Build `/` (book list + add-book modal with paste/.txt upload) and `/read/[bookId]` rendering pages from token offsets with learning-term highlights and pagination + current_page persistence. Wire FastAPI to serve `web/out` at `/` when the directory exists. No tooltip yet.
+**Accept:** `npm run build` clean; served at :8002 the story renders, saved learning lemmas (insert one via API by hand) highlight all their inflections; usable on a phone-width viewport.
 
 ### Epic 5 — Tooltip flow (the heart of the app)
 Popover per section 7: tap → lemma (editable) → Translate/Dictionary/Translate-sentence → editable textarea → deck select → Save; tap-highlighted → edit/mark-known/ignore/delete; phrase selection; sentence extraction. Instant client-side highlight refresh on save.
@@ -216,14 +217,14 @@ Popover per section 7: tap → lemma (editable) → Translate/Dictionary/Transla
 **Accept:** build + tests green; decks created in settings appear in the save-popover select.
 
 ### Epic 8 — Ops & Lute retirement
-Rewrite `start.ps1`: build `web/` if stale, launch single uvicorn `server.main:app --host 0.0.0.0 --port 8000`, open browser. Add Windows-Firewall note + Tailscale steps to README (install Tailscale on PC & phone, access `http://<magicdns-name>:8000`). Rewrite `README.md` for the new app (keep import_tools usage docs). Delete `translate_svc/main.py`'s Lute-HTML role only after confirming the user has stopped using Lute — leave a note in STATUS.md and keep it if unconfirmed. Final docs pass.
-**Accept:** fresh `start.ps1` run serves the full app on :8000 from a cold start; README accurate; STATUS.md marks all epics done.
+Rewrite `start.ps1`: build `web/` if stale, launch single uvicorn `server.main:app --host 0.0.0.0 --port 8002`, open browser. Add Windows-Firewall note + Tailscale steps to README (install Tailscale on PC & phone, access `http://<magicdns-name>:8002`). Rewrite `README.md` for the new app (keep import_tools usage docs). Delete `translate_svc/main.py`'s Lute-HTML role only after confirming the user has stopped using Lute — leave a note in STATUS.md and keep it if unconfirmed. Final docs pass.
+**Accept:** fresh `start.ps1` run serves the full app on :8002 from a cold start; README accurate; STATUS.md marks all epics done.
 
 **Backlog (explicitly out of scope, do not build):** Lute term migration script, auth for public deployment, always-on hosting off the PC, stats/reading-time tracking, audio/TTS, spaced-repetition inside the app.
 
 ## 11. End-to-end verification (after Epic 8)
 
-1. `start.ps1` → app on :8000. Import the user's test short story.
+1. `start.ps1` → app on :8002. Import the user's test short story.
 2. Tap 입고 → lemma 입다 → Translate → enrich the translation → Save → all inflections of 입다 highlighted; unknown words show no affordance until tapped.
 3. Hand-correct a bad lemma guess during save; highlight follows the corrected lemma.
 4. Anki open: Sync → notes in assigned decks; edit a term; Sync → same note updated, no duplicate; AnkiWeb sync carries them to AnkiDroid.

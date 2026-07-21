@@ -9,7 +9,7 @@ original intent. See `docs/DECISIONS.md` for the reasoning behind divergences.
 
 ```
 korean-reader/
-  server/                  FastAPI app, port 8000
+  server/                  FastAPI app, port 8002
     __init__.py
     main.py                app factory; mounts /api routers; serves web/out statically at /
     db.py                  sqlite (reader.db): connection, schema init, query helpers
@@ -29,7 +29,7 @@ korean-reader/
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
   `fastapi`, `uvicorn`, `httpx` already in `.venv`.
-- Port **8000** (Lute keeps 5001 and translate_svc 8001 during the transition — no
+- Port **8002** (Lute keeps 5001 and translate_svc 8001 during the transition — no
   clashes).
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
@@ -38,7 +38,7 @@ korean-reader/
 returning a FastAPI app whose `lifespan` calls `db.init_db(path)` on startup (not at
 import time) — this lets tests point at a temp DB via `create_app(tmp_path / "test.db")`
 without ever touching the real `reader.db`. Module-level `app = create_app()` is the
-uvicorn entrypoint (`uvicorn server.main:app --port 8000`) and uses the default path
+uvicorn entrypoint (`uvicorn server.main:app --port 8002`) and uses the default path
 (`reader.db` at repo root). `web/out` static mount is wired but inert until Epic 4
 creates that directory. `.venv` was created with Python 3.10 (`py -3.10 -m venv
 .venv`) per kiwipiepy's Windows compatibility story.
@@ -188,7 +188,7 @@ the spec's prose implies — verified directly against 입고 (`VV-R`), 들어�
 
 Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** —
 primary device is a phone. Clean, modern, uncluttered. Config: `output: 'export'`; dev
-uses `next.config` rewrites `/api/* → http://localhost:8000/api/*`.
+uses `next.config` rewrites `/api/* → http://localhost:8002/api/*`.
 
 Routes:
 - `/` — book list (title, progress `current_page/page_count`), "Add book" modal: title

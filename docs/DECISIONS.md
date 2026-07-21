@@ -64,3 +64,13 @@ init doesn't run at import/factory-call time. This lets `server/main.py` be impo
 (and `create_app()` called with a temp path) in tests without ever touching the real
 `reader.db`, while `uvicorn server.main:app` still initializes the real DB on actual
 startup via the same lifespan hook.
+
+## 2026-07-21 — Server port changed 8000 → 8002
+Discovered while manually testing Epic 2/3: the user's Android app syncs content via
+a Docker-based service already listening on `localhost:8000` on this machine (it was
+polling `/sync/pull` in the background and its 404s showed up in our server's log
+once our test uvicorn instance briefly occupied the port). korean-reader now uses
+**8002** instead throughout the docs (SPEC.md, ARCHITECTURE.md, CLAUDE.md) — no app
+code needed to change since the port was never hardcoded anywhere (only passed via
+`uvicorn --port` on the command line, and will be passed to `web/next.config`'s dev
+rewrite target once that's written in Epic 4).

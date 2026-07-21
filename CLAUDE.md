@@ -25,4 +25,5 @@ frontend (static export), phone access via Tailscale.
   `%LOCALAPPDATA%\Lute3`) before Epic 8 — the user still reads with it daily.
 - Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP,
   temp sqlite per test.
-- The new server runs on port **8000** (5001/8001 belong to the legacy setup).
+- The new server runs on port **8002** (5001/8001 belong to the legacy setup; 8000 is
+  taken on this machine by an unrelated Android app's Docker-based sync service).

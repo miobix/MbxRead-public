@@ -58,7 +58,15 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 ## Known issues / deviations
 
-(none yet)
+- **2026-07-21 — server port changed from 8000 to 8002.** The user's Android app
+  syncs content via a Docker-based service already bound to `localhost:8000` on this
+  machine. korean-reader now runs on **8002** instead (5001/8001 still reserved for
+  the legacy Lute setup). `CLAUDE.md`, `docs/SPEC.md`, and `docs/ARCHITECTURE.md`
+  updated throughout; see `docs/DECISIONS.md`. No app code hardcoded the port (it's
+  only ever passed via `uvicorn --port` / will be in `next.config`'s dev rewrite), so
+  this was a docs-only change as of Epic 3. Epic 0/2/3 entries below still say 8000
+  in their manual-check notes because that's what was true when those epics shipped
+  — historically accurate, not a live instruction.
 
 ## Notes for the next session
 
@@ -70,6 +78,8 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   must be clean from this epic on. Needs Node.js — check it's installed before
   starting; if missing, stop and ask the user to install Node LTS per SPEC §3.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
-  `&` jobs can outlive the Bash tool call that started them and squat on :8000;
-  check `netstat -ano | grep :8000` and `taskkill //PID <pid> //F` if a fresh
-  `uvicorn` run fails to bind.
+  `&` jobs can outlive the Bash tool call that started them and squat on the port;
+  check `netstat -ano | grep :8002` and `taskkill //PID <pid> //F` if a fresh
+  `uvicorn` run fails to bind. (Port 8000 belongs to an unrelated Docker service on
+  this machine — don't use it, don't kill things listening there without checking
+  what they are first.)
