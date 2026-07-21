@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { api, type Page as PageData, type Term, type Token, type TermSummary } from "@/lib/api";
+import {
+  api,
+  type Page as PageData,
+  type Settings,
+  type Term,
+  type Token,
+  type TermSummary,
+} from "@/lib/api";
 import { extractSentence } from "@/lib/sentence";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
@@ -24,6 +31,13 @@ function ReadPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [target, setTarget] = useState<PopoverTarget | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+
+  useEffect(() => {
+    api.getSettings().then(setSettings).catch(() => {
+      // best-effort — TokenPopover falls back to sane defaults if this never loads
+    });
+  }, []);
 
   const loadPage = useCallback((id: number, pageNo: number) => {
     setLoading(true);
@@ -69,7 +83,7 @@ function ReadPageContent() {
       // Multi-word phrase lemmas never match a tokenizer lemma, so they never show up
       // in page.terms even when saved — fall back to an exact-match terms search.
       api
-        .listTerms(selectionText)
+        .listTerms({ q: selectionText })
         .then((matches) => matches.find((t) => t.lemma === selectionText) ?? null)
         .catch(() => null)
         .then((exact) => {
@@ -176,6 +190,9 @@ function ReadPageContent() {
       {target && (
         <TokenPopover
           target={target}
+          decks={settings?.decks ?? ["Korean"]}
+          defaultDeck={settings?.default_deck ?? "Korean"}
+          translatorBackend={settings?.translator_backend}
           onClose={() => setTarget(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}

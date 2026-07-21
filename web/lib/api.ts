@@ -67,6 +67,12 @@ export type AnkiSyncResult = {
   failed: { lemma: string; error: string }[];
 };
 
+export type Settings = {
+  decks: string[];
+  default_deck: string;
+  translator_backend: "deepl" | "claude";
+};
+
 class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -114,12 +120,19 @@ export const api = {
 
   patchTerm: (
     id: number,
-    body: Partial<Pick<Term, "lemma" | "translation" | "status" | "deck" | "sentence">>
+    body: Partial<Pick<Term, "lemma" | "translation" | "notes" | "status" | "deck" | "sentence">>
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   deleteTerm: (id: number) => request<void>(`/terms/${id}`, { method: "DELETE" }),
 
-  listTerms: (q: string) => request<Term[]>(`/terms?q=${encodeURIComponent(q)}`),
+  listTerms: (params?: { status?: TermStatus; deck?: string; q?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    if (params?.deck) sp.set("deck", params.deck);
+    if (params?.q) sp.set("q", params.q);
+    const qs = sp.toString();
+    return request<Term[]>(`/terms${qs ? `?${qs}` : ""}`);
+  },
 
   translate: (text: string, backend?: string) =>
     request<TranslateResult>("/translate", {
@@ -131,4 +144,9 @@ export const api = {
     request<DictEntry[]>(`/dict?word=${encodeURIComponent(word)}`),
 
   syncAnki: () => request<AnkiSyncResult>("/anki/sync", { method: "POST" }),
+
+  getSettings: () => request<Settings>("/settings"),
+
+  putSettings: (body: Partial<Settings>) =>
+    request<Settings>("/settings", { method: "PUT", body: JSON.stringify(body) }),
 };

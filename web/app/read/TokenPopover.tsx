@@ -3,11 +3,6 @@
 import { useState } from "react";
 import { api, type DictEntry, type Term, type TermStatus, type TermSummary } from "@/lib/api";
 
-// TODO(Epic 7): replace with GET /api/settings decks + default_deck once the
-// settings API exists — matches the section-4 default of decks: ["Korean"].
-const DECKS = ["Korean"];
-const DEFAULT_DECK = "Korean";
-
 export type PopoverTarget = {
   surface: string;
   lemma: string;
@@ -17,24 +12,30 @@ export type PopoverTarget = {
 
 export function TokenPopover({
   target,
+  decks,
+  defaultDeck,
+  translatorBackend,
   onClose,
   onSaved,
   onDeleted,
 }: {
   target: PopoverTarget;
+  decks: string[];
+  defaultDeck: string;
+  translatorBackend?: string;
   onClose: () => void;
   onSaved: (originalLemma: string, newLemma: string, term: Term) => void;
   onDeleted: (lemma: string) => void;
 }) {
   const isEditing = target.existing !== null;
   const deckOptions =
-    target.existing?.deck && !DECKS.includes(target.existing.deck)
-      ? [...DECKS, target.existing.deck]
-      : DECKS;
+    target.existing?.deck && !decks.includes(target.existing.deck)
+      ? [...decks, target.existing.deck]
+      : decks;
 
   const [lemma, setLemma] = useState(target.lemma);
   const [translation, setTranslation] = useState(target.existing?.translation ?? "");
-  const [deck, setDeck] = useState(target.existing?.deck || DEFAULT_DECK);
+  const [deck, setDeck] = useState(target.existing?.deck || defaultDeck);
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function TokenPopover({
     setBusy("translate");
     setError(null);
     try {
-      const { translation: result } = await api.translate(lemma.trim());
+      const { translation: result } = await api.translate(lemma.trim(), translatorBackend);
       setTranslation(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Translation failed.");

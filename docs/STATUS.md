@@ -130,7 +130,37 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   updates the same note in place, no duplicate; all Anki functionalities user
   tested came back working. `ANKI.md` (repo root) written as the user-facing
   how-to (setup, daily workflow, field mapping, troubleshooting).
-- [ ] Epic 7 — Terms & settings pages, polish
+- [x] Epic 7 — Terms & settings pages, polish — done (2026-07-21).
+  `server/routes/settings.py` (new): `GET/PUT /api/settings` — `{decks,
+  default_deck, translator_backend}`, each stored as its own JSON-encoded row in
+  the `settings` table, merged over hardcoded defaults so a fresh DB still
+  returns a complete dict; `PUT` accepts any subset and never clobbers keys it
+  didn't mention. `web/app/settings/page.tsx` (new): deck list editor (add/
+  remove), default-deck select, translator-backend select — each edit `PUT`s
+  immediately. `web/app/terms/page.tsx` replaced Epic 6's Sync-only stub with
+  the real page: status/deck/search filters (debounced against
+  `GET /api/terms?status=&deck=&q=`), tap-a-row-to-edit (translation/notes/
+  deck/status inline, Save/Delete), Sync button + toast carried over unchanged.
+  `web/app/read/TokenPopover.tsx`'s hardcoded `DECKS = ["Korean"]` (the Epic 5
+  interim call) is gone — decks/default deck/translator backend now come from
+  `GET /api/settings`, fetched once by `read/page.tsx` and passed down as props.
+  72/72 tests green (10 new: settings defaults, partial/full `PUT`, persistence
+  across `GET`). `npm run build`/`lint` both clean.
+  **Not verified in a browser** (still no browser tooling in this environment):
+  the acceptance criterion "decks created in settings appear in the
+  save-popover select" was verified at the code/data-contract level (props
+  wiring traced end-to-end) and via the passing test suite, not by actually
+  watching it happen on a phone. Given Epics 4-6 all had real bugs surface only
+  once the user tried them by hand, **do a real pass on this epic too**: add a
+  deck in `/settings`, confirm it shows up in the reader's Save popover deck
+  `<select>` and in `/terms`'s filter dropdown; change the default deck and
+  confirm a *new* term saved via the popover defaults to it; flip the
+  translator backend and confirm Translate in the popover actually uses the
+  new one (compare output against the old backend, or check DeepL vs Claude's
+  differing response shape/style); try `/terms`'s filters and inline edit
+  (lemma/translation/notes/deck/status, including a lemma rename that should
+  409 against an existing lemma — confirm the term list updates and Anki
+  dirty-flag rules still hold) and delete a term.
 - [ ] Epic 8 — Ops & Lute retirement
 
 ## Known issues / deviations

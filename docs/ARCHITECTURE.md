@@ -118,9 +118,34 @@ book has at least one (possibly empty) page.
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET/PUT `/api/settings` | PUT: `{key: value, …}` | full settings dict |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend}` — **implemented (Epic 7)** |
+| PUT `/api/settings` | any subset of the above | full settings dict after merge — **implemented (Epic 7)** |
 
-Settings route remains unimplemented (Epic 7).
+**Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
+as its own row in the `settings` (key/value) table, JSON-encoded in the `value`
+column (so `decks` round-trips as a real array, not a comma string). `GET` merges
+stored rows over `DEFAULTS = {"decks": ["Korean"], "default_deck": "Korean",
+"translator_backend": "deepl"}` so a fresh DB (or one where only some keys were
+ever `PUT`) still returns a complete dict. `PUT` accepts any subset of the three
+keys (`exclude_unset`) and upserts only those, via `INSERT ... ON CONFLICT(key) DO
+UPDATE` — so a partial `PUT` never clobbers keys it didn't mention.
+
+`web/app/settings/page.tsx` (new): deck list (add/remove, each `PUT` after the
+edit — no separate "Save" step, mirroring how `/terms`'s inline edits and the
+reader popover already commit per-action rather than batching), default-deck
+select, translator-backend select. `web/app/read/page.tsx` now fetches
+`GET /api/settings` once per page-mount and passes `decks`/`default_deck`/
+`translator_backend` down to `TokenPopover.tsx` as props (replacing its old
+hardcoded `DECKS = ["Korean"]` constant from Epic 5); `TokenPopover`'s Translate
+button now passes `translatorBackend` through to `POST /api/translate` instead of
+always taking the `.env` `TRANSLATOR` default.
+
+`web/app/terms/page.tsx` replaced Epic 6's bare-bones Sync-only stub with the
+full page: status/deck/search filters (debounced, hitting `GET /api/terms?status=
+&deck=&q=`), a term list where tapping a row switches it into an inline edit
+form (lemma/translation/notes/deck/status, Save/Delete — a duplicate-lemma
+rename surfaces the same 409 message the reader popover shows), and the
+existing Sync button + result toast carried over unchanged.
 
 **Epic 3 status:** `server/routes/terms.py` — full CRUD. `POST` and lemma-renaming
 `PATCH` both 409 on a duplicate lemma (DB `UNIQUE` constraint caught via
