@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { api, type Page as PageData, type Token, type TermSummary } from "@/lib/api";
+import { api, type Page as PageData, type Term, type Token, type TermSummary } from "@/lib/api";
+import { extractSentence } from "@/lib/sentence";
+import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
 export default function ReadPage() {
   return (
@@ -21,6 +23,7 @@ function ReadPageContent() {
   const [page, setPage] = useState<PageData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [target, setTarget] = useState<PopoverTarget | null>(null);
 
   const loadPage = useCallback((id: number, pageNo: number) => {
     setLoading(true);
@@ -48,6 +51,58 @@ function ReadPageContent() {
     });
   };
 
+  const handleArticleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (!page) return;
+
+    const selectionText = window.getSelection()?.toString().trim();
+    if (selectionText) {
+      window.getSelection()?.removeAllRanges();
+      const centerIndex = Math.max(page.content.indexOf(selectionText), 0);
+      setTarget({
+        surface: selectionText,
+        lemma: selectionText,
+        sentence: extractSentence(page.content, centerIndex),
+        existing: page.terms[selectionText] ?? null,
+      });
+      return;
+    }
+
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-token-index]");
+    if (!el) return;
+    const token = page.tokens[Number(el.dataset.tokenIndex)];
+    if (!token) return;
+    setTarget({
+      surface: token.surface,
+      lemma: token.lemma,
+      sentence: extractSentence(page.content, token.s),
+      existing: page.terms[token.lemma] ?? null,
+    });
+  };
+
+  const handleSaved = (originalLemma: string, newLemma: string, term: Term) => {
+    setPage((prev) => {
+      if (!prev) return prev;
+      const nextTerms = { ...prev.terms };
+      if (originalLemma !== newLemma) delete nextTerms[originalLemma];
+      nextTerms[newLemma] = {
+        id: term.id,
+        translation: term.translation,
+        status: term.status,
+        deck: term.deck,
+      };
+      return { ...prev, terms: nextTerms };
+    });
+  };
+
+  const handleDeleted = (lemma: string) => {
+    setPage((prev) => {
+      if (!prev) return prev;
+      const nextTerms = { ...prev.terms };
+      delete nextTerms[lemma];
+      return { ...prev, terms: nextTerms };
+    });
+  };
+
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <Link href="/" className="text-sm text-zinc-500 self-start">
@@ -66,7 +121,10 @@ function ReadPageContent() {
 
       {page && (
         <>
-          <article className="leading-loose text-lg whitespace-pre-wrap">
+          <article
+            className="leading-loose text-lg whitespace-pre-wrap select-text"
+            onClick={handleArticleClick}
+          >
             {renderContent(page.content, page.tokens, page.terms)}
           </article>
 
@@ -91,6 +149,15 @@ function ReadPageContent() {
           </div>
         </>
       )}
+
+      {target && (
+        <TokenPopover
+          target={target}
+          onClose={() => setTarget(null)}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />
+      )}
     </main>
   );
 }
@@ -110,6 +177,7 @@ function renderContent(
     nodes.push(
       <span
         key={i}
+        data-token-index={i}
         className={
           isLearning
             ? "bg-amber-200/70 dark:bg-amber-300/25 rounded-sm"

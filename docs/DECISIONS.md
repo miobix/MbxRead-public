@@ -65,6 +65,50 @@ init doesn't run at import/factory-call time. This lets `server/main.py` be impo
 `reader.db`, while `uvicorn server.main:app` still initializes the real DB on actual
 startup via the same lifespan hook.
 
+## 2026-07-21 — Highlighting stays exact-lemma-match even right after a correction
+SPEC §5 defines highlighting as `token.lemma in terms && status === 'learning'` —
+purely a string match against each token's own (fixed, tokenizer-computed) lemma.
+Verified directly: created a term for 입다 (matching the 입고 token, which
+highlighted correctly), then renamed it to 착용하다 via PATCH (simulating "tap a
+highlighted token → edit lemma → Save"). On a fresh page reload, *no* token
+highighted anymore — because 입고's own computed lemma is still 입다, and the terms
+map no longer has that key. This is correct per the literal spec rule, but means
+SPEC §11's manual-check wording ("hand-correct a bad lemma guess; highlight follows
+the corrected lemma") only holds for *other* occurrences whose own tokenizer lemma
+matches the corrected string, not necessarily the exact instance that was tapped, if
+its own tokenizer guess differs from the correction. No special-case "instance
+override" was added — the plain rule is simpler, matches the spec's own words, and
+avoids client/server highlight state diverging after a reload.
+
+## 2026-07-21 — Deck select is hardcoded to `["Korean"]` pending Epic 7
+SPEC §7's popover needs a deck `<select>` "from settings, default `default_deck`",
+but `GET/PUT /api/settings` is explicitly Epic 7 scope (SPEC §10), and building it
+now would preempt that epic's own deliverable and blur epic boundaries.
+`web/app/read/TokenPopover.tsx` hardcodes `DECKS = ["Korean"]` (matching section 4's
+own default) with a `TODO(Epic 7)` comment, plus a fallback that adds an existing
+term's deck to the option list if it's some other value (so editing a
+hand-seeded/legacy term with a different deck doesn't silently blank the select).
+Replace with real settings once Epic 7 builds that route.
+
+## 2026-07-21 — Sentence extraction reimplemented client-side, mirroring paging.py
+"Current sentence extracted around the tap point" (SPEC §7) needs to run against
+`page.content` in the browser — there's no API round-trip for it. `web/lib/
+sentence.ts`'s `extractSentence()` uses the same break-character class as `server/
+paging.py` (`[.?!…]` or a newline) to find the previous/next sentence boundary
+around a character index. Verified against a live server: for "그는 옷을 입고
+나갔다. 날씨가 좋았다." tapping 입고 (offset 6) extracts exactly "그는 옷을 입고
+나갔다." — the first sentence, correctly excluding the second.
+
+## 2026-07-21 — Click-delegated tap/selection handling, not per-span handlers
+`read/page.tsx` uses one `onClick` on the `<article>` container rather than a
+handler per token `<span>` (~10-50+ spans per page). Inside it: check
+`window.getSelection()` first — if non-empty, treat it as a phrase selection
+(SPEC's "long-press drag" case) and use the raw selected text as the lemma; else
+fall back to `e.target.closest('[data-token-index]')` to resolve which token (if
+any) was tapped. This single delegated handler correctly disambiguates a plain tap
+from a drag-selection without double-firing, since a plain click always collapses
+any prior selection before the handler runs.
+
 ## 2026-07-21 — Dropped next/font/google (Geist) from the create-next-app default
 The scaffold's `app/layout.tsx` used `next/font/google` to self-host Geist Sans/Mono,
 which fetches font files from Google's CDN during `next build`. Replaced with the

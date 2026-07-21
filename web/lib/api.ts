@@ -22,11 +22,27 @@ export type Token = {
   pos: string;
 };
 
+export type TermStatus = "learning" | "known" | "ignored";
+
 export type TermSummary = {
   id: number;
   translation: string;
-  status: "learning" | "known" | "ignored";
+  status: TermStatus;
   deck: string;
+};
+
+export type Term = {
+  id: number;
+  lemma: string;
+  translation: string;
+  notes: string;
+  status: TermStatus;
+  deck: string;
+  sentence: string;
+  anki_note_id: number | null;
+  anki_dirty: boolean;
+  created: string;
+  updated: string;
 };
 
 export type Page = {
@@ -36,6 +52,14 @@ export type Page = {
   tokens: Token[];
   terms: Record<string, TermSummary>;
 };
+
+export type DictEntry = {
+  word: string;
+  pos: string;
+  definitions: { ko: string; en_word: string; en_def: string }[];
+};
+
+export type TranslateResult = { translation: string; backend: string; cached: boolean };
 
 class ApiError extends Error {}
 
@@ -73,4 +97,28 @@ export const api = {
 
   getPage: (bookId: number, pageNo: number) =>
     request<Page>(`/books/${bookId}/pages/${pageNo}`),
+
+  createTerm: (body: {
+    lemma: string;
+    translation: string;
+    status?: TermStatus;
+    deck?: string;
+    sentence?: string;
+  }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
+
+  patchTerm: (
+    id: number,
+    body: Partial<Pick<Term, "lemma" | "translation" | "status" | "deck" | "sentence">>
+  ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  deleteTerm: (id: number) => request<void>(`/terms/${id}`, { method: "DELETE" }),
+
+  translate: (text: string, backend?: string) =>
+    request<TranslateResult>("/translate", {
+      method: "POST",
+      body: JSON.stringify({ text, backend }),
+    }),
+
+  dictLookup: (word: string) =>
+    request<DictEntry[]>(`/dict?word=${encodeURIComponent(word)}`),
 };

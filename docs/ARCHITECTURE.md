@@ -198,19 +198,56 @@ Routes:
   `current_page/page_count`), "Add book" modal: title + paste-textarea or `.txt`
   upload → `POST /api/books`. `app/page.tsx`, both the list and the modal in one
   file (single small component, no separate `components/` dir yet).
-- `/read/?id=<bookId>` — **implemented (Epic 4), no tooltip yet.** `app/read/
-  page.tsx`. Renders `content` as spans using `tokens` offsets; only tokens whose
-  lemma is in `terms` with status `learning` get a highlight
+- `/read/?id=<bookId>` — **implemented (Epic 4 rendering, Epic 5 tooltip flow).**
+  `app/read/page.tsx`. Renders `content` as spans using `tokens` offsets; only
+  tokens whose lemma is in `terms` with status `learning` get a highlight
   (`bg-amber-200/70 dark:bg-amber-300/25`). Page prev/next `PATCH`es
-  `current_page` (best-effort — a failed PATCH doesn't block navigation). Tap
-  handling / popover / translate-save flow is Epic 5.
+  `current_page` (best-effort — a failed PATCH doesn't block navigation).
   **Not `/read/[bookId]` as SPEC literally names it** — see "Deviations" below.
+
+  **Tap/selection handling (Epic 5):** one delegated `onClick` on the `<article>`
+  container (not per-span handlers). It checks `window.getSelection()` first — a
+  non-empty selection is treated as a phrase (SPEC's "long-press drag" case), using
+  the raw selected text as both surface and lemma, and its first-occurrence offset
+  in `content` (via `indexOf`) as the center point for sentence extraction. Otherwise
+  it resolves `e.target.closest('[data-token-index]')` to find which token span (if
+  any) was tapped — every span carries `data-token-index`, not just highlighted
+  ones, since untapped words must open the "new term" flow too.
+
+  **Popover (`app/read/TokenPopover.tsx`):** editable lemma input; Translate
+  (`POST /api/translate` on the current lemma value → fills the translation
+  textarea); Dictionary (`GET /api/dict` on the current lemma value → renders
+  entries inline, read-only, doesn't touch the textarea); Translate sentence
+  (`POST /api/translate` on the extracted sentence → shown as read-only reference
+  text, also not written into the textarea — the user copies by hand into their own
+  enriched translation, matching CLAUDE.md's "hand-enrich the translation"). Deck
+  `<select>` — see deviation 4 below. Save: if the popover opened on a token/phrase
+  that already had a saved term (any status, not just `learning`), `PATCH`s that
+  term's id; otherwise `POST`s a new one with `status: "learning"` — this create/
+  edit mode is fixed at popover-open time, not re-decided at save time. A 409 from
+  a rename-into-an-existing-lemma surfaces the backend's message directly. Mark
+  known / Ignore (`PATCH status`) and Delete only render when the popover opened on
+  an existing term. `sentence` is sent on every save (current tap context), even
+  when editing — there's no "only set sentence once" special case.
+
+  **Instant client-side highlight refresh on save (SPEC §7):** `page.terms` is
+  updated in React state from the `Term` the API returns — no refetch. If the save
+  renamed the lemma, the old key is deleted from the local map so a stale entry
+  doesn't linger. Verified directly against a live server that this produces the
+  exact behavior SPEC describes *and* its edge case: saving a lemma correction that
+  no other token's own tokenizer-lemma matches means, correctly, that no span
+  highlights after a reload — see `docs/DECISIONS.md` 2026-07-21 ("Highlighting
+  stays exact-lemma-match...").
 - `/terms` — not yet built (Epic 7).
 - `/settings` — not yet built (Epic 7).
 
 Keep dependencies minimal: Next + Tailwind only; no state library (React context/props
 suffice), no component kit. Small shared `lib/api.ts` fetch wrapper (typed, throws
-on non-2xx, reads `{error}`/`{detail}` from the body when present).
+on non-2xx, reads `{error}`/`{detail}` from the body when present) plus `lib/
+sentence.ts`'s `extractSentence(content, centerIndex)`, a client-side reimplementation
+of `server/paging.py`'s sentence-boundary heuristic (same break-character class:
+`. ? ! …` or a newline) — used to fill the popover's `sentence` field without a
+server round-trip.
 
 **Deviations from this section (Epic 4, both forced by `output: 'export'`; full
 reasoning in `docs/DECISIONS.md` 2026-07-21):**
@@ -230,6 +267,9 @@ reasoning in `docs/DECISIONS.md` 2026-07-21):**
 3. **Removed `next/font/google` (Geist) from the default scaffold.** It fetches
    font files from Google Fonts at build time; kept the layout on the system font
    stack instead to avoid an unnecessary external-network build dependency.
+4. **(Epic 5) Deck select is hardcoded to `["Korean"]`**, not sourced from
+   `GET /api/settings` — that route is Epic 7 scope and doesn't exist yet. See
+   `docs/DECISIONS.md` 2026-07-21.
 
 ## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — not yet
 implemented)

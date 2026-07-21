@@ -78,7 +78,32 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   and `/api/*` routes correctly side by side (`GET /`, `GET /read/`, `GET
   /api/books` all returned correctly through one running server). The user should
   do a real visual/touch pass before relying on this epic being fully done.
-- [ ] Epic 5 — Tooltip flow (tap → translate → edit → save)
+- [x] Epic 5 — Tooltip flow (tap → translate → edit → save) — done (2026-07-21).
+  `web/app/read/TokenPopover.tsx` (new) + `web/lib/sentence.ts` (new) +
+  `web/app/read/page.tsx` (tap/selection delegation wired in). Full flow: tap an
+  unlearned token or drag-select a phrase → popover with editable lemma, Translate
+  / Dictionary / Translate-sentence, editable translation textarea, deck select →
+  Save (`POST` new or `PATCH` existing, fixed at popover-open time); tap an
+  already-saved token → same popover pre-filled, plus Mark known / Ignore /
+  Delete. Client-side `page.terms` map updates from the API response on save —
+  no refetch — so highlights refresh instantly.
+  `npm run build` and `npm run lint` both clean.
+  **Interim simplification:** deck `<select>` is hardcoded to `["Korean"]`
+  (matches SPEC §4's own default) since `GET /api/settings` doesn't exist until
+  Epic 7 — `TODO(Epic 7)` comment left in `TokenPopover.tsx`.
+  **Verified without a browser** (still none available in this environment): every
+  request/response shape the popover depends on, against a live server with real
+  `.env` keys — created a term via the exact payload `Save` sends, confirmed the
+  saved lemma's token highlights on the next page fetch; renamed the term's lemma
+  (simulating a hand-correction) and confirmed *no* token highlights afterward,
+  since no token's own tokenizer-lemma matches the new string — this is correct
+  per SPEC's literal `token.lemma in terms` rule, not a bug (see DECISIONS.md);
+  exercised mark-known/mark-ignored/delete; hit a real 409 on a duplicate lemma and
+  confirmed the exact error string the popover would display. Also independently
+  verified `lib/sentence.ts`'s extraction logic against the live page content in
+  Python (mirroring the same regex) — correct sentence boundaries. **Not verified:
+  actual popover rendering/positioning, touch drag-selection, and general
+  usability** — needs a real visual/touch pass.
 - [ ] Epic 6 — Anki sync (AnkiConnect add/update)
 - [ ] Epic 7 — Terms & settings pages, polish
 - [ ] Epic 8 — Ops & Lute retirement
@@ -99,18 +124,21 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 5 — the tooltip flow (tap → popover → Translate/Dictionary →
-  editable translation → deck select → Save; tap-highlighted → edit/known/ignore/
-  delete; phrase selection; sentence extraction). This is "the heart of the app"
-  per SPEC §10 — budget real care here. `npm run build` must stay clean; add
-  `npm run lint` to the pre-commit check too (caught a real
-  `react-hooks/set-state-in-effect` bug in Epic 4 that `tsc`/`next build` alone
-  missed).
-- No browser automation tool was available in this environment during Epic 4 (the
-  `claude-in-chrome` skill is listed but its MCP tools didn't load — no configured
-  extension). Frontend work after this point should get a real visual/interaction
-  check if such a tool becomes available; otherwise say explicitly what wasn't
-  verified, per CLAUDE.md's testing guidance.
+- Next up: Epic 6 — Anki sync. `server/anki.py` (AnkiConnect client) +
+  `routes/anki_sync.py` + a Sync button on `/terms`... except `/terms` doesn't
+  exist yet (that's Epic 7). Read SPEC §10 Epic 6 closely — it may make sense to
+  build the sync button as a small addition to `/` or a bare-bones `/terms` stub
+  rather than fully building Epic 7's page early; use judgment and log whatever's
+  decided in DECISIONS.md, same as the Epic 5 deck-select interim call.
+- **A real visual/touch pass over Epics 4 and 5 together is overdue.** No browser
+  automation tool has been available in this environment through either epic (the
+  `claude-in-chrome` skill is listed but its MCP tools never loaded — no configured
+  extension). Everything shipped so far was verified at the API/data-contract
+  level only. Before going much further, someone with a browser should actually
+  tap through: add a book, tap an unlearned word, translate, save, confirm the
+  highlight appears and every inflection of that lemma highlights too, tap it
+  again and mark it known, try a phrase selection. If a browser tool becomes
+  available, use it; otherwise keep being explicit about what's unverified.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
   `&` jobs can outlive the Bash tool call that started them and squat on the port;
   check `netstat -ano | grep :8002` and `taskkill //PID <pid> //F` if a fresh
