@@ -16,7 +16,15 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   Smoke tests in `server/tests/` (health 200, schema creation, idempotent init, FK
   pragma) — all green. Manual check: `uvicorn server.main:app --port 8000` boots,
   `/api/health` returns `{"ok":true,"version":"0.1.0"}`.
-- [ ] Epic 1 — Tokenizer (kiwipiepy wrapper + table-driven tests)
+- [x] Epic 1 — Tokenizer (kiwipiepy wrapper + table-driven tests) — done (2026-07-21).
+  `server/tokenizer.py` implements the section-6 rule order exactly. One deviation
+  found during implementation: kiwi tags irregular-verb stems with a suffixed subtag
+  (`VV-R`, `VV-I`, `VA-I`, …) rather than the bare `VV`/`VA`/`VX` the spec examples
+  show, so rule 2's match uses `tag.startswith(("VV","VA","VX"))`; `pos` is still
+  reported as the literal kiwi tag (e.g. `VV-R`), which is a superset of what the
+  spec's examples imply, not a behavior change. All 9 table-driven conjugation cases
+  pass; offsets round-trip; multi-sentence and latin/digit/punctuation-mixed text
+  handled without crashing.
 - [ ] Epic 2 — Books & pages API
 - [ ] Epic 3 — Terms & translate APIs
 - [ ] Epic 4 — Frontend: scaffold, book list, reader rendering
@@ -33,5 +41,6 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 1 — `server/tokenizer.py` (kiwipiepy wrapper) + table-driven tests per
-  SPEC §6. Run tests with `.venv\Scripts\python.exe -m pytest server/tests -q`.
+- Next up: Epic 2 — `routes/books.py` (CRUD), page-splitting util, and the page
+  payload endpoint (`content + tokens + terms`) per SPEC §5/§4. Run tests with
+  `.venv\Scripts\python.exe -m pytest server/tests -q`.

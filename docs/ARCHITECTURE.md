@@ -119,25 +119,37 @@ Everything except `/api/health` is unimplemented as of Epic 0 (`routes/` is empt
 tokens. The frontend renders spans from offsets and applies the highlight class when
 `token.lemma in terms && status === 'learning'`.
 
-## Tokenizer spec (`server/tokenizer.py`, Epic 1 — not yet implemented)
+## Tokenizer (`server/tokenizer.py`, Epic 1 — implemented)
 
-Use `kiwipiepy.Kiwi()` (module-level singleton — model load is slow). `kiwi.tokenize
-(text)` returns morphemes with `form`, `tag`, `start`, `len`.
+`kiwipiepy.Kiwi()` module-level singleton (`_kiwi`). `_kiwi.tokenize(text)` returns
+`Token(form, tag, start, len)` namedtuples sorted by `start`.
 
-Algorithm — group morphemes into **eojeols** (runs of non-whitespace in the original
-text), then pick the eojeol's *primary* morpheme:
+Algorithm — group morphemes into **eojeols** via `re.finditer(r"\S+", text)` (runs of
+non-whitespace, so a trailing/attached punctuation mark stays part of the eojeol, e.g.
+`"갔다."`), assign each eojeol the morphemes whose `start` falls in `[eojeol.start,
+eojeol.end)`, then pick the eojeol's *primary* morpheme from its first one or two
+morphemes:
 
-1. **하다-derivations first:** noun (`NNG/NNP/XR`) immediately followed by `XSV`/`XSA`
-   → lemma = noun-form + `하다` (공부했어요 → 공부하다), pos = `VV`/`VA`.
-2. Else first morpheme tagged `VV`, `VA`, or `VX` → lemma = form + `다` (입고 → 입다,
-   갔다 → 가다, 예뻐요 → 예쁘다).
-3. Else first morpheme tagged `NNG NNP NNB NR NP MAG MAJ IC` → lemma = form (학교에 →
-   학교, 사람들이 → 사람).
-4. Else (eojeol is only particles/endings/symbols/numbers) → emit no token for it.
+1. **하다-derivations first:** morpheme[0] tagged `NNG/NNP/XR` and morpheme[1] tagged
+   `XSV`/`XSA` → lemma = morpheme[0].form + `하다` (공부했어요 → 공부하다), pos = `VV`
+   if the suffix was `XSV`, `VA` if `XSA`.
+2. Else morpheme[0] tag **starts with** `VV`, `VA`, or `VX` → lemma = form + `다` (입고
+   → 입다, 갔다 → 가다, 예뻐요 → 예쁘다). `pos` = the literal kiwi tag, unnormalized —
+   see deviation below.
+3. Else morpheme[0] tagged exactly `NNG NNP NNB NR NP MAG MAJ IC` → lemma = form
+   (학교에 → 학교, 사람들이 → 사람).
+4. Else (eojeol is only particles/endings/symbols/numbers, or a copula `VCP`/`VCN`) →
+   emit no token for it.
 
-Return `list[Token]` with `surface` (full eojeol text), `s`, `e`, `lemma`, `pos` (tag of
-chosen morpheme). Wrong guesses are acceptable — the UI lets the user edit the lemma
-before saving.
+Returns `list[Token]` (frozen dataclass: `surface`, `s`, `e`, `lemma`, `pos`). Wrong
+guesses are acceptable — the UI lets the user edit the lemma before saving; a crash or
+a `text[s:e] != surface` mismatch is the only real bug.
+
+**Deviation from the spec's literal rule 2 wording:** kiwi tags irregular-conjugation
+stems with a suffixed subtag (`VV-R`, `VV-I`, `VA-I`, …), not the bare `VV`/`VA`/`VX`
+the spec's prose implies — verified directly against 입고 (`VV-R`), 들어요/돕다
+(`VV-I`), 더워요 (`VA-I`). Rule 2 therefore matches by tag **prefix**. See
+`docs/DECISIONS.md` (2026-07-21).
 
 ## Frontend spec (`web/`, Epic 4+ — not yet scaffolded)
 
