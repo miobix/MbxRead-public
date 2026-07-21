@@ -25,7 +25,16 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   spec's examples imply, not a behavior change. All 9 table-driven conjugation cases
   pass; offsets round-trip; multi-sentence and latin/digit/punctuation-mixed text
   handled without crashing.
-- [ ] Epic 2 — Books & pages API
+- [x] Epic 2 — Books & pages API — done (2026-07-21). `server/paging.py`
+  (`split_pages`, sentence/newline-aware, falls back to an oversized single page
+  rather than ever cutting mid-sentence) and `server/routes/books.py` (full CRUD +
+  `GET /api/books/{id}/pages/{n}` returning `content/tokens/terms`, wired into
+  `main.py`). `db.get_db` added as a FastAPI request dependency yielding a
+  per-request `sqlite3.Connection` from `app.state.db_path`. 43/43 tests green (16
+  new: paging edge cases, multi-page splitting, page payload shape, terms join,
+  current_page/title patch, cascade delete, 404s). Manual check: POSTed a Korean
+  story via a live `uvicorn` instance, GET page 1 returned correct token lemmas
+  (입다, 나가다, 좋다, 가다) with offsets round-tripping.
 - [ ] Epic 3 — Terms & translate APIs
 - [ ] Epic 4 — Frontend: scaffold, book list, reader rendering
 - [ ] Epic 5 — Tooltip flow (tap → translate → edit → save)
@@ -41,6 +50,10 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 2 — `routes/books.py` (CRUD), page-splitting util, and the page
-  payload endpoint (`content + tokens + terms`) per SPEC §5/§4. Run tests with
-  `.venv\Scripts\python.exe -m pytest server/tests -q`.
+- Next up: Epic 3 — `routes/terms.py` (CRUD, unique-lemma 409, dirty-flag rule) and
+  `routes/translate.py` (`/api/translate`, `/api/dict` wrapping `translate_svc`).
+  Run tests with `.venv\Scripts\python.exe -m pytest server/tests -q`.
+- When manually smoke-testing with a live `uvicorn` process on Windows, background
+  `&` jobs can outlive the Bash tool call that started them and squat on :8000;
+  check `netstat -ano | grep :8000` and `taskkill //PID <pid> //F` if a fresh
+  `uvicorn` run fails to bind.

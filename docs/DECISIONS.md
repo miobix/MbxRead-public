@@ -41,6 +41,13 @@ common irregular verbs still resolve; `pos` on the emitted token is left as the 
 kiwi tag (e.g. `VV-R`) rather than normalized, since SPEC only requires "pos (tag of
 chosen morpheme)".
 
+## 2026-07-21 — Oversized single-sentence pages allowed over mid-sentence splits
+`paging.split_pages` prioritizes "never split mid-sentence" over the ~1500-char page
+size target: if one sentence alone exceeds `max_chars` (no break point found within
+the limit), it takes the next available break point past the limit rather than
+cutting the sentence. An oversized page is a minor UX cost; a torn sentence would
+break tokenizer offsets' usefulness to the reader.
+
 ## 2026-07-21 — DB init moved to FastAPI lifespan, not app-factory call time
 `create_app()` only registers a `lifespan` handler that calls `db.init_db(path)`;
 init doesn't run at import/factory-call time. This lets `server/main.py` be imported

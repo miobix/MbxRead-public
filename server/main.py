@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from . import db
+from .routes import books
 
 WEB_OUT = Path(__file__).resolve().parent.parent / "web" / "out"
 
@@ -24,6 +25,8 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
     @app.get("/api/health")
     def health():
         return {"ok": True, "version": "0.1.0"}
+
+    app.include_router(books.router)
 
     if WEB_OUT.is_dir():
         app.mount("/", StaticFiles(directory=WEB_OUT, html=True), name="web")

@@ -1,6 +1,9 @@
 """SQLite connection and schema management for reader.db."""
 import sqlite3
 from pathlib import Path
+from typing import Generator
+
+from fastapi import Request
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "reader.db"
 
@@ -48,5 +51,14 @@ def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
     try:
         conn.executescript(SCHEMA)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
+    """FastAPI dependency yielding a per-request connection to the app's DB."""
+    conn = get_connection(request.app.state.db_path)
+    try:
+        yield conn
     finally:
         conn.close()

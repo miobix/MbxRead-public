@@ -39,10 +39,17 @@ returning a FastAPI app whose `lifespan` calls `db.init_db(path)` on startup (no
 import time) — this lets tests point at a temp DB via `create_app(tmp_path / "test.db")`
 without ever touching the real `reader.db`. Module-level `app = create_app()` is the
 uvicorn entrypoint (`uvicorn server.main:app --port 8000`) and uses the default path
-(`reader.db` at repo root). Only `GET /api/health` exists so far; `web/out` static
-mount is wired but inert until Epic 4 creates that directory. `routes/` package exists
-but is empty until Epic 2 onward. `.venv` was created with Python 3.10 (`py -3.10 -m
-venv .venv`) per kiwipiepy's Windows compatibility story.
+(`reader.db` at repo root). `web/out` static mount is wired but inert until Epic 4
+creates that directory. `.venv` was created with Python 3.10 (`py -3.10 -m venv
+.venv`) per kiwipiepy's Windows compatibility story.
+
+**Epic 2 status:** `server/routes/books.py` implements full CRUD plus the page
+payload endpoint, registered in `main.py` via `app.include_router(books.router)`.
+`server/db.py` adds `get_db(request: Request)`, a FastAPI dependency that opens one
+`sqlite3.Connection` per request from `request.app.state.db_path` and closes it after
+— routes take `conn: sqlite3.Connection = Depends(db.get_db)`. `server/paging.py`
+holds the page-splitting util (see below). `routes/terms.py`, `translate.py`,
+`anki_sync.py`, `settings.py` remain unimplemented (Epic 3+).
 
 ## Data model (`reader.db`, created by `server/db.py` on startup)
 
@@ -78,22 +85,31 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
 Foreign keys ON (`PRAGMA foreign_keys=ON` per connection, set in `db.get_connection`).
-Page splitting at import: split text into pages of ≤ ~1500 chars, breaking only at
-sentence ends (`.` `?` `!` `…` `다.` patterns / newlines); never split mid-sentence.
 Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
 `default_deck`, `translator_backend`.
+
+### Page splitting (`server/paging.py`, Epic 2 — implemented)
+
+`split_pages(text, max_chars=1500)`: candidate break points are every position right
+after a run of `. ? ! …` (optionally followed by a closing quote/bracket) or right
+after a `\n`, plus `len(text)` itself. Greedily walks the text, at each step taking
+the furthest break point that still fits within `max_chars` of the current position;
+if none fits (a single sentence longer than `max_chars`), takes the next break point
+past the limit rather than ever cutting mid-sentence — so an oversized page is
+possible but a split mid-sentence is not. `split_pages("")` returns `[""]` so every
+book has at least one (possibly empty) page.
 
 ## API contract (all under `/api`, JSON)
 
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | – | `[{id,title,source,current_page,page_count,created}]` |
-| POST `/api/books` | `{title, text, source?}` | created book (splits pages) |
-| GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` |
-| PATCH `/api/books/{id}` | `{current_page?, title?}` | updated book |
-| DELETE `/api/books/{id}` | – | 204 |
-| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) |
+| GET `/api/books` | – | `[{id,title,source,current_page,page_count,created}]` — **implemented (Epic 2)** |
+| POST `/api/books` | `{title, text, source?}` | created book (splits pages) — **implemented (Epic 2)** |
+| GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
+| PATCH `/api/books/{id}` | `{current_page?, title?}` | updated book — **implemented (Epic 2)** |
+| DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
+| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` |
 | POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?}` | created term (409 if lemma exists) |
 | PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` |
@@ -103,9 +119,9 @@ Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` |
 | GET/PUT `/api/settings` | PUT: `{key: value, …}` | full settings dict |
 
-Everything except `/api/health` is unimplemented as of Epic 0 (`routes/` is empty).
+Terms/translate/dict/anki-sync/settings routes remain unimplemented (Epic 3+).
 
-**Page payload** (the core endpoint, Epic 2):
+**Page payload** (the core endpoint, implemented in Epic 2):
 ```json
 {
   "page_no": 3, "page_count": 12,
