@@ -123,15 +123,13 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   Epic 5's deck-select decision — see `docs/DECISIONS.md`. Also: empty `deck`
   values (schema default `''`) fall back to Anki's literal `"Default"` deck since
   AnkiConnect requires a real deck name.
-  **Needs the user's Anki desktop open with AnkiConnect** to actually exercise —
-  not verified against a live Anki instance in this environment (mocked only, per
-  CLAUDE.md's offline-test requirement). The user should open Anki, click Sync on
-  `/terms`, and confirm in Anki's browser: a new note appears in the right deck
-  with no CORS/config changes needed (AnkiConnect's CORS origin allowlist is only
-  enforced for browser-originated requests carrying an `Origin` header; this is a
-  server-to-server `httpx` call, so it isn't subject to that check) — then edit a
-  synced term's translation and re-sync to confirm it updates the same note
-  in-place rather than duplicating.
+  **Manual accept check closed (2026-07-21):** user tested against a live Anki
+  desktop with AnkiConnect (no CORS config changes needed, as expected — that
+  allowlist only applies to browser-originated requests). Confirmed: new notes
+  land in the assigned deck on Sync; editing a synced term and re-syncing
+  updates the same note in place, no duplicate; all Anki functionalities user
+  tested came back working. `ANKI.md` (repo root) written as the user-facing
+  how-to (setup, daily workflow, field mapping, troubleshooting).
 - [ ] Epic 7 — Terms & settings pages, polish
 - [ ] Epic 8 — Ops & Lute retirement
 
@@ -158,14 +156,9 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   not yet created) and swap `TokenPopover.tsx`'s hardcoded `DECKS = ["Korean"]`
   for real settings-backed deck list + default deck (see the Epic 5 deck-select
   and Epic 6 `/terms`-stub entries in `docs/DECISIONS.md`).
-- **Epic 6's Anki sync has only been tested against a mocked AnkiConnect** (per
-  CLAUDE.md's offline-test rule) — nobody has run it against a live Anki desktop
-  yet. Before trusting it, open Anki (AnkiConnect already installed from the
-  legacy Lute setup), click "Sync to Anki" on `/terms`, and confirm in Anki's
-  browser: a new note lands in the right deck; editing a synced term's
-  translation and re-syncing updates that same note rather than duplicating it;
-  closing Anki produces the expected 503/error message in the UI instead of a
-  crash.
+- **Epic 6's Anki sync is verified against a live Anki desktop** (2026-07-21,
+  by the user) — new-note add, in-place update on re-sync, deck assignment all
+  confirmed working. `ANKI.md` at the repo root is the user-facing how-to.
 - **Visual/touch pass over Epics 4-5 done (2026-07-21), by the user on a real
   phone/browser** (no browser automation tool has been available in this
   environment). Result: book list, reader rendering, pagination (incl. returning
