@@ -44,10 +44,12 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   new). Tests mock at the `server.routes.translate` module boundary (not `httpx`),
   so the real `translate_cache.sqlite3` / `.env` are never touched — confirmed
   neither file exists after a full test run.
-  **Deferred:** the spec's manual accept check ("with real `.env` keys, POST
-  `/api/translate {"text":"사랑"}` returns a translation") needs API keys this
-  environment doesn't have; `.env` doesn't exist here (only `.env.example`). Do this
-  manually once `.env` is populated.
+  **Manual accept check closed (2026-07-21):** user added a real `.env`
+  (`TRANSLATOR=deepl`, `DEEPL_API_KEY` set, no `ANTHROPIC_API_KEY`/`KRDICT_API_KEY`).
+  Verified against a live `uvicorn` instance: `POST /api/translate {"text":"사랑"}` →
+  `{"translation":"Love","backend":"deepl","cached":false}`; `GET /api/dict?word=사랑`
+  → `[]` (krdict.lookup degrades gracefully with no key, per translate_svc design —
+  not a bug).
 - [ ] Epic 4 — Frontend: scaffold, book list, reader rendering
 - [ ] Epic 5 — Tooltip flow (tap → translate → edit → save)
 - [ ] Epic 6 — Anki sync (AnkiConnect add/update)
@@ -67,9 +69,6 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   from token offsets with learning-term highlights + pagination. `npm run build`
   must be clean from this epic on. Needs Node.js — check it's installed before
   starting; if missing, stop and ask the user to install Node LTS per SPEC §3.
-- Manual verification of `POST /api/translate` with a live translation backend is
-  still outstanding — needs a populated `.env` (`DEEPL_API_KEY` or
-  `ANTHROPIC_API_KEY`), which doesn't exist in this dev environment yet.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
   `&` jobs can outlive the Bash tool call that started them and squat on :8000;
   check `netstat -ano | grep :8000` and `taskkill //PID <pid> //F` if a fresh
