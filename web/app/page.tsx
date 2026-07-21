@@ -22,12 +22,17 @@ export default function HomePage() {
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Korean Reader</h1>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="rounded-full bg-zinc-900 text-white px-4 py-2 text-sm font-medium dark:bg-white dark:text-zinc-900"
-        >
-          + Add book
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href="/terms" className="text-sm text-zinc-500">
+            Terms
+          </Link>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="rounded-full bg-zinc-900 text-white px-4 py-2 text-sm font-medium dark:bg-white dark:text-zinc-900"
+          >
+            + Add book
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-red-600 dark:text-red-400 text-sm mb-4">{error}</p>}

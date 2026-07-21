@@ -61,6 +61,12 @@ export type DictEntry = {
 
 export type TranslateResult = { translation: string; backend: string; cached: boolean };
 
+export type AnkiSyncResult = {
+  added: number;
+  updated: number;
+  failed: { lemma: string; error: string }[];
+};
+
 class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -123,4 +129,6 @@ export const api = {
 
   dictLookup: (word: string) =>
     request<DictEntry[]>(`/dict?word=${encodeURIComponent(word)}`),
+
+  syncAnki: () => request<AnkiSyncResult>("/anki/sync", { method: "POST" }),
 };

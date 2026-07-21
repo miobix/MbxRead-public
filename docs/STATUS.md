@@ -104,7 +104,34 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   Python (mirroring the same regex) — correct sentence boundaries. **Not verified:
   actual popover rendering/positioning, touch drag-selection, and general
   usability** — needs a real visual/touch pass.
-- [ ] Epic 6 — Anki sync (AnkiConnect add/update)
+- [x] Epic 6 — Anki sync (AnkiConnect add/update) — done (2026-07-21).
+  `server/anki.py` (single `_invoke()` choke point for every AnkiConnect call —
+  `ping`, `create_deck`, `add_note`, `update_note_fields` — raising `AnkiError` on
+  transport failure or a non-null `error` in the response body) + `server/routes/
+  anki_sync.py` (`POST /api/anki/sync`: 503 if Anki unreachable; creates any decks
+  referenced by pending terms; adds `status='learning' AND anki_note_id IS NULL`
+  terms via `addNote`; pushes `anki_dirty=1` terms via `updateNoteFields`; per-note
+  failures land in `failed` and don't block the rest; returns
+  `{added, updated, failed}`), wired into `main.py`. 68/68 tests green (6 new,
+  mocking at the `anki` module boundary per existing convention, plus one patching
+  `httpx.post` directly to cover `_invoke`'s transport-error branch).
+  `web/app/terms/page.tsx` (new, bare-bones stub — just the Sync button + result
+  toast, linked from the home page header) + `lib/api.ts`'s `syncAnki()`.
+  `npm run build`/`lint` both clean.
+  **Deviation:** the full `/terms` table (filter/inline-edit/delete) stayed
+  Epic 7 scope rather than being pulled forward, per the interim-call pattern from
+  Epic 5's deck-select decision — see `docs/DECISIONS.md`. Also: empty `deck`
+  values (schema default `''`) fall back to Anki's literal `"Default"` deck since
+  AnkiConnect requires a real deck name.
+  **Needs the user's Anki desktop open with AnkiConnect** to actually exercise —
+  not verified against a live Anki instance in this environment (mocked only, per
+  CLAUDE.md's offline-test requirement). The user should open Anki, click Sync on
+  `/terms`, and confirm in Anki's browser: a new note appears in the right deck
+  with no CORS/config changes needed (AnkiConnect's CORS origin allowlist is only
+  enforced for browser-originated requests carrying an `Origin` header; this is a
+  server-to-server `httpx` call, so it isn't subject to that check) — then edit a
+  synced term's translation and re-sync to confirm it updates the same note
+  in-place rather than duplicating.
 - [ ] Epic 7 — Terms & settings pages, polish
 - [ ] Epic 8 — Ops & Lute retirement
 
@@ -124,12 +151,21 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 6 — Anki sync. `server/anki.py` (AnkiConnect client) +
-  `routes/anki_sync.py` + a Sync button on `/terms`... except `/terms` doesn't
-  exist yet (that's Epic 7). Read SPEC §10 Epic 6 closely — it may make sense to
-  build the sync button as a small addition to `/` or a bare-bones `/terms` stub
-  rather than fully building Epic 7's page early; use judgment and log whatever's
-  decided in DECISIONS.md, same as the Epic 5 deck-select interim call.
+- Next up: Epic 7 — Terms & settings pages, polish. `web/app/terms/page.tsx`
+  currently exists only as Epic 6's bare-bones Sync-button stub; replace its
+  contents with the real filterable/editable table (the Sync button/logic can
+  move in as-is). Also build `GET/PUT /api/settings` (`server/routes/settings.py`,
+  not yet created) and swap `TokenPopover.tsx`'s hardcoded `DECKS = ["Korean"]`
+  for real settings-backed deck list + default deck (see the Epic 5 deck-select
+  and Epic 6 `/terms`-stub entries in `docs/DECISIONS.md`).
+- **Epic 6's Anki sync has only been tested against a mocked AnkiConnect** (per
+  CLAUDE.md's offline-test rule) — nobody has run it against a live Anki desktop
+  yet. Before trusting it, open Anki (AnkiConnect already installed from the
+  legacy Lute setup), click "Sync to Anki" on `/terms`, and confirm in Anki's
+  browser: a new note lands in the right deck; editing a synced term's
+  translation and re-syncing updates that same note rather than duplicating it;
+  closing Anki produces the expected 503/error message in the UI instead of a
+  crash.
 - **Visual/touch pass over Epics 4-5 done (2026-07-21), by the user on a real
   phone/browser** (no browser automation tool has been available in this
   environment). Result: book list, reader rendering, pagination (incl. returning

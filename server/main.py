@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from . import db
-from .routes import books, terms, translate
+from .routes import anki_sync, books, terms, translate
 
 WEB_OUT = Path(__file__).resolve().parent.parent / "web" / "out"
 
@@ -29,6 +29,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
     app.include_router(books.router)
     app.include_router(terms.router)
     app.include_router(translate.router)
+    app.include_router(anki_sync.router)
 
     if WEB_OUT.is_dir():
         app.mount("/", StaticFiles(directory=WEB_OUT, html=True), name="web")

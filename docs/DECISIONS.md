@@ -170,6 +170,22 @@ The user did the overdue browser pass and hit three real issues, fixed same-day:
    handler, and state from `TokenPopover.tsx`; the italic sentence-context line
    (used for the saved `sentence` field) stays.
 
+## 2026-07-21 — Epic 6: bare-bones `/terms` stub instead of building Epic 7 early
+SPEC §7's "Sync to Anki" button lives on the `/terms` page, but that page (filter
+table, inline edit, delete) is explicit Epic 7 scope — building it now would blur
+epic boundaries and duplicate work. `web/app/terms/page.tsx` is a minimal stub: a
+heading, the Sync button, and the `{added, updated, failed}` result — nothing else.
+Linked from the home page header. Epic 7 replaces this file's contents with the
+real table; the Sync button/logic moves in as-is.
+
+## 2026-07-21 — Anki sync: empty `deck` column falls back to Anki's "Default" deck
+`terms.deck` defaults to `''` in the schema (SPEC §4), but AnkiConnect's `createDeck`/
+`addNote` need an actual deck name. The current UI's deck `<select>` always has a
+value (`TokenPopover.tsx`'s hardcoded `["Korean"]`), so `''` is only reachable for
+hand-seeded/legacy terms. `routes/anki_sync.py` treats an empty deck as the literal
+string `"Default"` (Anki's own built-in default deck) rather than erroring or
+skipping the term.
+
 ## 2026-07-21 — Server port changed 8000 → 8002
 Discovered while manually testing Epic 2/3: the user's Android app syncs content via
 a Docker-based service already listening on `localhost:8000` on this machine (it was

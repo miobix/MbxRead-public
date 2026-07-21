@@ -49,7 +49,8 @@ payload endpoint, registered in `main.py` via `app.include_router(books.router)`
 `sqlite3.Connection` per request from `request.app.state.db_path` and closes it after
 — routes take `conn: sqlite3.Connection = Depends(db.get_db)`. `server/paging.py`
 holds the page-splitting util (see below). `routes/terms.py`, `translate.py`,
-`anki_sync.py`, `settings.py` remain unimplemented (Epic 3+).
+`anki_sync.py` are now implemented (Epics 3, 3, 6); `settings.py` remains
+unimplemented (Epic 7).
 
 ## Data model (`reader.db`, created by `server/db.py` on startup)
 
@@ -116,10 +117,10 @@ book has at least one (possibly empty) page.
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
-| POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` |
+| POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
 | GET/PUT `/api/settings` | PUT: `{key: value, …}` | full settings dict |
 
-Anki-sync/settings routes remain unimplemented (Epic 6+/7).
+Settings route remains unimplemented (Epic 7).
 
 **Epic 3 status:** `server/routes/terms.py` — full CRUD. `POST` and lemma-renaming
 `PATCH` both 409 on a duplicate lemma (DB `UNIQUE` constraint caught via
@@ -271,8 +272,7 @@ reasoning in `docs/DECISIONS.md` 2026-07-21):**
    `GET /api/settings` — that route is Epic 7 scope and doesn't exist yet. See
    `docs/DECISIONS.md` 2026-07-21.
 
-## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — not yet
-implemented)
+## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — implemented)
 
 AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`);
 Anki desktop with the AnkiConnect add-on (code 2055492159) is already installed from
@@ -290,3 +290,17 @@ Sync algorithm:
    same field rendering; on success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not
    synced (existing notes left alone).
+
+**Epic 6 status:** `server/anki.py`'s `_invoke()` is the single choke point for every
+AnkiConnect call (`httpx.post`, 5s timeout) — raises `AnkiError` on transport failure
+or a non-null `error` field in the response body, which `routes/anki_sync.py` turns
+into the 503 (ping) or a per-term `failed` entry (add/update). A term's `deck` column
+defaults to `''` in the schema, but AnkiConnect needs a real deck name, so an empty
+deck falls back to the literal string `"Default"` (Anki's own built-in default deck)
+— only reachable for hand-seeded/legacy terms, since the UI's deck `<select>` always
+has a value. Tests monkeypatch the functions on the `anki` module directly (same
+pattern as `translate.py`'s `krdict` module-level patching), plus one test patching
+`httpx.post` itself to cover `_invoke`'s transport-error branch per SPEC's "mock the
+AnkiConnect HTTP layer" wording. `web/app/terms/page.tsx` is a bare-bones stub (just
+a "Sync to Anki" button + `{added, updated, failed}` result) — the full filterable
+table is Epic 7 scope; see `docs/DECISIONS.md`.
