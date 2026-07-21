@@ -215,20 +215,28 @@ later epic until the real sources are known.
   the score line / "Check difficulty" / "Easiest unread" sort were verified at the
   data-contract level and via the passing suite, not watched on a phone — do a quick real
   pass when convenient.
-- [ ] **Epic 10 — Content catalog** (non-code; do this before 11/12). Answer
-  `NEXT_STAGE_OPTIONS.md`'s open questions (Korean reading level; register to automate
-  first; specific news sites / communities / YouTubers / fitness sources; which English
-  reads want a Korean equivalent). Produce the source catalog — one row per source:
-  name/URL · type (RSS | YouTube | needs-scraper) · feed available? · topic tag · rough
-  difficulty tier — ranked into "definitely automate" vs. "needs a custom scraper, do
-  later". Also catalog learner-friendly ramp sources, since the user's stated interests
-  (news, games, guides, gym) skew native-adult/fast-register and may sit below the
-  comfortable coverage zone early. **Two data-sourcing sub-tasks the user explicitly
-  wants:** (a) list **TOPIK past-exam reading passages** as a learner-ramp *content*
-  source (published, level-appropriate) alongside the harder native sources; (b) identify
-  a graded **TOPIK/frequency word-list file** to feed Epic 13's cold-start scorer signal
-  (a reference vocab list, not reading material). **Acceptance:** a committed catalog doc
-  the later automation epic can iterate over.
+- [x] **Epic 10 — Content catalog** — done (2026-07-21), non-code. `docs/
+  CONTENT_CATALOG.md` (new) answers `NEXT_STAGE_OPTIONS.md`'s open questions (level:
+  solid; register: both equally; games: PS5/free-monthly-title-driven, so no fixed game
+  list — news/community + guides + YouTubers + reviews all wanted; fitness: YouTubers
+  only; news: Reddit/HN in English, Yonhap tech only if genuinely interesting, not
+  forced) and adds a category the original doc didn't have: **literature** — modern-only
+  thrillers/sci-fi/short-fiction (Da Vinci Code, pessimistic sci-fi in the vein of
+  *Citizen Sleeper*, Cortázar/García-Márquez-style short stories), explicitly no
+  archaic/classical Korean. Source catalog table per topic (name/URL · type · feed
+  verified? · topic · notes): **verified live** — Inven game news RSS, Ruliweb PS/game
+  news RSS; **candidates needing channel-ID lookup** — 대도서관/감스트/우왁굳 (gaming
+  YouTube), 피지컬갤러리/박승현 (fitness YouTube); **needs scraper or unverified** —
+  Gamemeca (no RSS found), Yonhap tech (feed URL blocked by anti-bot fetch, untested via
+  plain browser); **one-time imports, not feeds** — 5 literature candidates (다빈치 코드
+  incl. a YA/simplified Korean edition; 정유정, 김영하, 김초엽, 정보라) and TOPIK
+  passages. Both explicit sub-tasks done: (a) TOPIK past-exam reading passages identified
+  as a content source (NIIED-published PDFs, fits the existing `pdf_text.py` path
+  directly); (b) TOPIK/frequency word-list candidates identified for Epic 13 (NIIED
+  graded vocab lists or 국립국어원 frequency lists) — not yet downloaded, just located.
+  **Caveat:** all of this is 2026-07-21 web-search-derived and only spot-verified (2 RSS
+  URLs fetched live), not personally vetted by the user — treat YouTube channel picks and
+  author picks as a shortlist to react to before Epic 12 wires anything to them.
 - [ ] **Epic 11 — DB expansion + library UX.** Schema for a managed content queue.
   `books`: `topic`/`tags` (JSON or comma text — single-user, a join table is overkill,
   matches the `settings.decks` JSON pattern), `source_url`, `source_ref` (stable id:
@@ -289,9 +297,9 @@ later epic until the real sources are known.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
   above (Epics 9-12, with the daily-fetch automation deferred beyond that). The
-  next actionable item is **Epic 10 — content catalog** (non-code: answer the
-  open questions in `docs/NEXT_STAGE_OPTIONS.md` and produce the ranked source
-  catalog). Epic 9 (difficulty scorer) shipped 2026-07-21.
+  next actionable item is **Epic 11 — DB expansion + library UX**. Epic 9
+  (difficulty scorer) and Epic 10 (content catalog, see `docs/
+  CONTENT_CATALOG.md`) both shipped 2026-07-21.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,
