@@ -50,7 +50,34 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
   `{"translation":"Love","backend":"deepl","cached":false}`; `GET /api/dict?word=사랑`
   → `[]` (krdict.lookup degrades gracefully with no key, per translate_svc design —
   not a bug).
-- [ ] Epic 4 — Frontend: scaffold, book list, reader rendering
+- [x] Epic 4 — Frontend: scaffold, book list, reader rendering — done (2026-07-21).
+  `web/` scaffolded with `create-next-app` (Next 16.2.10, React 19, TypeScript,
+  Tailwind v4, App Router, `--no-src-dir`). Removed the default `next/font/google`
+  usage (Geist) from `app/layout.tsx` to avoid an external-network dependency at
+  build time — system font stack instead. `lib/api.ts` is a small typed fetch
+  wrapper (`/api` same-origin). `app/page.tsx`: book list + inline add-book modal
+  (paste-textarea or `.txt` upload) → `POST /api/books`. `app/read/page.tsx`:
+  renders `content` as spans from `tokens` offsets, highlights tokens whose lemma is
+  a saved `learning` term, prev/next pagination that `PATCH`es `current_page`.
+  `server/main.py`'s `web/out` static mount (wired since Epic 0) now actually serves
+  something. `npm run build` and `npm run lint` both clean; `pytest` 62/62 still
+  green (no server code changed).
+  **Two deviations from SPEC §7, logged in DECISIONS.md:** (1) the reader route is
+  `/read/?id=<bookId>` (query string), not `/read/[bookId]` — `output: 'export'`
+  requires dynamic segments to be enumerable via `generateStaticParams()` at build
+  time, which is impossible for book IDs created at runtime. (2) `next.config.ts`
+  sets `trailingSlash: true` so static export emits `out/read/index.html` (which
+  Starlette's `StaticFiles(html=True)` can actually resolve for `GET /read/`)
+  instead of a flat `out/read.html` (which it can't).
+  **Not verified — no browser tooling available in this environment:** the actual
+  rendered page, the highlight CSS, and phone-width usability were not visually
+  checked. What *was* verified: the page-payload → highlight-condition data
+  contract end-to-end (created a book via the API, hand-inserted a `learning` term
+  for 입다, confirmed `GET .../pages/1` marks the correct token — same condition
+  `read/page.tsx` checks client-side), and that FastAPI serves the static export
+  and `/api/*` routes correctly side by side (`GET /`, `GET /read/`, `GET
+  /api/books` all returned correctly through one running server). The user should
+  do a real visual/touch pass before relying on this epic being fully done.
 - [ ] Epic 5 — Tooltip flow (tap → translate → edit → save)
 - [ ] Epic 6 — Anki sync (AnkiConnect add/update)
 - [ ] Epic 7 — Terms & settings pages, polish
@@ -72,11 +99,18 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
-- Next up: Epic 4 — scaffold `web/` (Next.js, TS, Tailwind, App Router,
-  `output:'export'`), book list + add-book modal, `/read/[bookId]` rendering pages
-  from token offsets with learning-term highlights + pagination. `npm run build`
-  must be clean from this epic on. Needs Node.js — check it's installed before
-  starting; if missing, stop and ask the user to install Node LTS per SPEC §3.
+- Next up: Epic 5 — the tooltip flow (tap → popover → Translate/Dictionary →
+  editable translation → deck select → Save; tap-highlighted → edit/known/ignore/
+  delete; phrase selection; sentence extraction). This is "the heart of the app"
+  per SPEC §10 — budget real care here. `npm run build` must stay clean; add
+  `npm run lint` to the pre-commit check too (caught a real
+  `react-hooks/set-state-in-effect` bug in Epic 4 that `tsc`/`next build` alone
+  missed).
+- No browser automation tool was available in this environment during Epic 4 (the
+  `claude-in-chrome` skill is listed but its MCP tools didn't load — no configured
+  extension). Frontend work after this point should get a real visual/interaction
+  check if such a tool becomes available; otherwise say explicitly what wasn't
+  verified, per CLAUDE.md's testing guidance.
 - When manually smoke-testing with a live `uvicorn` process on Windows, background
   `&` jobs can outlive the Bash tool call that started them and squat on the port;
   check `netstat -ano | grep :8002` and `taskkill //PID <pid> //F` if a fresh

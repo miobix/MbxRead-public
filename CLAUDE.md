@@ -14,7 +14,9 @@ frontend (static export), phone access via Tailscale.
    `docs/ARCHITECTURE.md`.
 3. Do **one epic per session** unless the user says otherwise. End every epic with: full
    test suite green (`.venv\Scripts\python.exe -m pytest server/tests -q`), `npm run build`
-   in `web/` green (Epic ≥ 4), one commit `Epic N: <summary>` that includes the docs updates.
+   **and** `npm run lint` in `web/` green (Epic ≥ 4 — `tsc` alone missed a real
+   react-hooks bug in Epic 4), one commit `Epic N: <summary>` that includes the docs
+   updates.
 
 ## Hard rules
 

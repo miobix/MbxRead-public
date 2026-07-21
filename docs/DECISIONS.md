@@ -65,6 +65,39 @@ init doesn't run at import/factory-call time. This lets `server/main.py` be impo
 `reader.db`, while `uvicorn server.main:app` still initializes the real DB on actual
 startup via the same lifespan hook.
 
+## 2026-07-21 — Dropped next/font/google (Geist) from the create-next-app default
+The scaffold's `app/layout.tsx` used `next/font/google` to self-host Geist Sans/Mono,
+which fetches font files from Google's CDN during `next build`. Replaced with the
+system font stack (no font import at all) to keep the build free of an external
+network dependency — relevant since this app is meant to build reliably on the
+user's PC without assuming reliable internet at build time.
+
+## 2026-07-21 — `npm run lint` is now part of the pre-commit check, not just `tsc`
+`next build`'s TypeScript pass didn't catch a real bug: `app/read/page.tsx` called
+`setState` synchronously inside a `useEffect` body for the "no book id in URL" case,
+which `eslint-plugin-react-hooks`'s `react-hooks/set-state-in-effect` rule flags
+(can cause cascading renders). Fixed by deriving that condition at render time
+instead of storing it in the async `error` state meant for fetch failures. `npm run
+build` alone would not have caught this — `npm run lint` must run too from Epic 4
+on.
+
+## 2026-07-21 — Reader route is `/read/?id=<bookId>`, not `/read/[bookId]`
+SPEC §7 names the reader route `/read/[bookId]`. With `output: 'export'`, Next.js
+requires every dynamic route segment to be enumerable at build time via
+`generateStaticParams()` (confirmed against the bundled Next 16 docs —
+`node_modules/next/dist/docs/.../static-exports.md` explicitly lists "Dynamic Routes
+without `generateStaticParams()`" and "with `dynamicParams: true`" as **unsupported**
+for static export). Book IDs are created at runtime after deployment and are
+unbounded, so they can't be enumerated at build time. Used a single static `/read`
+route instead, reading the book id from `?id=` via `useSearchParams()` (wrapped in a
+`Suspense` boundary per Next's requirement for search params in prerendered routes).
+FastAPI's static mount doesn't care about the query string, so this has no server-side
+cost. `web/next.config.ts` also sets `trailingSlash: true`, since static export's
+default output (`out/read.html`) isn't resolvable by Starlette's
+`StaticFiles(html=True)` (which only auto-serves `index.html` for a *directory* path,
+not `<name>.html` for a bare path) — `trailingSlash: true` makes export emit
+`out/read/index.html` instead, which does resolve for `GET /read/`.
+
 ## 2026-07-21 — Server port changed 8000 → 8002
 Discovered while manually testing Epic 2/3: the user's Android app syncs content via
 a Docker-based service already listening on `localhost:8000` on this machine (it was

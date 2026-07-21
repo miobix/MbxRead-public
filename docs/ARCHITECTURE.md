@@ -39,9 +39,9 @@ returning a FastAPI app whose `lifespan` calls `db.init_db(path)` on startup (no
 import time) — this lets tests point at a temp DB via `create_app(tmp_path / "test.db")`
 without ever touching the real `reader.db`. Module-level `app = create_app()` is the
 uvicorn entrypoint (`uvicorn server.main:app --port 8002`) and uses the default path
-(`reader.db` at repo root). `web/out` static mount is wired but inert until Epic 4
-creates that directory. `.venv` was created with Python 3.10 (`py -3.10 -m venv
-.venv`) per kiwipiepy's Windows compatibility story.
+(`reader.db` at repo root). `web/out` static mount is wired since Epic 0 and now
+actually serves the Epic 4 frontend build. `.venv` was created with Python 3.10
+(`py -3.10 -m venv .venv`) per kiwipiepy's Windows compatibility story.
 
 **Epic 2 status:** `server/routes/books.py` implements full CRUD plus the page
 payload endpoint, registered in `main.py` via `app.include_router(books.router)`.
@@ -184,29 +184,52 @@ the spec's prose implies — verified directly against 입고 (`VV-R`), 들어�
 (`VV-I`), 더워요 (`VA-I`). Rule 2 therefore matches by tag **prefix**. See
 `docs/DECISIONS.md` (2026-07-21).
 
-## Frontend spec (`web/`, Epic 4+ — not yet scaffolded)
+## Frontend spec (`web/`, Epic 4+)
 
-Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** —
-primary device is a phone. Clean, modern, uncluttered. Config: `output: 'export'`; dev
-uses `next.config` rewrites `/api/* → http://localhost:8002/api/*`.
+Next.js 16.2.10, React 19, App Router, TypeScript, Tailwind v4. **Mobile-first** —
+primary device is a phone. Clean, modern, uncluttered. Config: `output: 'export'`,
+`images: { unoptimized: true }`, `trailingSlash: true` (required — see below); dev
+uses `next.config` rewrites `/api/* → http://localhost:8002/api/*` (build-time
+no-op for the static export, ignored with a warning; only takes effect under `next
+dev`, where FastAPI must be separately running on 8002).
 
 Routes:
-- `/` — book list (title, progress `current_page/page_count`), "Add book" modal: title
-  + paste-textarea or `.txt` upload.
-- `/read/[bookId]` — the reader: renders `content` as spans using `tokens` offsets.
-  Base text plain; only tokens whose lemma is in `terms` with status `learning` get a
-  subtle highlight. Tap a token → popover: surface, editable lemma input, Translate /
-  Dictionary / Translate-sentence buttons, editable translation textarea, deck select,
-  Save. Tap a highlighted token → same popover pre-filled, plus mark known / ignore /
-  delete. Text selection → same popover with raw selection as lemma. Page prev/next
-  with `current_page` persistence. Sentence extraction: previous sentence-end to next
-  sentence-end around the token.
-- `/terms` — table (filter: status, deck, search), inline edit, delete, "Sync to
-  Anki" button showing `{added, updated, failed}` toast.
-- `/settings` — deck list editor, default deck, translator backend (deepl/claude).
+- `/` — **implemented (Epic 4).** Book list (title, progress
+  `current_page/page_count`), "Add book" modal: title + paste-textarea or `.txt`
+  upload → `POST /api/books`. `app/page.tsx`, both the list and the modal in one
+  file (single small component, no separate `components/` dir yet).
+- `/read/?id=<bookId>` — **implemented (Epic 4), no tooltip yet.** `app/read/
+  page.tsx`. Renders `content` as spans using `tokens` offsets; only tokens whose
+  lemma is in `terms` with status `learning` get a highlight
+  (`bg-amber-200/70 dark:bg-amber-300/25`). Page prev/next `PATCH`es
+  `current_page` (best-effort — a failed PATCH doesn't block navigation). Tap
+  handling / popover / translate-save flow is Epic 5.
+  **Not `/read/[bookId]` as SPEC literally names it** — see "Deviations" below.
+- `/terms` — not yet built (Epic 7).
+- `/settings` — not yet built (Epic 7).
 
 Keep dependencies minimal: Next + Tailwind only; no state library (React context/props
-suffice), no component kit. Small shared `lib/api.ts` fetch wrapper.
+suffice), no component kit. Small shared `lib/api.ts` fetch wrapper (typed, throws
+on non-2xx, reads `{error}`/`{detail}` from the body when present).
+
+**Deviations from this section (Epic 4, both forced by `output: 'export'`; full
+reasoning in `docs/DECISIONS.md` 2026-07-21):**
+1. **Reader route uses a query string, not a dynamic segment.** Static export
+   requires every dynamic route (`[bookId]`) to be enumerable at build time via
+   `generateStaticParams()`; book IDs are created at runtime and are unbounded, so
+   they can't be. `/read` is one static route; the id comes from `?id=` via
+   `useSearchParams()` (wrapped in `<Suspense>`, which Next requires for search
+   params in a prerendered route).
+2. **`trailingSlash: true` is required**, not optional, in this stack. Static
+   export's default output for a route named `read` is a flat `out/read.html`.
+   Starlette's `StaticFiles(html=True)` (`server/main.py`'s static mount) only
+   auto-resolves a *directory* path to `index.html` — it does not append `.html`
+   to a bare path — so `GET /read/` would 404 without this. With
+   `trailingSlash: true`, export emits `out/read/index.html` instead, which
+   resolves correctly.
+3. **Removed `next/font/google` (Geist) from the default scaffold.** It fetches
+   font files from Google Fonts at build time; kept the layout on the system font
+   stack instead to avoid an unnecessary external-network build dependency.
 
 ## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — not yet
 implemented)
