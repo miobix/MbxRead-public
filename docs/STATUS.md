@@ -6,11 +6,16 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 ## Epic checklist
 
-- [ ] **Epic 0 — Repo, scaffolding, docs** — *partially done by the planning session
-  (2026-07-19): git repo initialized, `.gitignore`, `docs/` (SPEC/STATUS/DECISIONS),
-  `CLAUDE.md`, initial commit. Remaining: `requirements.txt`, install kiwipiepy+pytest,
-  `server/` skeleton with `/api/health` + `db.py` schema, `docs/ARCHITECTURE.md` (copy
-  SPEC sections 3–8), smoke tests.*
+- [x] **Epic 0 — Repo, scaffolding, docs** — done (2026-07-21). `.venv` created with
+  Python 3.10 (`py -3.10 -m venv .venv`, required for kiwipiepy). `requirements.txt`
+  pinned (fastapi, uvicorn, httpx, python-dotenv, kiwipiepy, pytest). `server/`
+  skeleton: `main.py` (app factory `create_app(db_path=None)`, lifespan-based DB init
+  so tests never touch real `reader.db`, `/api/health`, inert `web/out` static mount),
+  `db.py` (section-4 schema + `get_connection`/`init_db`), empty `routes/` package.
+  `docs/ARCHITECTURE.md` created (copy of SPEC §3–8, annotated with per-epic status).
+  Smoke tests in `server/tests/` (health 200, schema creation, idempotent init, FK
+  pragma) — all green. Manual check: `uvicorn server.main:app --port 8000` boots,
+  `/api/health` returns `{"ok":true,"version":"0.1.0"}`.
 - [ ] Epic 1 — Tokenizer (kiwipiepy wrapper + table-driven tests)
 - [ ] Epic 2 — Books & pages API
 - [ ] Epic 3 — Terms & translate APIs
@@ -28,3 +33,5 @@ DECISIONS.md if reality diverged from the spec) in that same commit.
 
 - The old Lute setup (ports 5001/8001 via `start.ps1`) stays live and untouched until Epic 8.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
+- Next up: Epic 1 — `server/tokenizer.py` (kiwipiepy wrapper) + table-driven tests per
+  SPEC §6. Run tests with `.venv\Scripts\python.exe -m pytest server/tests -q`.

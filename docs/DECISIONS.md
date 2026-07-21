@@ -25,3 +25,15 @@ production to a single uvicorn process; `next dev` for development.
 ## 2026-07-19 — 3 word statuses
 learning (highlighted, synced) / known (plain, not synced) / ignored. Lute's 1–5 scale
 deemed unnecessary UI.
+
+## 2026-07-21 — venv on Python 3.10, not the system's newer default
+The machine has 3.10, 3.12 (x2), and Anaconda's python on PATH; `py -3.10 -m venv
+.venv` was used explicitly since SPEC assumes 3.10 for kiwipiepy compatibility. 3.10
+installed kiwipiepy 0.23.2 cleanly with no build step needed.
+
+## 2026-07-21 — DB init moved to FastAPI lifespan, not app-factory call time
+`create_app()` only registers a `lifespan` handler that calls `db.init_db(path)`;
+init doesn't run at import/factory-call time. This lets `server/main.py` be imported
+(and `create_app()` called with a temp path) in tests without ever touching the real
+`reader.db`, while `uvicorn server.main:app` still initializes the real DB on actual
+startup via the same lifespan hook.
