@@ -16,7 +16,7 @@ def test_schema_creates_on_temp_db(tmp_path):
     }
     conn.close()
 
-    assert {"books", "pages", "terms", "settings", "feeds"} <= tables
+    assert {"books", "pages", "terms", "settings", "feeds", "vocab_levels"} <= tables
 
 
 def test_init_db_is_idempotent(tmp_path):
@@ -53,6 +53,29 @@ def test_source_ref_unique_index_ignores_nulls(tmp_path):
             assert False, "expected a UNIQUE constraint violation"
         except sqlite3.IntegrityError:
             pass
+    finally:
+        conn.close()
+
+
+def test_vocab_levels_seeded_once_and_idempotent(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    conn = db.get_connection(db_path)
+    try:
+        (count_first,) = conn.execute("SELECT COUNT(*) FROM vocab_levels").fetchone()
+        assert count_first > 5000  # the bundled NIKL list has ~5.5k entries
+        row = conn.execute(
+            "SELECT grade FROM vocab_levels WHERE lemma = ?", ("가다",)
+        ).fetchone()
+        assert row["grade"] == "A"
+    finally:
+        conn.close()
+
+    db.init_db(db_path)  # re-running must not duplicate the seed
+    conn = db.get_connection(db_path)
+    try:
+        (count_second,) = conn.execute("SELECT COUNT(*) FROM vocab_levels").fetchone()
+        assert count_second == count_first
     finally:
         conn.close()
 

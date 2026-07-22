@@ -16,6 +16,11 @@ korean-reader/
     tokenizer.py           kiwipiepy wrapper: text -> eojeol tokens with lemma
     anki.py                AnkiConnect client (http://localhost:8765)
     article.py             trafilatura wrapper: url -> (title, cleaned_text) — Epic 12
+    difficulty.py           coverage/new-per-page scoring; Epic 13's cold-start
+                            frequency fallback
+    data/
+      vocab_levels.tsv      Epic 13: bundled NIKL word-grade reference data, seeded
+                            into the `vocab_levels` table on first init_db
     routes/
       books.py  terms.py  translate.py  anki_sync.py  settings.py  difficulty.py
       imports.py           Epic 12: YouTube/PDF/article import endpoints
@@ -115,6 +120,15 @@ CREATE TABLE IF NOT EXISTS feeds (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref
   ON books(source_ref) WHERE source_ref IS NOT NULL;
+-- Epic 13: cold-start difficulty signal. grade A (beginner/common) .. C (advanced/
+-- rare); rank is a frequency rank across the whole list (lower = more frequent),
+-- nullable since ~1% of source rows have no rank recorded. Seeded once from
+-- server/data/vocab_levels.tsv by db._seed_vocab_levels, not hand-maintained.
+CREATE TABLE IF NOT EXISTS vocab_levels (
+  lemma TEXT PRIMARY KEY,
+  grade TEXT NOT NULL CHECK (grade IN ('A','B','C')),
+  rank INTEGER
+);
 ```
 
 Foreign keys ON (`PRAGMA foreign_keys=ON` per connection, set in `db.get_connection`).
@@ -123,6 +137,12 @@ Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
 above are applied via `db._apply_migrations()` (additive `ALTER TABLE`s + the partial
 index, guarded by `PRAGMA table_info` so re-running `init_db` never double-adds) rather
 than being in the base `CREATE TABLE`, so an existing `reader.db` upgrades in place.
+`vocab_levels` (Epic 13) is a brand-new table (`CREATE TABLE IF NOT EXISTS` directly,
+same as `feeds` in Epic 11 — no migration entry needed for a new table) but its *rows*
+are seeded, not hand-written: `db._seed_vocab_levels()` runs after `_apply_migrations`
+in `init_db`, reads `server/data/vocab_levels.tsv`, and bulk-inserts only if the table
+is currently empty (`SELECT COUNT(*)` guard), so re-running `init_db` never duplicates
+the ~5,543 rows.
 
 ### Page splitting (`server/paging.py`, Epic 2 — implemented)
 
@@ -266,6 +286,40 @@ environment. `web/app/page.tsx`'s add-book modal gained a 4-way mode switch
 pass: paste a YouTube URL with Korean captions, upload a PDF, paste an article URL;
 confirm each lands as a scored-ready book and that re-submitting the same one 409s
 instead of duplicating.
+
+**Epic 13 status:** `server/difficulty.py` gained `COLD_START_THRESHOLD = 50` and
+`frequency_grades(conn) -> dict[lemma, grade]` (a full-table read of `vocab_levels`
+into a dict — ~5.5k rows, cheap enough to redo per request). `score_text` gained a
+third optional parameter, `frequency`; when `len(known) < COLD_START_THRESHOLD` *and*
+a frequency map was passed, the "familiar" set (used for both `coverage` and
+`new_per_page`) becomes `known | {lemma for lemma with grade == "A"}` instead of just
+`known` — otherwise behavior is byte-for-byte the pre-Epic-13 function (both existing
+callers that never pass `frequency` are unaffected; the two-arg call shape is still
+valid). Both HTTP call sites (`routes/difficulty.py`'s `POST /api/score` and
+`routes/books.py`'s `POST /api/books/{id}/score`) now pass `frequency_grades(conn)`
+through unconditionally — the threshold check inside `score_text` is what actually
+gates whether it's used, so this is safe to always pass. `server/data/vocab_levels.tsv`
+(new, committed) is a cleaned/deduped export of the 국립국어원 (NIKL) 2003 "한국어
+학습용 어휘 목록" — 5,543 lemmas after stripping homograph-disambiguation suffixes
+(가다01 -> 가다) and, where the same lemma appeared under multiple grades (different
+senses/POS), keeping its easiest grade. `db.py` gained `vocab_levels`
+(`CREATE TABLE IF NOT EXISTS`, see schema block above) and `_seed_vocab_levels()`,
+called from `init_db` right after `_apply_migrations`. See DECISIONS.md for: why NIKL
+grades over the actual TOPIK exam vocab list, why grade A specifically (not a
+continuous weighting across A/B/C), why threshold 50, and the source-download
+provenance (the file required following a session-cookie'd download link on
+korean.go.kr — not a plain URL — documented there so it can be re-derived if the
+list ever needs refreshing).
+**Verified:** `pytest` (`test_difficulty.py`'s cold-start section, `test_db.py`'s
+seeding test) exercises the fallback logic directly and end-to-end through the real
+seeded table; a real live sentence pair (all-common vs. rare/advanced vocabulary) was
+hand-verified against the actual `vocab_levels` grades before being hardcoded into
+`RARE_STORY`/`STORY` in the test file, so the acceptance-criterion test
+(`test_rare_text_scores_harder_than_common_text_with_empty_known_set`) reflects the
+real data, not a guess. No frontend changes — `/score` and book-scoring already
+render whatever `coverage`/`new_per_page` the API returns, so the add-book "Check
+difficulty" preview and per-book score line pick up the new cold-start numbers with
+no code changes needed on that side.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

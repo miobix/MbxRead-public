@@ -337,3 +337,61 @@ Rather than writing them to a temp file just so `extract()` could keep taking a
 `Path` (extra disk I/O, Windows temp-file cleanup edge cases), `fitz.open()` already
 supports `stream=<bytes>, filetype="pdf"` directly — so `extract()` now branches on
 `isinstance(pdf_source, bytes)` and the CLI's `Path` usage is unchanged.
+
+## 2026-07-22 — Epic 13: NIKL's graded word list, not the actual TOPIK exam vocab
+`docs/CONTENT_CATALOG.md` named two candidates: the official NIIED TOPIK vocab lists
+(graded 1–6) or 국립국어원(NIKL)'s "한국어 학습용 어휘 목록" (graded A/beginner,
+B/intermediate, C/advanced). Went with NIKL's: it's hosted directly on korean.go.kr
+with an explicit public-use statement ("이용자의 편의를 위해... 목록을 원하는 사람은
+누구나 이용할 수 있도록... 공개"), whereas the actual TOPIK vocab list's licensing/
+distribution terms weren't as cleanly verifiable in this pass. A pre-existing
+third-party GitHub repo (`julienshim/combined_korean_vocabulary_list`) had already
+combined both sources into a TSV, but its GitHub API metadata shows `license: null`
+— no stated license on that specific compiled derivative — so it was used only to
+confirm the two source lists existed and roughly what a combined schema could look
+like, not as the actual data source; the real import goes straight to NIKL's own
+download, not through that repo. 3 grades (not TOPIK's 6 levels) is coarser but
+sufficient for score_text's binary "assume familiar" cold-start signal.
+
+## 2026-07-22 — Epic 13: NIKL vocab list downloaded via a session-cookie'd request, not a plain URL
+`https://www.korean.go.kr/front_eng/down/down_02V.do?etc_seq=70` (the page's own
+"text file" download link) 403s directly — the site requires a session cookie
+established by first loading the etcData detail page
+(`front/etcData/etcDataView.do?mn_id=46&etc_seq=71`), whose HTML embeds the real,
+one-time download URL under a *different* path prefix (`/common/download.do?
+file_path=etcData&c_file_name=<uuid>_0.xls&o_file_name=...`). Fetched with `curl -c/-b`
+carrying that cookie plus a browser `User-Agent` and the detail page as `Referer`;
+without cookie+referer it 404s. Downloaded the `.xls` (Excel 97-2003 binary,
+cp949-codepage internally — `xlrd` decodes it correctly despite how it displays in a
+non-UTF-8 terminal) rather than the "text file" variant since the text download link
+was the one that 403'd. This only matters if the list ever needs re-downloading; the
+committed `server/data/vocab_levels.tsv` is what the app actually reads at runtime.
+
+## 2026-07-22 — Epic 13: convert to a committed TSV at build time, not xlrd-at-runtime
+Considered shipping the raw `.xls` and parsing it with `xlrd` on every `init_db` call.
+Rejected: `xlrd` would become a permanent runtime dependency for a file that only
+needs parsing once, the binary `.xls` doesn't diff cleanly in git, and homograph
+dedup (가다01/가다02 -> 가다, keeping the easiest grade) has to happen somewhere
+regardless. Instead ran the xlrd conversion once (locally, `xlrd` installed
+transiently and then uninstalled — never added to `requirements.txt`), and committed
+the clean output as `server/data/vocab_levels.tsv` (lemma/grade/rank, UTF-8, sorted by
+lemma for readable diffs). `db.py`'s `_seed_vocab_levels()` just does `csv.DictReader`
+over this file — stdlib only, no new runtime dependency.
+
+## 2026-07-22 — Epic 13: cold-start fallback is grade-A-only, binary, threshold-gated at 50
+Three judgment calls with no spec-mandated number, made together because they compose:
+(1) **Grade A only, not a continuous weight across A/B/C** — a text's cold-start
+coverage is "how much of this would a beginner already know," and NIKL's grade A is
+specifically the beginner tier; partial credit for grade B added complexity (a weight
+to justify) without a clear benefit for the coarse "does this text look hard" signal
+`new_per_page`/`coverage` exist to give. (2) **Binary membership, not rank-weighted**
+— the `rank` column is stored (per Epic 13's "tag lemmas with frequency rank" goal,
+for potential future use) but unused by `score_text` itself; grade alone already
+satisfies the acceptance criterion (rare text scores harder than common text) without
+inventing a rank-to-familiarity curve. (3) **Threshold 50** — arbitrary but
+conservative: low enough that a user who's saved a real, personal vocabulary
+(anything approaching normal daily use) quickly falls back to pure personal coverage
+(the "secondary to personal coverage" requirement from STATUS.md), high enough that a
+handful of terms saved while just poking around during onboarding doesn't
+prematurely disable the fallback before it's done any good. All three are easy to
+revisit if real usage shows the fallback over- or under-shoots.

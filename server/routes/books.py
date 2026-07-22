@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from .. import db as db_module
-from ..difficulty import known_lemmas, score_text
+from ..difficulty import frequency_grades, known_lemmas, score_text
 from ..paging import split_pages
 from ..tokenizer import tokenize
 
@@ -186,7 +186,7 @@ def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db
         "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
     ).fetchall()
     text = "\n".join(row["content"] for row in rows)
-    result = score_text(text, known_lemmas(conn))
+    result = score_text(text, known_lemmas(conn), frequency_grades(conn))
     conn.execute(
         "UPDATE books SET coverage = ?, new_per_page = ?, scored_at = CURRENT_TIMESTAMP "
         "WHERE id = ?",

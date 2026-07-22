@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from .. import db as db_module
-from ..difficulty import known_lemmas, score_text
+from ..difficulty import frequency_grades, known_lemmas, score_text
 
 router = APIRouter(prefix="/api", tags=["difficulty"])
 
@@ -20,4 +20,4 @@ class ScoreRequest(BaseModel):
 
 @router.post("/score")
 def score(body: ScoreRequest, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    return score_text(body.text, known_lemmas(conn))
+    return score_text(body.text, known_lemmas(conn), frequency_grades(conn))

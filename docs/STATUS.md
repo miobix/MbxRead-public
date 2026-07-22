@@ -310,14 +310,35 @@ later epic until the real sources are known.
   in the add-book modal; confirm each becomes a scored-ready book, and that
   re-submitting the same one 409s instead of duplicating.
 
-- [ ] **Epic 13 — Cold-start difficulty signal.** Import the graded TOPIK/frequency
-  word list (sourced in Epic 10) into a reference table via the Epic 11 additive-migration
-  pattern; tag lemmas with TOPIK level / frequency rank; extend `score_text` to fall back
-  to that signal when the personal known-set is too thin to be informative. Secondary to
-  personal coverage — it only matters early, while the known-set is small. **Acceptance:**
-  a text of rare/advanced words scores harder than one of common words even with an empty
-  known-set. *(Placement note: value is highest early — could be pulled to right after
-  Epic 10 for earlier payoff, at the cost of delaying import wiring. Left at 13 for now.)*
+- [x] **Epic 13 — Cold-start difficulty signal** — done (2026-07-22). Downloaded the
+  official 국립국어원 (NIKL) 2003 "한국어 학습용 어휘 목록" (graded A/beginner,
+  B/intermediate, C/advanced, ~5,965 entries) directly from korean.go.kr (needed a
+  session-cookie'd request, not a plain URL — see DECISIONS.md), deduped homograph
+  suffixes (가다01/가다02 → 가다, keeping the easiest grade where the same lemma had
+  multiple senses/grades) down to 5,543 lemmas, and committed the clean result as
+  `server/data/vocab_levels.tsv` (lemma/grade/rank, UTF-8). `server/db.py`: new
+  `vocab_levels` table (`CREATE TABLE IF NOT EXISTS`, like Epic 11's `feeds`) +
+  `_seed_vocab_levels()` (bulk-inserts from the TSV once, guarded by a `COUNT(*)`
+  check, called from `init_db` after `_apply_migrations`). `server/difficulty.py`:
+  `COLD_START_THRESHOLD = 50`, `frequency_grades(conn)` (loads the whole table into
+  a `{lemma: grade}` dict), and `score_text` gained an optional third `frequency`
+  param — when the personal known-set has fewer than 50 lemmas *and* a frequency map
+  was passed, grade-A lemmas count as familiar too (both `coverage` and
+  `new_per_page` reflect this); past that threshold, or when `frequency` isn't
+  passed at all, behavior is byte-for-byte identical to Epic 9. Both `POST
+  /api/score` and `POST /api/books/{id}/score` now pass `frequency_grades(conn)`
+  through — the threshold check inside `score_text` is what actually gates it, so
+  passing it unconditionally is safe. 107/107 tests green (7 new: seeding +
+  idempotency in `test_db.py`; fallback unit tests, a threshold-crossing test, and
+  the acceptance-criterion demonstration — a real rare/advanced sentence scoring
+  harder than an all-common one through the live endpoint — in `test_difficulty.py`).
+  `npm run build`/`lint` clean (no frontend changes needed — the add-book "Check
+  difficulty" preview and per-book score line already render whatever the API
+  returns). See DECISIONS.md for why NIKL over the actual TOPIK exam vocab list, why
+  grade-A-only/binary (not a continuous A/B/C weighting), and why threshold 50 —
+  all three are easy to revisit later if real usage shows over/under-shooting.
+  **Not verified in a browser** (no browser tooling in this environment) — carry
+  forward with the other pending browser passes (Epics 4–12).
 - [ ] **Epic 14 — Daily fetch job (capstone).** Windows Task Scheduler script: fetch
   feeds → clean (Epic 12 importers) → score (Epics 9 + 13) → dedup (`source_ref`) →
   auto-create a topic-tagged book within a `feeds` difficulty band. Deferred until 10–13
@@ -350,10 +371,14 @@ later epic until the real sources are known.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
   above. Epics 9 (difficulty scorer), 10 (content catalog), 11 (DB expansion +
-  library UX), and 12 (import wiring) are done. The next actionable item is
-  **Epic 13 — Cold-start difficulty signal** (import the TOPIK/frequency word list
-  located in Epic 10 as a reference table, tag lemmas with level/frequency, extend
-  `score_text` to fall back to it when the personal known-set is too thin).
+  library UX), 12 (import wiring), and 13 (cold-start difficulty signal) are done.
+  The next actionable item is **Epic 14 — Daily fetch job**, deferred until then
+  because it's blocked by its own dependencies (Epic 12's importers, `source_ref`
+  dedup, `feeds` band columns, the scorer) — all now in place.
+- **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
+  specifically to see Epic 13's cold-start scoring results first (2026-07-22). That
+  pass (paste a YouTube URL, upload a PDF, paste an article URL, plus the older
+  Epic 4-11 checklist items above) is still owed whenever the user is ready.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

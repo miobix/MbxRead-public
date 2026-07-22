@@ -1,4 +1,5 @@
 """SQLite connection and schema management for reader.db."""
+import csv
 import sqlite3
 from pathlib import Path
 from typing import Generator
@@ -6,6 +7,10 @@ from typing import Generator
 from fastapi import Request
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "reader.db"
+
+# Epic 13: bundled reference data seeded into `vocab_levels` on first init. See
+# docs/DECISIONS.md for provenance (국립국어원 한국어 학습용 어휘 목록, 2003).
+VOCAB_LEVELS_TSV = Path(__file__).resolve().parent / "data" / "vocab_levels.tsv"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS books (
@@ -47,6 +52,15 @@ CREATE TABLE IF NOT EXISTS feeds (
   difficulty_max REAL,
   last_fetched TIMESTAMP
 );
+-- Epic 13: cold-start difficulty signal. grade A (beginner/common) .. C (advanced/
+-- rare), rank is a frequency rank across the whole list (lower = more frequent),
+-- nullable since ~1% of source rows have no rank recorded. Seeded once from
+-- VOCAB_LEVELS_TSV by _seed_vocab_levels, not hand-maintained.
+CREATE TABLE IF NOT EXISTS vocab_levels (
+  lemma TEXT PRIMARY KEY,
+  grade TEXT NOT NULL CHECK (grade IN ('A','B','C')),
+  rank INTEGER
+);
 """
 
 # Additive columns introduced after the initial schema. Applied idempotently by
@@ -84,6 +98,23 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
     )
 
 
+def _seed_vocab_levels(conn: sqlite3.Connection) -> None:
+    """Populate `vocab_levels` from the bundled TSV, once. A fresh reader.db (or a
+    fresh temp test DB) starts with an empty table; this fills it on the first
+    init_db call and is a no-op on every call after (guarded by COUNT(*))."""
+    (count,) = conn.execute("SELECT COUNT(*) FROM vocab_levels").fetchone()
+    if count > 0:
+        return
+    with open(VOCAB_LEVELS_TSV, encoding="utf-8", newline="") as f:
+        rows = [
+            (row["lemma"], row["grade"], int(row["rank"]) if row["rank"] else None)
+            for row in csv.DictReader(f, delimiter="\t")
+        ]
+    conn.executemany(
+        "INSERT INTO vocab_levels (lemma, grade, rank) VALUES (?, ?, ?)", rows
+    )
+
+
 def get_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -96,6 +127,7 @@ def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
     try:
         conn.executescript(SCHEMA)
         _apply_migrations(conn)
+        _seed_vocab_levels(conn)
         conn.commit()
     finally:
         conn.close()
