@@ -1,4 +1,5 @@
 """Books & pages API. See docs/SPEC.md section 5."""
+import json
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,11 +17,20 @@ class BookCreate(BaseModel):
     title: str
     text: str
     source: str = "paste"
+    topic: str = ""
+    tags: list[str] = []
+    source_url: str = ""
+    source_ref: str | None = None
+    fetched: str | None = None
 
 
 class BookPatch(BaseModel):
     current_page: int | None = None
     title: str | None = None
+    topic: str | None = None
+    tags: list[str] | None = None
+    archived: bool | None = None
+    read: bool | None = None
 
 
 def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
@@ -40,6 +50,13 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "coverage": row["coverage"],
         "new_per_page": row["new_per_page"],
         "scored_at": row["scored_at"],
+        "topic": row["topic"],
+        "tags": json.loads(row["tags"]),
+        "source_url": row["source_url"],
+        "source_ref": row["source_ref"],
+        "fetched": row["fetched"],
+        "archived": bool(row["archived"]),
+        "read": bool(row["read"]),
     }
 
 
@@ -51,16 +68,44 @@ def _get_book_or_404(conn: sqlite3.Connection, book_id: int) -> dict:
 
 
 @router.get("")
-def list_books(conn: sqlite3.Connection = Depends(db_module.get_db)):
-    rows = conn.execute("SELECT id FROM books ORDER BY id").fetchall()
+def list_books(
+    topic: str | None = None,
+    archived: bool | None = None,
+    conn: sqlite3.Connection = Depends(db_module.get_db),
+):
+    query = "SELECT id FROM books WHERE 1=1"
+    params: list = []
+    if topic:
+        query += " AND topic = ?"
+        params.append(topic)
+    if archived is not None:
+        query += " AND archived = ?"
+        params.append(int(archived))
+    query += " ORDER BY id"
+    rows = conn.execute(query, params).fetchall()
     return [_book_dict(conn, row["id"]) for row in rows]
 
 
 @router.post("", status_code=201)
 def create_book(body: BookCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    cur = conn.execute(
-        "INSERT INTO books (title, source) VALUES (?, ?)", (body.title, body.source)
-    )
+    try:
+        cur = conn.execute(
+            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                body.title,
+                body.source,
+                body.topic,
+                json.dumps(body.tags),
+                body.source_url,
+                body.source_ref,
+                body.fetched,
+            ),
+        )
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="a book with this source_ref already exists"
+        )
     book_id = cur.lastrowid
     pages = split_pages(body.text)
     conn.executemany(
@@ -88,6 +133,8 @@ def patch_book(
 ):
     _get_book_or_404(conn, book_id)
     fields = body.model_dump(exclude_unset=True)
+    if "tags" in fields:
+        fields["tags"] = json.dumps(fields["tags"])
     if fields:
         set_clause = ", ".join(f"{key} = ?" for key in fields)
         conn.execute(
@@ -95,7 +142,7 @@ def patch_book(
             (*fields.values(), book_id),
         )
         conn.commit()
-    return get_book(book_id, conn)
+    return _book_dict(conn, book_id)
 
 
 @router.delete("/{book_id}", status_code=204)

@@ -62,7 +62,19 @@ CREATE TABLE IF NOT EXISTS books (
   title TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf
   current_page INTEGER NOT NULL DEFAULT 1,
-  created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  -- Epic 9 (additive migration): cached difficulty score.
+  coverage REAL,                                 -- fraction of lemmas already known; NULL if unscored
+  new_per_page REAL,                             -- unknown-unique lemmas / page count
+  scored_at TIMESTAMP,
+  -- Epic 11 (additive migration): content-catalog metadata.
+  topic TEXT NOT NULL DEFAULT '',                -- gaming | fitness | news | literature | other | ''
+  tags TEXT NOT NULL DEFAULT '[]',               -- JSON array of free-form strings
+  source_url TEXT NOT NULL DEFAULT '',
+  source_ref TEXT,                               -- stable id (video id/feed guid); see partial UNIQUE index below
+  fetched TIMESTAMP,                             -- set by automated imports (Epic 12+), NULL for manual paste/txt
+  archived INTEGER NOT NULL DEFAULT 0,
+  read INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS pages (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -85,11 +97,29 @@ CREATE TABLE IF NOT EXISTS terms (
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- Epic 11: the model a future settings page edits and Epic 14's daily job iterates.
+-- Table only — no CRUD routes until Epic 14 actually needs to populate it.
+CREATE TABLE IF NOT EXISTS feeds (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('rss','youtube','scraper')),
+  url_or_channel_id TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  difficulty_min REAL,
+  difficulty_max REAL,
+  last_fetched TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref
+  ON books(source_ref) WHERE source_ref IS NOT NULL;
 ```
 
 Foreign keys ON (`PRAGMA foreign_keys=ON` per connection, set in `db.get_connection`).
 Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
-`default_deck`, `translator_backend`.
+`default_deck`, `translator_backend`. All columns and tables marked "Epic 9"/"Epic 11"
+above are applied via `db._apply_migrations()` (additive `ALTER TABLE`s + the partial
+index, guarded by `PRAGMA table_info` so re-running `init_db` never double-adds) rather
+than being in the base `CREATE TABLE`, so an existing `reader.db` upgrades in place.
 
 ### Page splitting (`server/paging.py`, Epic 2 — implemented)
 
@@ -107,10 +137,10 @@ book has at least one (possibly empty) page.
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | – | `[{id,title,source,current_page,page_count,created}]` — **implemented (Epic 2)** |
-| POST `/api/books` | `{title, text, source?}` | created book (splits pages) — **implemented (Epic 2)** |
+| GET `/api/books` | `?topic=&archived=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read}]` — filters **implemented (Epic 11)**, base shape (Epic 2), score fields (Epic 9) |
+| POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11)** |
 | GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
-| PATCH `/api/books/{id}` | `{current_page?, title?}` | updated book — **implemented (Epic 2)** |
+| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?}` | full updated book row (as `GET /api/books` shape) — **implemented (Epic 2, extended Epic 11)** |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
@@ -165,6 +195,30 @@ and `server.routes.translate.krdict.lookup` respectively, which never touches th
 real `translate_cache.sqlite3` or requires `.env` keys. `POST /api/translate` catches
 `TranslationError` and returns `502 {"error": "..."}` via `JSONResponse` (not
 FastAPI's default `{"detail": ...}` shape, to match the spec's contract exactly).
+
+**Epic 11 status:** `server/db.py`'s `_ADDED_COLUMNS["books"]` grew the seven columns
+in the schema block above; `_apply_migrations` also creates the partial
+`idx_books_source_ref` unique index every `init_db` call (idempotent — `CREATE …
+IF NOT EXISTS`). `feeds` is a brand-new table so it needed no migration entry, just
+`CREATE TABLE IF NOT EXISTS` in `SCHEMA` directly. `routes/books.py`: `BookCreate`
+gained `topic/tags/source_url/source_ref/fetched` (all optional, defaulting to
+empty/`None`); a duplicate `source_ref` surfaces as 409 (`sqlite3.IntegrityError`
+caught the same way `terms.py` handles duplicate lemmas). `BookPatch` gained
+`topic/tags/archived/read`; `tags` is JSON-encoded before the `UPDATE` (same pattern
+`routes/settings.py` uses). `list_books` takes `?topic=` (exact match) and
+`?archived=` (bool) query filters, mirroring `terms.py`'s filter style.
+`web/app/page.tsx`: a topic `<select>` + "Show archived" checkbox filter row (both
+re-fetch from the server rather than filtering client-side, so they compose with the
+existing client-side Recent/Easiest-unread sort); each book row shows its
+topic/tags line and gained "Mark read"/"Archive" toggle buttons — both call `PATCH`
+then re-fetch (rather than patching local state), since toggling either can move a
+book out of the current filter view; the add-book modal gained a topic `<select>`
+and a comma-separated tags `<input>`. No frontend UI for `source_url`/`source_ref`/
+`fetched` yet — nothing sets those until Epic 12's importers exist; verified via API
+tests directly (`test_duplicate_source_ref_returns_409`, etc.) instead.
+**Not verified in a browser** (still no browser tooling in this environment; also
+deliberately not run against the user's real `reader.db` to avoid polluting it with
+test books) — do a real pass together with Epic 9's still-pending one.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

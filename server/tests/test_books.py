@@ -126,7 +126,86 @@ def test_list_books_shape(client):
         assert set(book.keys()) == {
             "id", "title", "source", "current_page", "page_count", "created",
             "coverage", "new_per_page", "scored_at",
+            "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
         }
+
+
+def test_create_book_with_topic_and_tags(client):
+    resp = client.post(
+        "/api/books",
+        json={
+            "title": "Game news",
+            "text": SHORT_STORY,
+            "topic": "gaming",
+            "tags": ["ps5", "review"],
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["topic"] == "gaming"
+    assert body["tags"] == ["ps5", "review"]
+    assert body["archived"] is False
+    assert body["read"] is False
+
+
+def test_list_books_filters_by_topic(client):
+    client.post("/api/books", json={"title": "A", "text": SHORT_STORY, "topic": "gaming"})
+    client.post("/api/books", json={"title": "B", "text": SHORT_STORY, "topic": "fitness"})
+
+    resp = client.get("/api/books?topic=gaming")
+    assert resp.status_code == 200
+    titles = {b["title"] for b in resp.json()}
+    assert titles == {"A"}
+
+
+def test_list_books_filters_by_archived(client):
+    resp = client.post("/api/books", json={"title": "A", "text": SHORT_STORY})
+    book_id = resp.json()["id"]
+    client.post("/api/books", json={"title": "B", "text": SHORT_STORY})
+    client.patch(f"/api/books/{book_id}", json={"archived": True})
+
+    active = client.get("/api/books?archived=false").json()
+    assert {b["title"] for b in active} == {"B"}
+
+    archived = client.get("/api/books?archived=true").json()
+    assert {b["title"] for b in archived} == {"A"}
+
+
+def test_patch_book_topic_tags_archived_read(client):
+    resp = client.post("/api/books", json={"title": "A", "text": SHORT_STORY})
+    book_id = resp.json()["id"]
+
+    patched = client.patch(
+        f"/api/books/{book_id}",
+        json={"topic": "literature", "tags": ["short-fiction"], "archived": True, "read": True},
+    )
+    assert patched.status_code == 200
+    body = patched.json()
+    assert body["topic"] == "literature"
+    assert body["tags"] == ["short-fiction"]
+    assert body["archived"] is True
+    assert body["read"] is True
+
+
+def test_duplicate_source_ref_returns_409(client):
+    resp = client.post(
+        "/api/books",
+        json={"title": "A", "text": SHORT_STORY, "source_ref": "yt:abc123"},
+    )
+    assert resp.status_code == 201
+
+    dup = client.post(
+        "/api/books",
+        json={"title": "B", "text": SHORT_STORY, "source_ref": "yt:abc123"},
+    )
+    assert dup.status_code == 409
+
+
+def test_multiple_books_without_source_ref_are_allowed(client):
+    resp1 = client.post("/api/books", json={"title": "A", "text": SHORT_STORY})
+    resp2 = client.post("/api/books", json={"title": "B", "text": SHORT_STORY})
+    assert resp1.status_code == 201
+    assert resp2.status_code == 201
 
 
 def test_get_patch_delete_404_for_missing_book(client):

@@ -36,16 +36,35 @@ CREATE TABLE IF NOT EXISTS terms (
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS feeds (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('rss','youtube','scraper')),
+  url_or_channel_id TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  difficulty_min REAL,
+  difficulty_max REAL,
+  last_fetched TIMESTAMP
+);
 """
 
 # Additive columns introduced after the initial schema. Applied idempotently by
 # init_db so an existing reader.db upgrades in place (SQLite has no ADD COLUMN IF
 # NOT EXISTS, so we guard on PRAGMA table_info). Epic 9: cached difficulty scores.
+# Epic 11: content-catalog metadata (topic/tags/provenance/archived/read).
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "books": {
         "coverage": "REAL",
         "new_per_page": "REAL",
         "scored_at": "TIMESTAMP",
+        "topic": "TEXT NOT NULL DEFAULT ''",
+        "tags": "TEXT NOT NULL DEFAULT '[]'",
+        "source_url": "TEXT NOT NULL DEFAULT ''",
+        "source_ref": "TEXT",
+        "fetched": "TIMESTAMP",
+        "archived": "INTEGER NOT NULL DEFAULT 0",
+        "read": "INTEGER NOT NULL DEFAULT 0",
     },
 }
 
@@ -56,6 +75,13 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         for name, decl in columns.items():
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    # Partial index: NULL source_ref (paste/txt books) never collides, but two
+    # imports of the same video id / feed guid do — the dedup guarantee Epic 12's
+    # importers and Epic 14's daily job rely on.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref "
+        "ON books(source_ref) WHERE source_ref IS NOT NULL"
+    )
 
 
 def get_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:

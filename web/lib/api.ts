@@ -8,6 +8,13 @@ export type Book = {
   coverage: number | null;
   new_per_page: number | null;
   scored_at: string | null;
+  topic: string;
+  tags: string[];
+  source_url: string;
+  source_ref: string | null;
+  fetched: string | null;
+  archived: boolean;
+  read: boolean;
 };
 
 export type ScoreResult = {
@@ -107,10 +114,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listBooks: () => request<Book[]>("/books"),
+  listBooks: (params?: { topic?: string; archived?: boolean }) => {
+    const sp = new URLSearchParams();
+    if (params?.topic) sp.set("topic", params.topic);
+    if (params?.archived !== undefined) sp.set("archived", String(params.archived));
+    const qs = sp.toString();
+    return request<Book[]>(`/books${qs ? `?${qs}` : ""}`);
+  },
 
-  createBook: (body: { title: string; text: string; source?: string }) =>
-    request<Book>("/books", { method: "POST", body: JSON.stringify(body) }),
+  createBook: (body: {
+    title: string;
+    text: string;
+    source?: string;
+    topic?: string;
+    tags?: string[];
+  }) => request<Book>("/books", { method: "POST", body: JSON.stringify(body) }),
 
   getBook: (id: number) => request<BookDetail>(`/books/${id}`),
 
@@ -119,8 +137,17 @@ export const api = {
 
   scoreBook: (id: number) => request<Book>(`/books/${id}/score`, { method: "POST" }),
 
-  patchBook: (id: number, body: { current_page?: number; title?: string }) =>
-    request<BookDetail>(`/books/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  patchBook: (
+    id: number,
+    body: {
+      current_page?: number;
+      title?: string;
+      topic?: string;
+      tags?: string[];
+      archived?: boolean;
+      read?: boolean;
+    }
+  ) => request<Book>(`/books/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   getPage: (bookId: number, pageNo: number) =>
     request<Page>(`/books/${bookId}/pages/${pageNo}`),

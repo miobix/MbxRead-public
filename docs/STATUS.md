@@ -236,19 +236,42 @@ later epic until the real sources are known.
   graded vocab lists or 국립국어원 frequency lists) — not yet downloaded, just located.
   **Caveat:** all of this is 2026-07-21 web-search-derived and only spot-verified (2 RSS
   URLs fetched live), not personally vetted by the user — treat YouTube channel picks and
-  author picks as a shortlist to react to before Epic 12 wires anything to them.
-- [ ] **Epic 11 — DB expansion + library UX.** Schema for a managed content queue.
-  `books`: `topic`/`tags` (JSON or comma text — single-user, a join table is overkill,
-  matches the `settings.decks` JSON pattern), `source_url`, `source_ref` (stable id:
-  video id / feed guid, with a **UNIQUE index** so the future daily job never
-  re-imports), `fetched` date, `archived`/`read` flag. New `feeds` table (`id, name,
-  type (rss|youtube|scraper), url_or_channel_id, topic, enabled, difficulty_min,
-  difficulty_max, last_fetched`) — the model a future settings page edits and the daily
-  script iterates (the *table* lands here; the fetch job is a later epic). All via the
-  same idempotent additive-migration path Epic 9 introduced. Library UX: filter/sort the
-  book list by topic + difficulty + read/archived state (extends the existing "Easiest
-  unread" sort). **Acceptance:** existing `reader.db` upgrades in place; can tag a book
-  and filter to it; `source_ref` uniqueness enforced.
+  author picks as a shortlist to react to before Epic 12 wires anything to them. Re-think the sources later. 
+  For reviews and guides, prioritize well written articles over user unstructured short comments.
+  For youtube, lets explore gaming podcasts on the next iteration.
+- [x] **Epic 11 — DB expansion + library UX** — done (2026-07-22). `server/db.py`:
+  `_ADDED_COLUMNS["books"]` grew seven columns (`topic` TEXT, `tags` JSON-encoded TEXT,
+  `source_url`, `source_ref` nullable, `fetched`, `archived`, `read`) via the same
+  additive-migration path Epic 9 introduced, plus a partial `CREATE UNIQUE INDEX
+  idx_books_source_ref ... WHERE source_ref IS NOT NULL` (created idempotently every
+  `init_db` call) so paste/txt books (`source_ref IS NULL`) never collide but two
+  imports of the same video id / feed guid do. New `feeds` table (id, name, type
+  rss|youtube|scraper, url_or_channel_id, topic, enabled, difficulty_min,
+  difficulty_max, last_fetched) landed as a plain `CREATE TABLE IF NOT EXISTS` —
+  no CRUD routes yet, per the epic's own scope note (table now, fetch job later).
+  `server/routes/books.py`: `POST` accepts `topic/tags/source_url/source_ref/fetched`
+  (409 on duplicate `source_ref`); `PATCH` accepts `topic/tags/archived/read` and now
+  returns the full book row (was the reduced `{id,title,current_page,page_count}`
+  shape) so the frontend can update from the response; `GET /api/books` takes
+  `?topic=` and `?archived=` filters. 91/91 tests green (8 new: topic/tag
+  round-trip, topic/archived filtering, archived+read patch, duplicate-`source_ref`
+  409, NULL-`source_ref` non-collision, migration idempotency for all seven columns
+  and the `feeds` table). `npm run build`/`lint` clean. Frontend (`web/app/page.tsx`):
+  topic `<select>` + "Show archived" checkbox (both re-query the server rather than
+  filtering client-side — composes with the existing client-side Recent/Easiest-unread
+  sort); per-book topic/tags line; "Mark read"/"Archive" toggle buttons (re-fetch after
+  `PATCH` rather than patch local state, since toggling can move a book out of the
+  current filter); add-book modal gained a topic `<select>` and comma-separated tags
+  `<input>`. Five `docs/DECISIONS.md` entries added (tags-as-JSON/topic-as-string
+  split, partial-index dedup rationale, feeds-table-without-routes rationale, the
+  `PATCH` response-shape widening and why it's safe). `docs/ARCHITECTURE.md`'s schema
+  block and API table updated — and backfilled with Epic 9's `coverage`/
+  `new_per_page`/`scored_at` columns, which had been missed there.
+  **Not verified in a browser** (no browser tooling in this environment; also
+  deliberately not run against the user's real `reader.db`, to avoid seeding it with
+  test books) — do a real pass together with Epic 9's still-pending one: tag a book,
+  filter by topic, toggle archived/read and confirm the list updates, add a book with
+  tags and confirm they round-trip.
 - [ ] **Epic 12 — Import wiring.** Bring the existing CLI importers into the app so
   content can be pulled in-app instead of by hand. Wire `import_tools/yt_subs.py`
   (YouTube subs) and `import_tools/pdf_text.py` (PDF → cleaned `.txt`) — currently
@@ -296,10 +319,12 @@ later epic until the real sources are known.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
-  above (Epics 9-12, with the daily-fetch automation deferred beyond that). The
-  next actionable item is **Epic 11 — DB expansion + library UX**. Epic 9
-  (difficulty scorer) and Epic 10 (content catalog, see `docs/
-  CONTENT_CATALOG.md`) both shipped 2026-07-21.
+  above (Epics 9-12, with the daily-fetch automation deferred beyond that). Epic 9
+  (difficulty scorer), Epic 10 (content catalog, see `docs/CONTENT_CATALOG.md`), and
+  Epic 11 (DB expansion + library UX) are done. The next actionable item is
+  **Epic 12 — Import wiring** (wire `import_tools/yt_subs.py` and
+  `import_tools/pdf_text.py` behind API endpoints + add-book UI, using Epic 11's
+  `source_url`/`source_ref`/`topic`/`tags` columns and dedup index).
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

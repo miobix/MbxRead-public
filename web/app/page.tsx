@@ -6,6 +6,8 @@ import { api, type Book, type ScoreResult } from "@/lib/api";
 
 type Sort = "recent" | "easiest";
 
+const TOPICS = ["gaming", "fitness", "news", "literature", "other"] as const;
+
 // Coverage bands from docs/NEXT_STAGE_OPTIONS.md: ~0.95+ comfortable, 0.90-0.95
 // productive study zone, <0.85 a slog. Colour the % so difficulty reads at a glance.
 function coverageClass(coverage: number): string {
@@ -35,15 +37,17 @@ export default function HomePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [sort, setSort] = useState<Sort>("recent");
   const [scoring, setScoring] = useState<number | null>(null);
+  const [topicFilter, setTopicFilter] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   const refresh = () => {
     api
-      .listBooks()
+      .listBooks({ topic: topicFilter || undefined, archived: showArchived })
       .then(setBooks)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load books."));
   };
 
-  useEffect(refresh, []);
+  useEffect(refresh, [topicFilter, showArchived]);
 
   const score = async (id: number) => {
     setScoring(id);
@@ -54,6 +58,17 @@ export default function HomePage() {
       setError(e instanceof Error ? e.message : "Failed to score book.");
     } finally {
       setScoring(null);
+    }
+  };
+
+  // Re-fetches (rather than patching local state) since toggling archived/read
+  // can move a book out of the current filter view.
+  const toggle = async (id: number, field: "archived" | "read", value: boolean) => {
+    try {
+      await api.patchBook(id, { [field]: value });
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update book.");
     }
   };
 
@@ -94,10 +109,34 @@ export default function HomePage() {
 
       {error && <p className="text-danger text-sm mb-4">{error}</p>}
 
+      <div className="flex items-center flex-wrap gap-2 mb-3 text-sm">
+        <span className="text-muted">Topic:</span>
+        <select
+          value={topicFilter}
+          onChange={(e) => setTopicFilter(e.target.value)}
+          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">All</option>
+          {TOPICS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1 text-muted">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          Show archived
+        </label>
+      </div>
+
       {books === null && !error && <p className="text-muted">Loading…</p>}
 
       {books?.length === 0 && (
-        <p className="text-muted">No books yet. Add one to get started.</p>
+        <p className="text-muted">No books match. Add one or adjust the filters.</p>
       )}
 
       {books && books.length > 0 && (
@@ -129,12 +168,20 @@ export default function HomePage() {
               href={`/read/?id=${book.id}`}
               className="block hover:text-accent transition-colors"
             >
-              <div className="font-medium">{book.title}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{book.title}</span>
+                {book.read && <span className="text-xs text-accent">✓ read</span>}
+              </div>
               <div className="text-sm text-muted">
                 {book.current_page} / {book.page_count} pages
               </div>
+              {(book.topic || book.tags.length > 0) && (
+                <div className="text-xs text-muted mt-0.5">
+                  {[book.topic, ...book.tags].filter(Boolean).join(" · ")}
+                </div>
+              )}
             </Link>
-            <div className="mt-2 flex items-center gap-3">
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
               <ScoreLine book={book} />
               <button
                 onClick={() => score(book.id)}
@@ -146,6 +193,18 @@ export default function HomePage() {
                   : book.scored_at
                     ? "re-score"
                     : "Score difficulty"}
+              </button>
+              <button
+                onClick={() => toggle(book.id, "read", !book.read)}
+                className="text-xs text-muted hover:text-ink transition-colors"
+              >
+                {book.read ? "Mark unread" : "Mark read"}
+              </button>
+              <button
+                onClick={() => toggle(book.id, "archived", !book.archived)}
+                className="text-xs text-muted hover:text-ink transition-colors"
+              >
+                {book.archived ? "Unarchive" : "Archive"}
               </button>
             </div>
           </li>
@@ -175,6 +234,8 @@ function AddBookModal({
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [source, setSource] = useState<"paste" | "txt">("paste");
+  const [topic, setTopic] = useState("");
+  const [tags, setTags] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScoreResult | null>(null);
@@ -209,7 +270,11 @@ function AddBookModal({
     setSubmitting(true);
     setError(null);
     try {
-      await api.createBook({ title: title.trim(), text, source });
+      const tagList = tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await api.createBook({ title: title.trim(), text, source, topic, tags: tagList });
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create book.");
@@ -246,6 +311,27 @@ function AddBookModal({
           rows={8}
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
+
+        <div className="flex gap-2">
+          <select
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            className="rounded-lg border border-border bg-transparent px-2 py-2 text-sm flex-1"
+          >
+            <option value="">No topic</option>
+            {TOPICS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <input
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="tags, comma, separated"
+            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm flex-1 placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          />
+        </div>
 
         <label className="text-sm text-muted flex flex-col gap-1">
           or upload a .txt file

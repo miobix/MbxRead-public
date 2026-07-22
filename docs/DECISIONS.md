@@ -260,3 +260,38 @@ user has real data) without a destructive recreate and without a migration frame
 so future additive columns (Epic 11's `topic`/`source_ref`/etc.) extend the same path.
 Idempotent by construction — re-running `init_db` never double-adds (covered by
 `test_migration_is_idempotent`).
+
+## 2026-07-22 — Epic 11: `tags` as a JSON-encoded TEXT column, `topic` as plain TEXT
+Single-user app, so a `book_tags` join table is overkill — same reasoning already
+applied to `settings.decks`. `topic` stays a single plain string (one primary category:
+gaming/fitness/news/literature/other, matching `docs/CONTENT_CATALOG.md` and the future
+`feeds.topic` column) rather than JSON, since a book has one home shelf but can carry
+several free-form tags. `tags` round-trips through `json.dumps`/`json.loads` in
+`routes/books.py`, same pattern as `routes/settings.py`.
+
+## 2026-07-22 — Epic 11: `source_ref` dedup via a partial UNIQUE index, not a `NOT NULL` column
+`source_ref` (video id / feed guid) is `NULL` for every paste/txt book and only ever
+set by Epic 12's importers / Epic 14's daily job. A plain `UNIQUE` column would still
+work in SQLite (multiple `NULL`s never collide under `UNIQUE` there), but a partial
+index (`CREATE UNIQUE INDEX ... WHERE source_ref IS NOT NULL`) makes that guarantee
+explicit rather than relying on an easy-to-forget SQLite-specific `NULL` behavior, and
+keeps the dedup rule visible next to `_apply_migrations` rather than buried in a column
+declaration. `POST /api/books` catches the resulting `sqlite3.IntegrityError` and
+returns 409, same shape as `terms.py`'s duplicate-lemma 409.
+
+## 2026-07-22 — Epic 11: `feeds` table lands with no CRUD routes yet
+Per the Cycle 2 plan, Epic 11 only needs the schema to exist so Epic 14's daily job and
+a future settings page have somewhere to read/write; nothing in this epic populates or
+edits it, so no `routes/feeds.py` was written — would be an unused, untestable
+abstraction before Epic 14 exists. It's a brand-new table (`CREATE TABLE IF NOT EXISTS`
+in `SCHEMA` directly), not an additive column, so it needed no `_apply_migrations` entry.
+
+## 2026-07-22 — Epic 11: `PATCH /api/books/{id}` now returns the full book row
+Previously reused `get_book()`'s reduced `{id,title,current_page,page_count}` shape
+(matching what the reader page's pagination patch needed). Now that `PATCH` can change
+`topic`/`tags`/`archived`/`read`, callers (the home page's Archive/Mark-read buttons)
+need those fields back to update state without a second round trip, so `patch_book`
+returns `_book_dict()` directly — the same full shape `POST`/`score` already return.
+`GET /api/books/{id}` (used by the reader page, which only ever wants the reduced
+shape) is unchanged. Checked the one other `patchBook` caller (`read/page.tsx`'s
+current-page persistence) discards the response already, so this is a safe widening.
