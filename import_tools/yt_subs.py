@@ -14,8 +14,12 @@ from pathlib import Path
 from yt_dlp import YoutubeDL
 
 
-def fetch_subs(url: str) -> tuple[str, str]:
-    """Returns (title, cleaned_text)."""
+class NoSubtitlesError(Exception):
+    """Raised when a video has no Korean subtitles (manual or auto-generated)."""
+
+
+def fetch_subs(url: str) -> tuple[str, str, str]:
+    """Returns (title, cleaned_text, video_id)."""
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             "skip_download": True,
@@ -29,10 +33,11 @@ def fetch_subs(url: str) -> tuple[str, str]:
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
         title = info.get("title", "untitled")
+        video_id = info["id"]
         vtts = list(Path(tmp).glob("*.vtt"))
         if not vtts:
-            raise SystemExit("No Korean subtitles found for this video.")
-        return title, clean_vtt(vtts[0].read_text(encoding="utf-8"))
+            raise NoSubtitlesError("No Korean subtitles found for this video.")
+        return title, clean_vtt(vtts[0].read_text(encoding="utf-8")), video_id
 
 
 def clean_vtt(vtt: str) -> str:
@@ -62,10 +67,13 @@ def html_unescape(s: str) -> str:
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    title, text = fetch_subs(sys.argv[1])
+    try:
+        title, text, _video_id = fetch_subs(sys.argv[1])
+    except NoSubtitlesError as e:
+        raise SystemExit(str(e))
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(
         re.sub(r"[^\w가-힣 -]", "", title)[:60].strip() + ".txt"
     )
     out.write_text(text, encoding="utf-8")
     print(f"Saved {len(text)} chars -> {out}")
-    print("Import it in Lute: Home > 새 책 (New book) > paste or upload this file.")
+    print("Import it into korean-reader: Add book > YouTube URL.")

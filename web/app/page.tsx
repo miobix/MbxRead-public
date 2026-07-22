@@ -224,6 +224,18 @@ export default function HomePage() {
   );
 }
 
+type Mode = "paste" | "youtube" | "pdf" | "article";
+
+const MODES: { key: Mode; label: string }[] = [
+  { key: "paste", label: "Paste / .txt" },
+  { key: "youtube", label: "YouTube" },
+  { key: "pdf", label: "PDF" },
+  { key: "article", label: "Article URL" },
+];
+
+const inputClass =
+  "rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors";
+
 function AddBookModal({
   onClose,
   onCreated,
@@ -231,9 +243,13 @@ function AddBookModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const [mode, setMode] = useState<Mode>("paste");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [source, setSource] = useState<"paste" | "txt">("paste");
+  const [url, setUrl] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPages, setPdfPages] = useState("");
   const [topic, setTopic] = useState("");
   const [tags, setTags] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -241,7 +257,7 @@ function AddBookModal({
   const [preview, setPreview] = useState<ScoreResult | null>(null);
   const [checking, setChecking] = useState(false);
 
-  const handleFile = async (file: File) => {
+  const handleTxtFile = async (file: File) => {
     const content = await file.text();
     setText(content);
     setSource("txt");
@@ -263,21 +279,63 @@ function AddBookModal({
   };
 
   const submit = async () => {
-    if (!title.trim() || !text.trim()) {
-      setError("Title and text are both required.");
+    setError(null);
+    const tagList = tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (mode === "paste") {
+      if (!title.trim() || !text.trim()) {
+        setError("Title and text are both required.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await api.createBook({ title: title.trim(), text, source, topic, tags: tagList });
+        onCreated();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to create book.");
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (mode === "youtube" || mode === "article") {
+      if (!url.trim()) {
+        setError("Paste a URL first.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const body = { url: url.trim(), topic, tags: tagList };
+        if (mode === "youtube") await api.importYoutube(body);
+        else await api.importArticle(body);
+        onCreated();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Import failed.");
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // mode === "pdf"
+    if (!pdfFile) {
+      setError("Choose a PDF file first.");
       return;
     }
     setSubmitting(true);
-    setError(null);
     try {
-      const tagList = tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-      await api.createBook({ title: title.trim(), text, source, topic, tags: tagList });
+      await api.importPdf({
+        file: pdfFile,
+        title: title.trim(),
+        topic,
+        tags,
+        pages: pdfPages.trim(),
+      });
       onCreated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create book.");
+      setError(e instanceof Error ? e.message : "Import failed.");
       setSubmitting(false);
     }
   };
@@ -293,24 +351,121 @@ function AddBookModal({
       >
         <h2 className="text-lg font-semibold font-serif">Add a book</h2>
 
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        />
+        <div className="flex gap-1 rounded-lg bg-paper p-1 text-sm">
+          {MODES.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => {
+                setMode(m.key);
+                setError(null);
+              }}
+              className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+                mode === m.key
+                  ? "bg-surface shadow-sm text-ink font-medium"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
 
-        <textarea
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setSource("paste");
-            setPreview(null);
-          }}
-          placeholder="Paste Korean text here…"
-          rows={8}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        />
+        {mode === "paste" && (
+          <>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              className={inputClass}
+            />
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setSource("paste");
+                setPreview(null);
+              }}
+              placeholder="Paste Korean text here…"
+              rows={8}
+              className={`${inputClass} resize-none`}
+            />
+            <label className="text-sm text-muted flex flex-col gap-1">
+              or upload a .txt file
+              <input
+                type="file"
+                accept=".txt"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleTxtFile(file);
+                }}
+                className="text-sm"
+              />
+            </label>
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                onClick={checkDifficulty}
+                disabled={checking || !text.trim()}
+                className="text-muted hover:text-ink transition-colors disabled:opacity-50"
+              >
+                {checking ? "Checking…" : "Check difficulty"}
+              </button>
+              {preview && (
+                <span className="text-muted">
+                  {preview.coverage !== null && (
+                    <span className={coverageClass(preview.coverage)}>
+                      {Math.round(preview.coverage * 100)}% known
+                    </span>
+                  )}
+                  {preview.coverage !== null && " · "}
+                  {preview.new_per_page} new/pg
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        {(mode === "youtube" || mode === "article") && (
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={mode === "youtube" ? "https://youtube.com/watch?v=…" : "https://example.com/article"}
+            className={inputClass}
+          />
+        )}
+
+        {mode === "pdf" && (
+          <>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title (defaults to filename)"
+              className={inputClass}
+            />
+            <label className="text-sm text-muted flex flex-col gap-1">
+              PDF file
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                className="text-sm"
+              />
+            </label>
+            <input
+              value={pdfPages}
+              onChange={(e) => setPdfPages(e.target.value)}
+              placeholder="Page range, e.g. 1-20 (optional)"
+              className={inputClass}
+            />
+          </>
+        )}
+
+        {mode !== "paste" && (
+          <p className="text-xs text-muted -mt-1">
+            {mode === "pdf"
+              ? "Duplicate PDFs (same file re-uploaded) are detected automatically."
+              : "Re-importing the same link won't create a duplicate book."}
+          </p>
+        )}
 
         <div className="flex gap-2">
           <select
@@ -329,42 +484,8 @@ function AddBookModal({
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="tags, comma, separated"
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm flex-1 placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+            className={`${inputClass} flex-1`}
           />
-        </div>
-
-        <label className="text-sm text-muted flex flex-col gap-1">
-          or upload a .txt file
-          <input
-            type="file"
-            accept=".txt"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-            }}
-            className="text-sm"
-          />
-        </label>
-
-        <div className="flex items-center gap-3 text-sm">
-          <button
-            onClick={checkDifficulty}
-            disabled={checking || !text.trim()}
-            className="text-muted hover:text-ink transition-colors disabled:opacity-50"
-          >
-            {checking ? "Checking…" : "Check difficulty"}
-          </button>
-          {preview && (
-            <span className="text-muted">
-              {preview.coverage !== null && (
-                <span className={coverageClass(preview.coverage)}>
-                  {Math.round(preview.coverage * 100)}% known
-                </span>
-              )}
-              {preview.coverage !== null && " · "}
-              {preview.new_per_page} new/pg
-            </span>
-          )}
         </div>
 
         {error && <p className="text-danger text-sm">{error}</p>}

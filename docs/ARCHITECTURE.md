@@ -15,14 +15,17 @@ korean-reader/
     db.py                  sqlite (reader.db): connection, schema init, query helpers
     tokenizer.py           kiwipiepy wrapper: text -> eojeol tokens with lemma
     anki.py                AnkiConnect client (http://localhost:8765)
+    article.py             trafilatura wrapper: url -> (title, cleaned_text) — Epic 12
     routes/
-      books.py  terms.py  translate.py  anki_sync.py  settings.py
+      books.py  terms.py  translate.py  anki_sync.py  settings.py  difficulty.py
+      imports.py           Epic 12: YouTube/PDF/article import endpoints
   server/tests/            pytest suite
   translate_svc/           used as a library (translators.py, cache.py, krdict.py,
                            config.py) — main.py (Lute's HTML tooltip page) deleted
                            in Epic 8, Lute is fully retired
   web/                     Next.js app (TypeScript, Tailwind, output: 'export')
-  import_tools/            existing
+  import_tools/            yt_subs.py / pdf_text.py — still runnable standalone CLIs,
+                           now also imported as libraries by routes/imports.py (Epic 12)
   docs/                    living design docs (see Executor conventions)
   requirements.txt         direct Python deps
   start.ps1                single-server launcher — rewritten in Epic 8
@@ -60,7 +63,7 @@ unimplemented (Epic 7).
 CREATE TABLE IF NOT EXISTS books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf
+  source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf | article
   current_page INTEGER NOT NULL DEFAULT 1,
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   -- Epic 9 (additive migration): cached difficulty score.
@@ -152,6 +155,9 @@ book has at least one (possibly empty) page.
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
 | GET `/api/settings` | – | `{decks, default_deck, translator_backend}` — **implemented (Epic 7)** |
 | PUT `/api/settings` | any subset of the above | full settings dict after merge — **implemented (Epic 7)** |
+| POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12)** |
+| POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
+| POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
 
 **Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
 as its own row in the `settings` (key/value) table, JSON-encoded in the `value`
@@ -219,6 +225,47 @@ tests directly (`test_duplicate_source_ref_returns_409`, etc.) instead.
 **Not verified in a browser** (still no browser tooling in this environment; also
 deliberately not run against the user's real `reader.db` to avoid polluting it with
 test books) — do a real pass together with Epic 9's still-pending one.
+
+**Epic 12 status:** `server/routes/books.py` gained `insert_book()` — the shared
+page-split + `source_ref`-dedup insert (raises `DuplicateSourceRef` on collision,
+caught by each caller to shape its own 409 message) — extracted out of `create_book`
+so `routes/imports.py`'s three importers reuse it instead of duplicating the
+INSERT/split-pages/commit logic. `import_tools/yt_subs.py`'s `fetch_subs()` now
+returns `(title, text, video_id)` (was `(title, text)`) and raises a proper
+`NoSubtitlesError` instead of `SystemExit` when no Korean captions exist, so it's
+safe to call as a library — the CLI `__main__` block catches it and converts back to
+`SystemExit` itself. `import_tools/pdf_text.py`'s `extract()` now accepts either a
+`Path` (CLI, unchanged) or raw `bytes` (`fitz.open(stream=..., filetype="pdf")`, used
+by the upload route — no temp file needed); `parse_page_range()` was pulled out of
+the CLI's inline arg-parsing so the route can reuse the same `"1-20"` syntax.
+`server/article.py` (new) wraps `trafilatura.fetch_url` + `.extract` +
+`.extract_metadata`, raising `ArticleError` on an unfetchable URL or a page with no
+extractable article text. Dedup keys: YouTube on `yt:<video_id>` (from yt-dlp's
+`info["id"]`, stable across URL variants like `?t=30s`); article on
+`article:<url>` (exact string — a differently-formatted URL to the same article
+isn't detected, judged acceptable for a personal single-user app); PDF on
+`pdf:<sha256 of the uploaded bytes>` (works even though PDFs have no natural id;
+re-uploading the identical file always dedupes, a re-export with different bytes
+won't — same rationale). All three routes catch their fetch/extract exception and
+return `502 {"error": ...}` (matching `routes/translate.py`'s existing convention),
+then catch `DuplicateSourceRef` separately for the 409. Tests
+(`server/tests/test_imports.py`) monkeypatch `imports.fetch_subs` /
+`imports.fetch_article` / `imports.extract_pdf` at the route-module boundary, same
+convention as `test_translate.py`; PDF upload tests exercise real multipart
+`files=`/`data=` through `TestClient`. New deps: `yt-dlp`, `pymupdf`, `trafilatura`,
+`python-multipart` (FastAPI needs it for `UploadFile`/`Form`) — all added to
+`requirements.txt`. Real (non-mocked) sanity checks run manually against live
+YouTube and a live news URL confirmed `fetch_subs`/`fetch_article` work end-to-end
+(not just against mocks) — not run through the API/DB layer, per the
+Epic 9/11 convention of never seeding the user's real `reader.db` from this
+environment. `web/app/page.tsx`'s add-book modal gained a 4-way mode switch
+(Paste/.txt, YouTube, PDF, Article URL); `lib/api.ts` gained `importYoutube`/
+`importArticle`/`importPdf` plus a `requestForm` helper (skips the JSON
+`Content-Type` header so the browser can set its own multipart boundary).
+**Not verified in a browser** (no browser tooling in this environment) — do a real
+pass: paste a YouTube URL with Korean captions, upload a PDF, paste an article URL;
+confirm each lands as a scored-ready book and that re-submitting the same one 409s
+instead of duplicating.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

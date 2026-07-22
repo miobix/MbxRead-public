@@ -10,8 +10,12 @@ from pathlib import Path
 import fitz  # pymupdf
 
 
-def extract(pdf_path: Path, page_range: tuple[int, int] | None = None) -> str:
-    doc = fitz.open(pdf_path)
+def extract(pdf_source: Path | bytes, page_range: tuple[int, int] | None = None) -> str:
+    """pdf_source is a file path (CLI) or raw PDF bytes (in-memory upload)."""
+    if isinstance(pdf_source, bytes):
+        doc = fitz.open(stream=pdf_source, filetype="pdf")
+    else:
+        doc = fitz.open(pdf_source)
     first, last = page_range or (1, doc.page_count)
     chunks = []
     for i in range(first - 1, min(last, doc.page_count)):
@@ -19,6 +23,12 @@ def extract(pdf_path: Path, page_range: tuple[int, int] | None = None) -> str:
         if text:
             chunks.append(text)
     return "\n\n".join(chunks)
+
+
+def parse_page_range(rng: str) -> tuple[int, int]:
+    """"1-20" or "5" -> (first, last), 1-based inclusive."""
+    first, _, last = rng.partition("-")
+    return (int(first), int(last or first))
 
 
 if __name__ == "__main__":
@@ -29,8 +39,7 @@ if __name__ == "__main__":
     for a in sys.argv[1:]:
         if a.startswith("--pages"):
             rng = a.split("=", 1)[-1] if "=" in a else sys.argv[sys.argv.index(a) + 1]
-            first, _, last = rng.partition("-")
-            pages = (int(first), int(last or first))
+            pages = parse_page_range(rng)
     src = Path(args[0])
     out = Path(args[1]) if len(args) > 1 else src.with_suffix(".txt")
     text = extract(src, pages)

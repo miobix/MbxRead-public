@@ -92,12 +92,7 @@ export type Settings = {
 
 class ApiError extends Error {}
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-
+async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = res.statusText;
     try {
@@ -111,6 +106,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  return handleResponse<T>(res);
+}
+
+// No Content-Type header here — the browser sets multipart/form-data with the
+// right boundary itself; forcing application/json (like `request` does) would
+// break the upload.
+async function requestForm<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: "POST", body: formData });
+  return handleResponse<T>(res);
 }
 
 export const api = {
@@ -191,4 +202,26 @@ export const api = {
 
   putSettings: (body: Partial<Settings>) =>
     request<Settings>("/settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  importYoutube: (body: { url: string; topic?: string; tags?: string[] }) =>
+    request<Book>("/import/youtube", { method: "POST", body: JSON.stringify(body) }),
+
+  importArticle: (body: { url: string; topic?: string; tags?: string[] }) =>
+    request<Book>("/import/article", { method: "POST", body: JSON.stringify(body) }),
+
+  importPdf: (body: {
+    file: File;
+    title?: string;
+    topic?: string;
+    tags?: string;
+    pages?: string;
+  }) => {
+    const fd = new FormData();
+    fd.set("file", body.file);
+    if (body.title) fd.set("title", body.title);
+    if (body.topic) fd.set("topic", body.topic);
+    if (body.tags) fd.set("tags", body.tags);
+    if (body.pages) fd.set("pages", body.pages);
+    return requestForm<Book>("/import/pdf", fd);
+  },
 };

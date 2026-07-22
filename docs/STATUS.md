@@ -272,13 +272,43 @@ later epic until the real sources are known.
   test books) — do a real pass together with Epic 9's still-pending one: tag a book,
   filter by topic, toggle archived/read and confirm the list updates, add a book with
   tags and confirm they round-trip.
-- [ ] **Epic 12 — Import wiring.** Bring the existing CLI importers into the app so
-  content can be pulled in-app instead of by hand. Wire `import_tools/yt_subs.py`
-  (YouTube subs) and `import_tools/pdf_text.py` (PDF → cleaned `.txt`) — currently
-  working standalone scripts — behind API endpoints + add-book UI options, plus an
-  article/URL extractor. Each import sets `source_url`/`source_ref` and dedupes on the
-  Epic 11 unique index. **Acceptance:** paste a YouTube URL / upload a PDF / paste an
-  article URL in-app → a scored book, no duplicate on re-import.
+- [x] **Epic 12 — Import wiring** — done (2026-07-22). `server/routes/imports.py`
+  (new): `POST /api/import/youtube` (`{url, topic?, tags?}`), `POST /api/import/article`
+  (`{url, topic?, tags?}`), `POST /api/import/pdf` (multipart `file` + `title?/topic?/
+  tags?/pages?`). `server/routes/books.py` gained a shared `insert_book()` helper
+  (raises `DuplicateSourceRef`) extracted out of `create_book`, reused by all three
+  importers so the page-split + dedup-insert logic lives in one place. `import_tools/
+  yt_subs.py`'s `fetch_subs()` now returns `(title, text, video_id)` (was `(title,
+  text)`) and raises `NoSubtitlesError` instead of `SystemExit` (CLI `__main__`
+  converts it back, so the standalone script's behavior is unchanged);
+  `import_tools/pdf_text.py`'s `extract()` now accepts raw bytes as well as a `Path`
+  (`fitz.open(stream=..., filetype="pdf")`, no temp file needed for the upload path),
+  and its CLI page-range parsing was pulled out into a reusable `parse_page_range()`.
+  `server/article.py` (new): thin `trafilatura` wrapper, `fetch_article(url) ->
+  (title, text)`, raising `ArticleError` on an unfetchable URL or a page with no
+  extractable text. Dedup keys (all in the Epic 11 `source_ref` column, prefixed to
+  keep the three namespaces apart): `yt:<video_id>`, `article:<url>` (exact string),
+  `pdf:<sha256 of uploaded bytes>` — see DECISIONS.md for why each shape was chosen.
+  New deps: `yt-dlp`, `pymupdf`, `trafilatura`, `python-multipart` (all added to
+  `requirements.txt`). 100/100 tests green (9 new in `test_imports.py`, mocking
+  `imports.fetch_subs`/`imports.fetch_article`/`imports.extract_pdf` at the
+  route-module boundary per the existing `test_translate.py` convention; PDF tests
+  drive real multipart `files=`/`data=` through `TestClient`). `npm run build`/`lint`
+  clean. `web/app/page.tsx`'s add-book modal gained a 4-way mode switch (Paste/.txt,
+  YouTube, PDF, Article URL); `lib/api.ts` gained `importYoutube`/`importArticle`/
+  `importPdf` + a `requestForm` helper for multipart uploads.
+  **Real (non-mocked) sanity checks run manually, network-only, no DB writes:**
+  `server.article.fetch_article` against a live URL (`https://www.yna.co.kr/`) —
+  correct title + clean Korean body text; `import_tools.yt_subs.fetch_subs` against a
+  real public YouTube video (PSY - Gangnam Style, `9bZkp7q19f0`) — correct title,
+  video id, and Korean subtitle text extracted end-to-end through real `yt-dlp`.
+  Deliberately **not** run through the API/DB layer against the user's real
+  `reader.db`, per the same convention Epics 9/11 followed (avoid seeding it with
+  test books from this environment).
+  **Not verified in a browser** (no browser tooling in this environment) — do a real
+  pass: paste a YouTube URL with Korean captions, upload a PDF, paste an article URL
+  in the add-book modal; confirm each becomes a scored-ready book, and that
+  re-submitting the same one 409s instead of duplicating.
 
 - [ ] **Epic 13 — Cold-start difficulty signal.** Import the graded TOPIK/frequency
   word list (sourced in Epic 10) into a reference table via the Epic 11 additive-migration
@@ -319,12 +349,11 @@ later epic until the real sources are known.
 - Tests must pass offline: mock DeepL/Claude/krdict/AnkiConnect; temp sqlite per test.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
-  above (Epics 9-12, with the daily-fetch automation deferred beyond that). Epic 9
-  (difficulty scorer), Epic 10 (content catalog, see `docs/CONTENT_CATALOG.md`), and
-  Epic 11 (DB expansion + library UX) are done. The next actionable item is
-  **Epic 12 — Import wiring** (wire `import_tools/yt_subs.py` and
-  `import_tools/pdf_text.py` behind API endpoints + add-book UI, using Epic 11's
-  `source_url`/`source_ref`/`topic`/`tags` columns and dedup index).
+  above. Epics 9 (difficulty scorer), 10 (content catalog), 11 (DB expansion +
+  library UX), and 12 (import wiring) are done. The next actionable item is
+  **Epic 13 — Cold-start difficulty signal** (import the TOPIK/frequency word list
+  located in Epic 10 as a reference table, tag lemmas with level/frequency, extend
+  `score_text` to fall back to it when the personal known-set is too thin).
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

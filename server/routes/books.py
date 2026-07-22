@@ -67,6 +67,42 @@ def _get_book_or_404(conn: sqlite3.Connection, book_id: int) -> dict:
     return book
 
 
+class DuplicateSourceRef(Exception):
+    """Raised when source_ref collides with an already-imported book."""
+
+
+def insert_book(
+    conn: sqlite3.Connection,
+    *,
+    title: str,
+    text: str,
+    source: str,
+    topic: str = "",
+    tags: list[str] | None = None,
+    source_url: str = "",
+    source_ref: str | None = None,
+    fetched: str | None = None,
+) -> dict:
+    """Shared by the paste/txt route and the Epic 12 importers: insert the book
+    row + split pages, or raise DuplicateSourceRef on a source_ref collision."""
+    try:
+        cur = conn.execute(
+            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (title, source, topic, json.dumps(tags or []), source_url, source_ref, fetched),
+        )
+    except sqlite3.IntegrityError:
+        raise DuplicateSourceRef(source_ref)
+    book_id = cur.lastrowid
+    pages = split_pages(text)
+    conn.executemany(
+        "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
+        [(book_id, i + 1, page) for i, page in enumerate(pages)],
+    )
+    conn.commit()
+    return _book_dict(conn, book_id)
+
+
 @router.get("")
 def list_books(
     topic: str | None = None,
@@ -89,31 +125,21 @@ def list_books(
 @router.post("", status_code=201)
 def create_book(body: BookCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
     try:
-        cur = conn.execute(
-            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                body.title,
-                body.source,
-                body.topic,
-                json.dumps(body.tags),
-                body.source_url,
-                body.source_ref,
-                body.fetched,
-            ),
+        return insert_book(
+            conn,
+            title=body.title,
+            text=body.text,
+            source=body.source,
+            topic=body.topic,
+            tags=body.tags,
+            source_url=body.source_url,
+            source_ref=body.source_ref,
+            fetched=body.fetched,
         )
-    except sqlite3.IntegrityError:
+    except DuplicateSourceRef:
         raise HTTPException(
             status_code=409, detail="a book with this source_ref already exists"
         )
-    book_id = cur.lastrowid
-    pages = split_pages(body.text)
-    conn.executemany(
-        "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
-        [(book_id, i + 1, page) for i, page in enumerate(pages)],
-    )
-    conn.commit()
-    return _book_dict(conn, book_id)
 
 
 @router.get("/{book_id}")

@@ -295,3 +295,45 @@ returns `_book_dict()` directly — the same full shape `POST`/`score` already r
 `GET /api/books/{id}` (used by the reader page, which only ever wants the reduced
 shape) is unchanged. Checked the one other `patchBook` caller (`read/page.tsx`'s
 current-page persistence) discards the response already, so this is a safe widening.
+
+## 2026-07-22 — Epic 12: `trafilatura` for article extraction, not a hand-rolled BeautifulSoup heuristic
+No existing code did HTML→article-text extraction (`import_tools` only covers
+YouTube/PDF). Considered a lightweight BeautifulSoup heuristic (grab `<article>`/`<p>`
+tags) vs. a dedicated extraction library. Chose `trafilatura`: it's specifically built
+for exactly this (boilerplate/nav/ad stripping, main-content detection across
+arbitrary site templates) and ships its own metadata extraction for a title, which a
+hand-rolled heuristic would have to redo badly. Accepted the larger transitive
+dependency tree (lxml, courlan, htmldate, justext, dateparser, babel, …) as the
+tradeoff for not maintaining bespoke extraction logic across however many different
+Korean news/blog templates the user ends up feeding it. Verified live against a real
+URL (`https://www.yna.co.kr/`) — title + clean body text extracted correctly.
+
+## 2026-07-22 — Epic 12: three different dedup-key shapes for one `source_ref` column
+`source_ref` is a single nullable TEXT column (Epic 11), but the three importers have
+no shared natural id, so each prefixes its own namespace into the same column rather
+than adding per-source columns: `yt:<video_id>` (yt-dlp's own stable id, immune to URL
+query-string variants), `article:<url>` (exact string match — accepted as a known gap;
+a re-formatted URL to the same article won't dedupe, judged not worth a canonicalizer
+for a personal app), `pdf:<sha256 of the uploaded bytes>` (PDFs have no natural id at
+all; hashing the raw bytes means an identical re-upload always dedupes regardless of
+filename/title typed at upload time). The `yt:`/`article:`/`pdf:` prefixes also mean
+the three namespaces can never collide with each other under the one partial unique
+index from Epic 11.
+
+## 2026-07-22 — Epic 12: `yt_subs.fetch_subs` raises instead of `SystemExit`, gains a `video_id` return
+The pre-existing CLI script used `raise SystemExit(...)` for the no-subtitles case,
+which is fine for a script exiting the process but would crash the FastAPI worker if
+called as a library. Changed to a proper `NoSubtitlesError(Exception)`; the CLI
+`__main__` block now catches it and converts back to `SystemExit` itself, so
+`python import_tools/yt_subs.py <url>` behaves identically from the command line.
+`fetch_subs` also now returns the video id (`info["id"]`, already available from the
+same `yt_dlp` call) as a third tuple element — needed for the `yt:<video_id>`
+dedup key — so its return shape changed from `(title, text)` to
+`(title, text, video_id)`; the CLI's unpacking was updated to match.
+
+## 2026-07-22 — Epic 12: `pdf_text.extract()` accepts bytes directly, no temp file
+The upload route receives the PDF as in-memory bytes from `UploadFile.read()`.
+Rather than writing them to a temp file just so `extract()` could keep taking a
+`Path` (extra disk I/O, Windows temp-file cleanup edge cases), `fitz.open()` already
+supports `stream=<bytes>, filetype="pdf"` directly — so `extract()` now branches on
+`isinstance(pdf_source, bytes)` and the CLI's `Path` usage is unchanged.
