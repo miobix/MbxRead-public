@@ -37,6 +37,65 @@ def test_books_migration_adds_epic11_columns_idempotently(tmp_path):
         assert cols.count(name) == 1
 
 
+def test_books_migration_adds_epic15_columns_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
+    conn.close()
+    for name in ("status", "general_coverage", "general_level"):
+        assert cols.count(name) == 1
+
+
+def test_existing_books_default_to_library_status(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    conn = db.get_connection(db_path)
+    try:
+        conn.execute("INSERT INTO books (title) VALUES ('a')")
+        conn.commit()
+        row = conn.execute("SELECT status FROM books WHERE title = 'a'").fetchone()
+        assert row["status"] == "library"
+    finally:
+        conn.close()
+
+
+def test_feeds_seeded_and_idempotent(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    conn = db.get_connection(db_path)
+    try:
+        rows = conn.execute("SELECT name, url_or_channel_id FROM feeds").fetchall()
+        assert len(rows) == 2
+        urls = {r["url_or_channel_id"] for r in rows}
+        assert "https://webzine.inven.co.kr/news/rss.php" in urls
+        assert "https://bbs.ruliweb.com/news/524/rss" in urls
+
+        # A hand-added feed must survive re-seeding, and the seeded 2 must not duplicate.
+        conn.execute(
+            "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (?, ?, ?, ?)",
+            ("My channel", "youtube", "UCxxxx", "gaming"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db.init_db(db_path)
+    conn = db.get_connection(db_path)
+    try:
+        rows = conn.execute("SELECT name FROM feeds").fetchall()
+        assert len(rows) == 3
+        assert {r["name"] for r in rows} == {
+            "Inven game news",
+            "Ruliweb PS/game news",
+            "My channel",
+        }
+    finally:
+        conn.close()
+
+
 def test_source_ref_unique_index_ignores_nulls(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)

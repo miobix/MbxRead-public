@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS vocab_levels (
 # Additive columns introduced after the initial schema. Applied idempotently by
 # init_db so an existing reader.db upgrades in place (SQLite has no ADD COLUMN IF
 # NOT EXISTS, so we guard on PRAGMA table_info). Epic 9: cached difficulty scores.
-# Epic 11: content-catalog metadata (topic/tags/provenance/archived/read).
+# Epic 11: content-catalog metadata (topic/tags/provenance/archived/read). Epic 15:
+# candidate-queue lifecycle (status) + cached general/public difficulty.
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "books": {
         "coverage": "REAL",
@@ -79,8 +80,26 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "fetched": "TIMESTAMP",
         "archived": "INTEGER NOT NULL DEFAULT 0",
         "read": "INTEGER NOT NULL DEFAULT 0",
+        "status": (
+            "TEXT NOT NULL DEFAULT 'library' "
+            "CHECK (status IN ('library','candidate','discarded'))"
+        ),
+        "general_coverage": "REAL",
+        "general_level": "TEXT",
     },
 }
+
+# Epic 15: seeded (not migrated) `feeds` rows — the two RSS feeds verified live in
+# Epic 10 (Inven, Ruliweb game news), to prove the fetch->score->queue path
+# end-to-end. Curating the full multi-topic source list is a separate future
+# planning session; this only proves the infrastructure. Guarded per-URL (not a
+# blanket COUNT(*) like _seed_vocab_levels) since `feeds` is a small, individually-
+# meaningful roster that keeps growing across future curation sessions — a future
+# hand-added feed row must survive re-seeding these two after an upgrade.
+_SEED_FEEDS: list[tuple[str, str, str, str]] = [
+    ("Inven game news", "rss", "https://webzine.inven.co.kr/news/rss.php", "gaming"),
+    ("Ruliweb PS/game news", "rss", "https://bbs.ruliweb.com/news/524/rss", "gaming"),
+]
 
 
 def _apply_migrations(conn: sqlite3.Connection) -> None:
@@ -91,11 +110,25 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
     # Partial index: NULL source_ref (paste/txt books) never collides, but two
     # imports of the same video id / feed guid do — the dedup guarantee Epic 12's
-    # importers and Epic 14's daily job rely on.
+    # importers and Epic 15's feed fetcher rely on.
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref "
         "ON books(source_ref) WHERE source_ref IS NOT NULL"
     )
+
+
+def _seed_feeds(conn: sqlite3.Connection) -> None:
+    """Insert the Epic 15 seed feeds, once each, keyed by URL so a hand-added feed
+    row (or a future curation session's rows) is never touched or duplicated."""
+    existing = {
+        row["url_or_channel_id"] for row in conn.execute("SELECT url_or_channel_id FROM feeds")
+    }
+    for name, type_, url, topic in _SEED_FEEDS:
+        if url not in existing:
+            conn.execute(
+                "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (?, ?, ?, ?)",
+                (name, type_, url, topic),
+            )
 
 
 def _seed_vocab_levels(conn: sqlite3.Connection) -> None:
@@ -128,6 +161,7 @@ def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
         conn.executescript(SCHEMA)
         _apply_migrations(conn)
         _seed_vocab_levels(conn)
+        _seed_feeds(conn)
         conn.commit()
     finally:
         conn.close()

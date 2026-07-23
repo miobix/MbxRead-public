@@ -346,12 +346,89 @@ later epic until the real sources are known.
   band columns, scorer) and by the doc's "interest list before automation" caution, not
   by priority. **Acceptance:** a scheduled run auto-imports new items from a `feeds` row
   within its band, never a duplicate.
-- [ ] **Epic 15 — UI makeover + go-live (final stage).** Fuller per-page UI makeover over
-  the now-complete screen set (library filters, feeds, imports) — done last so screens are
-  polished once. Then execute Epic 8's still-pending cold-start + Tailscale verification
-  and go live day-to-day. **Acceptance:** the makeover the user has wanted since the Epic 8
-  "paper" palette baseline, plus a verified cold-start `start.ps1` run reachable from the
-  phone over Tailscale.
+  **Update (2026-07-23, after Epic 15):** the auto-create-directly design above is now
+  superseded in spirit — Epic 15 built the same fetch→clean→score→dedup pipeline but
+  lands results in a browsable `status='candidate'` queue instead of silently creating
+  library books (see Epic 15's own rationale below). What's left for this epic, if it's
+  still wanted, is much smaller: a Task Scheduler entry that calls the now-existing
+  `POST /api/feeds/fetch` on a timer. Left unmarked/unscoped rather than rewritten,
+  since the user may decide the manual "Fetch new candidates" button on `/queue` is
+  enough and this epic isn't needed at all.
+- [x] **Epic 15 — Curation queue + general difficulty tag + source-type filter** —
+  done (2026-07-23). Two gaps from Epics 12/13: no difficulty signal independent of the
+  user's personal vocabulary, and no automation path that doesn't risk silently
+  cluttering the library with content nobody asked to read.
+  `server/difficulty.py` gained `GENERAL_WEIGHTS = {"A": 1.0, "B": 0.5, "C": 0.15}`
+  (unlisted = 0.0) and `score_general_difficulty(text, frequency)` — a standalone
+  weighted-average-over-grade score with **no personal `known` set at all**, shown
+  *alongside* `score_text`'s personal coverage, never blended into it. Labels
+  (`easy`/`medium`/`hard` at `>=0.75`/`>=0.45`/else) are recalibrated lower than
+  `score_text`'s 0.95/0.85 bands since a weighted A/B/C/unlisted average rarely reaches
+  the high-90s even for genuinely easy text — see DECISIONS.md, flagged as tunable.
+  `server/db.py`: `books` gained `status` (`'library'|'candidate'|'discarded'`, `NOT
+  NULL DEFAULT 'library'` **with a CHECK constraint** — a deliberate deviation from
+  every prior additive column, justified because this one is a central enum the whole
+  epic's correctness depends on) plus `general_coverage`/`general_level` (cached
+  alongside `coverage`/`new_per_page` under one `scored_at`). **Candidate lifecycle is
+  a `books.status` value, not a separate table** — a candidate already needs full page
+  content + a score before the user decides, so it's structurally a book; promote/
+  discard is one `PATCH`, never a copy across tables. **Discard is a soft delete**
+  (`status='discarded'`, never a real `DELETE`) so the `source_ref` unique index stays
+  permanent and a discarded item is never re-fetched. New seeded (not migrated) `feeds`
+  rows: the two RSS feeds verified live back in Epic 10 (Inven, Ruliweb game news) —
+  proves the infrastructure end-to-end; curating the full multi-topic source list
+  (YouTube channel IDs, fitness, news, literature feeds) stays a separate future
+  planning session. `server/feeds.py` (new, stdlib-only `xml.etree.ElementTree`):
+  `fetch_feed_xml`/`parse_rss`, verified live against both feeds' real XML this
+  session (plain RSS 2.0, no namespaces, CDATA titles, one feed has no `<guid>` at
+  all — falls back to `<link>`). `server/routes/feeds.py` (new): `POST
+  /api/feeds/fetch` (optional `?feed_id=`) iterates enabled feeds, skips non-`rss`
+  types gracefully (youtube/scraper have no fetch logic yet), dedupes on `source_ref`
+  *before* calling `fetch_article` (avoids wasted trafilatura calls), scores each new
+  item via a shared `_score_and_cache()` helper extracted out of `routes/books.py`
+  (computes both personal + general difficulty under one `scored_at` — the existing
+  `POST /api/books/{id}/score` is now a thin wrapper over it), and isolates
+  per-feed/per-item failures so one bad feed or article never blocks the rest — same
+  isolation pattern as `anki_sync`'s per-note failures. `GET /api/books` gained
+  `?source=` (exact match, mirrors `?topic=`) and now defaults `?status=` to
+  `"library"` when omitted (the one behavior change to an existing endpoint — every
+  pre-Epic-15 book already defaults to `status='library'`, so nothing previously
+  visible becomes hidden; verified against every existing `test_books.py`/
+  `test_difficulty.py` book-creation path). `BookPatch` gained `status`, so promote/
+  discard reuse the existing `PATCH /api/books/{id}` — no new endpoints. 129/129 tests
+  green (22 new: `test_feeds.py` for RSS parsing + the fetch route's dedup/isolation/
+  skip behavior; `test_db.py` for column/seed idempotency and the default-status
+  backfill; `test_difficulty.py` for `score_general_difficulty`'s bands and its
+  independence from the personal known-set; `test_books.py` for the status filter,
+  promote/discard, and the discarded-still-blocks-reimport guarantee). `npm run
+  build`/`lint` clean. Frontend: `web/lib/score-display.tsx` (new) hoists
+  `ScoreLine`/`coverageClass` out of `page.tsx` and adds `GeneralScoreLine`/
+  `generalLevelClass`, shared by both the home list and the new `/queue` page;
+  `web/app/page.tsx` gained a source-type filter `<select>` alongside the existing
+  topic filter, a general-difficulty line per book row, the general %+label in the
+  add-book "Check difficulty" preview, and a **Queue** nav link with a
+  candidate-count badge; new `web/app/queue/page.tsx` (modeled on `/terms`) lists
+  candidates with both score lines, a "Fetch new candidates" button
+  (`POST /api/feeds/fetch`, shows the returned per-feed summary), and Promote/Discard
+  buttons per row.
+  **Real (non-mocked) sanity checks run manually, network-only, no DB writes:**
+  `server.feeds.fetch_feed_xml` + `parse_rss` against both live seeded feed URLs —
+  25 items from Inven, 15 from Ruliweb, titles/links parsed correctly;
+  `score_general_difficulty` against the same STORY/RARE_STORY sentences Epic 13
+  used, against the real seeded `vocab_levels` table — STORY (all grade-A) scored
+  1.0/"easy", RARE_STORY (mixed/mostly-unlisted) scored 0.358/"hard", matching the
+  same "rare text harder than common text" shape Epic 13 established. Deliberately
+  **not** run through `POST /api/feeds/fetch` against the user's real `reader.db`,
+  same caution as every prior epic.
+  **Not verified in a browser** (no browser tooling in this environment) — the new
+  Queue page and source-type filter join the already-owed Epics 4–13 browser/touch
+  pass.
+- [ ] **Epic 16 — UI makeover + go-live (final stage).** Fuller per-page UI makeover
+  over the now-complete screen set (library filters, feeds/queue, imports) — done last
+  so screens are polished once. Then execute Epic 8's still-pending cold-start +
+  Tailscale verification and go live day-to-day. **Acceptance:** the makeover the user
+  has wanted since the Epic 8 "paper" palette baseline, plus a verified cold-start
+  `start.ps1` run reachable from the phone over Tailscale.
 
 ## Known issues / deviations
 
@@ -371,14 +448,20 @@ later epic until the real sources are known.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
   above. Epics 9 (difficulty scorer), 10 (content catalog), 11 (DB expansion +
-  library UX), 12 (import wiring), and 13 (cold-start difficulty signal) are done.
-  The next actionable item is **Epic 14 — Daily fetch job**, deferred until then
-  because it's blocked by its own dependencies (Epic 12's importers, `source_ref`
-  dedup, `feeds` band columns, the scorer) — all now in place.
+  library UX), 12 (import wiring), 13 (cold-start difficulty signal), and 15
+  (curation queue + general difficulty + source filter) are done. **Epic 14 —
+  Daily fetch job** is unstarted and now much smaller than originally scoped — see
+  its checklist entry's 2026-07-23 update: Epic 15 already built fetch→clean→score→
+  dedup behind `POST /api/feeds/fetch`, so what's left (if still wanted at all,
+  given `/queue`'s manual "Fetch new candidates" button) is just Task Scheduler
+  wiring. **Epic 16 — UI makeover + go-live** is next after that (or could jump
+  ahead of Epic 14 if the manual fetch button turns out to be enough).
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
-  specifically to see Epic 13's cold-start scoring results first (2026-07-22). That
-  pass (paste a YouTube URL, upload a PDF, paste an article URL, plus the older
-  Epic 4-11 checklist items above) is still owed whenever the user is ready.
+  specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
+  added two more unverified surfaces (the `/queue` page, the source-type filter) to
+  the same still-owed pass. That pass (paste a YouTube URL, upload a PDF, paste an
+  article URL, try the Queue's Fetch/Promote/Discard flow, plus the older Epic 4-11
+  checklist items above) is still owed whenever the user is ready.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

@@ -127,7 +127,9 @@ def test_list_books_shape(client):
             "id", "title", "source", "current_page", "page_count", "created",
             "coverage", "new_per_page", "scored_at",
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
+            "status", "general_coverage", "general_level",
         }
+        assert book["status"] == "library"
 
 
 def test_create_book_with_topic_and_tags(client):
@@ -212,3 +214,67 @@ def test_get_patch_delete_404_for_missing_book(client):
     assert client.get("/api/books/999").status_code == 404
     assert client.patch("/api/books/999", json={"title": "x"}).status_code == 404
     assert client.delete("/api/books/999").status_code == 404
+
+
+# --- Epic 15: candidate queue (status), source filter ---
+
+
+def test_default_list_excludes_candidates_and_discarded(client):
+    client.post("/api/books", json={"title": "Library", "text": SHORT_STORY})
+    client.post(
+        "/api/books", json={"title": "Candidate", "text": SHORT_STORY, "status": "candidate"}
+    )
+    client.post(
+        "/api/books", json={"title": "Discarded", "text": SHORT_STORY, "status": "discarded"}
+    )
+
+    titles = {b["title"] for b in client.get("/api/books").json()}
+    assert titles == {"Library"}
+
+    titles = {b["title"] for b in client.get("/api/books?status=candidate").json()}
+    assert titles == {"Candidate"}
+
+    titles = {b["title"] for b in client.get("/api/books?status=discarded").json()}
+    assert titles == {"Discarded"}
+
+
+def test_list_books_filters_by_source(client):
+    client.post("/api/books", json={"title": "A", "text": SHORT_STORY, "source": "paste"})
+    client.post("/api/books", json={"title": "B", "text": SHORT_STORY, "source": "txt"})
+
+    titles = {b["title"] for b in client.get("/api/books?source=txt").json()}
+    assert titles == {"B"}
+
+
+def test_promote_and_discard_via_patch(client):
+    book_id = client.post(
+        "/api/books", json={"title": "A", "text": SHORT_STORY, "status": "candidate"}
+    ).json()["id"]
+
+    promoted = client.patch(f"/api/books/{book_id}", json={"status": "library"})
+    assert promoted.json()["status"] == "library"
+    assert {b["id"] for b in client.get("/api/books").json()} == {book_id}
+
+    discarded = client.patch(f"/api/books/{book_id}", json={"status": "discarded"})
+    assert discarded.json()["status"] == "discarded"
+    assert client.get("/api/books").json() == []
+
+
+def test_discarded_book_still_blocks_reimport(client):
+    resp = client.post(
+        "/api/books", json={"title": "A", "text": SHORT_STORY, "source_ref": "article:x"}
+    )
+    book_id = resp.json()["id"]
+    client.patch(f"/api/books/{book_id}", json={"status": "discarded"})
+
+    dup = client.post(
+        "/api/books", json={"title": "B", "text": SHORT_STORY, "source_ref": "article:x"}
+    )
+    assert dup.status_code == 409
+
+
+def test_score_book_caches_general_difficulty(client):
+    book_id = client.post("/api/books", json={"title": "S", "text": SHORT_STORY}).json()["id"]
+    scored = client.post(f"/api/books/{book_id}/score").json()
+    assert scored["general_coverage"] is not None
+    assert scored["general_level"] in {"easy", "medium", "hard"}

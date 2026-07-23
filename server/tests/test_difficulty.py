@@ -1,10 +1,12 @@
 """Epic 9 — difficulty scorer (server/difficulty.py + score endpoints).
-Epic 13 adds the cold-start frequency fallback — see the tests below that section."""
+Epic 13 adds the cold-start frequency fallback — see the tests below that section.
+Epic 15 adds standalone general/public difficulty — see that section at the bottom."""
 from server import db as db_module
 from server.difficulty import (
     COLD_START_THRESHOLD,
     frequency_grades,
     known_lemmas,
+    score_general_difficulty,
     score_text,
 )
 from server.paging import split_pages
@@ -89,10 +91,15 @@ def test_score_endpoint_shape(client):
     resp = client.post("/api/score", json={"text": STORY})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"coverage", "new_lemmas", "total_lemmas", "new_per_page"}
+    assert set(body) == {
+        "coverage", "new_lemmas", "total_lemmas", "new_per_page",
+        "general_coverage", "general_level",
+    }
     # No terms saved yet, but every STORY lemma is grade A — Epic 13's cold-start
     # fallback treats the whole thing as familiar (see the cold-start test section).
     assert body["coverage"] == 1.0
+    # All-grade-A text is also "easy" by the Epic 15 general/public measure.
+    assert body["general_level"] == "easy"
 
 
 def test_score_endpoint_reflects_known_terms(client):
@@ -194,3 +201,46 @@ def test_rare_text_scores_harder_than_common_text_with_empty_known_set(client):
     rare = client.post("/api/score", json={"text": RARE_STORY}).json()
     assert rare["coverage"] < common["coverage"]
     assert common["coverage"] == 1.0
+
+
+# --- Epic 15: standalone general/public difficulty (no personal `known` set) ---
+
+
+def test_general_difficulty_all_grade_a_is_easy():
+    # Every one of STORY's 10 lemmas, all graded A (matches the real vocab_levels
+    # data, per test_score_endpoint_shape's cold-start assumption).
+    grades = {lemma: "A" for lemma in _lemmas(STORY)}
+    result = score_general_difficulty(STORY, grades)
+    assert result["general_level"] == "easy"
+    assert result["general_coverage"] == 1.0
+
+
+def test_general_difficulty_all_unlisted_is_hard():
+    result = score_general_difficulty(RARE_STORY, {})
+    assert result["general_level"] == "hard"
+    assert result["general_coverage"] == 0.0
+
+
+def test_general_difficulty_mixed_lands_in_medium():
+    # 사색/형이상학 stay unlisted (weight 0); 그/문제 grade A, 잠기다/반추하다 grade B ->
+    # (1.0 + 1.0 + 0.5 + 0.5 + 0 + 0) / 6 == 0.5, squarely in the medium band.
+    grades = {"그": "A", "문제": "A", "잠기다": "B", "반추하다": "B"}
+    result = score_general_difficulty(RARE_STORY, grades)
+    assert result["general_level"] == "medium"
+    assert result["general_coverage"] == 0.5
+
+
+def test_general_difficulty_empty_text_is_none():
+    result = score_general_difficulty("", {})
+    assert result == {"general_coverage": None, "general_level": None}
+
+
+def test_general_difficulty_is_independent_of_personal_known_set(client):
+    # Saving a personal term moves `coverage` but must never move `general_coverage`
+    # (it's computed purely from vocab_levels, no `known` set at all).
+    before = client.post("/api/score", json={"text": RARE_STORY}).json()
+    client.post("/api/terms", json={"lemma": "형이상학", "translation": "x", "status": "known"})
+    after = client.post("/api/score", json={"text": RARE_STORY}).json()
+    assert after["coverage"] > before["coverage"]
+    assert after["general_coverage"] == before["general_coverage"]
+    assert after["general_level"] == before["general_level"]

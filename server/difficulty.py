@@ -42,6 +42,41 @@ def frequency_grades(conn: sqlite3.Connection) -> dict[str, str]:
     return {row["lemma"]: row["grade"] for row in rows}
 
 
+# Epic 15 — general/public difficulty: how hard is a text for a *typical* learner,
+# using only the vocab_levels grade distribution (no personal `known` set at all).
+# Shown ALONGSIDE score_text's personal coverage, never blended into it — the two
+# answer different questions ("is this hard for anyone" vs "is this hard for me").
+GENERAL_WEIGHTS = {"A": 1.0, "B": 0.5, "C": 0.15}  # unlisted lemmas = 0.0
+
+
+def score_general_difficulty(text: str, frequency: dict[str, str]) -> dict:
+    """Weighted average over each unique lemma's grade weight: A=1.0 (typical
+    learner knows it), B=0.5 (partially familiar), C=0.15 (small nonzero floor —
+    common loanwords/technical terms sometimes land in the 'advanced' grade
+    despite being easy), unlisted=0.0 (most conservative — an unrecognized lemma
+    is assumed hard). Labels recalibrated lower than score_text's 0.95/0.85 bands
+    since this weighted average rarely reaches the high-90s even for easy text —
+    see docs/DECISIONS.md, easy to retune once real candidate text has been scored
+    and eyeballed. Returns {general_coverage, general_level}, both None on
+    empty/unresolvable text.
+    """
+    unique = {t.lemma for t in tokenize(text)}
+    if not unique:
+        return {"general_coverage": None, "general_level": None}
+
+    total_weight = sum(GENERAL_WEIGHTS.get(frequency.get(lemma, ""), 0.0) for lemma in unique)
+    general_coverage = round(total_weight / len(unique), 4)
+
+    if general_coverage >= 0.75:
+        general_level = "easy"
+    elif general_coverage >= 0.45:
+        general_level = "medium"
+    else:
+        general_level = "hard"
+
+    return {"general_coverage": general_coverage, "general_level": general_level}
+
+
 def score_text(text: str, known: set[str], frequency: dict[str, str] | None = None) -> dict:
     """Score `text` against the `known` lemma set.
 

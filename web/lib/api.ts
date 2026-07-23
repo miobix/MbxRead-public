@@ -1,3 +1,5 @@
+export type BookStatus = "library" | "candidate" | "discarded";
+
 export type Book = {
   id: number;
   title: string;
@@ -15,6 +17,9 @@ export type Book = {
   fetched: string | null;
   archived: boolean;
   read: boolean;
+  status: BookStatus;
+  general_coverage: number | null;
+  general_level: "easy" | "medium" | "hard" | null;
 };
 
 export type ScoreResult = {
@@ -22,6 +27,24 @@ export type ScoreResult = {
   new_lemmas: number;
   total_lemmas: number;
   new_per_page: number;
+  general_coverage: number | null;
+  general_level: "easy" | "medium" | "hard" | null;
+};
+
+export type FeedFetchResult = {
+  checked_feeds: number;
+  skipped_feed_types: number;
+  candidates_created: number;
+  feeds: {
+    id: number;
+    name: string;
+    items_seen?: number;
+    created?: number;
+    skipped_duplicate?: number;
+    failed?: number;
+    fetch_error?: string;
+    skipped_type?: string;
+  }[];
 };
 
 export type BookDetail = {
@@ -125,10 +148,17 @@ async function requestForm<T>(path: string, formData: FormData): Promise<T> {
 }
 
 export const api = {
-  listBooks: (params?: { topic?: string; archived?: boolean }) => {
+  listBooks: (params?: {
+    topic?: string;
+    archived?: boolean;
+    source?: string;
+    status?: BookStatus;
+  }) => {
     const sp = new URLSearchParams();
     if (params?.topic) sp.set("topic", params.topic);
     if (params?.archived !== undefined) sp.set("archived", String(params.archived));
+    if (params?.source) sp.set("source", params.source);
+    if (params?.status) sp.set("status", params.status);
     const qs = sp.toString();
     return request<Book[]>(`/books${qs ? `?${qs}` : ""}`);
   },
@@ -157,6 +187,7 @@ export const api = {
       tags?: string[];
       archived?: boolean;
       read?: boolean;
+      status?: BookStatus;
     }
   ) => request<Book>(`/books/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
@@ -224,4 +255,6 @@ export const api = {
     if (body.pages) fd.set("pages", body.pages);
     return requestForm<Book>("/import/pdf", fd);
   },
+
+  fetchFeeds: () => request<FeedFetchResult>("/feeds/fetch", { method: "POST" }),
 };

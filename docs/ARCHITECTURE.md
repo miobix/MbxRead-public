@@ -82,7 +82,12 @@ CREATE TABLE IF NOT EXISTS books (
   source_ref TEXT,                               -- stable id (video id/feed guid); see partial UNIQUE index below
   fetched TIMESTAMP,                             -- set by automated imports (Epic 12+), NULL for manual paste/txt
   archived INTEGER NOT NULL DEFAULT 0,
-  read INTEGER NOT NULL DEFAULT 0
+  read INTEGER NOT NULL DEFAULT 0,
+  -- Epic 15 (additive migration): candidate-queue lifecycle + general/public difficulty.
+  status TEXT NOT NULL DEFAULT 'library'        -- library | candidate | discarded
+    CHECK (status IN ('library','candidate','discarded')),
+  general_coverage REAL,                        -- weighted-average NIKL-grade score; NULL if unscored
+  general_level TEXT                            -- easy | medium | hard; NULL if unscored
 );
 CREATE TABLE IF NOT EXISTS pages (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -105,8 +110,9 @@ CREATE TABLE IF NOT EXISTS terms (
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- Epic 11: the model a future settings page edits and Epic 14's daily job iterates.
--- Table only — no CRUD routes until Epic 14 actually needs to populate it.
+-- Epic 11: the model a future settings page edits. No CRUD routes yet — Epic 15
+-- seeds two rows directly (see db._seed_feeds) and reads via POST /api/feeds/fetch;
+-- a settings UI for adding/editing feeds by hand is still future work.
 CREATE TABLE IF NOT EXISTS feeds (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -133,16 +139,22 @@ CREATE TABLE IF NOT EXISTS vocab_levels (
 
 Foreign keys ON (`PRAGMA foreign_keys=ON` per connection, set in `db.get_connection`).
 Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
-`default_deck`, `translator_backend`. All columns and tables marked "Epic 9"/"Epic 11"
-above are applied via `db._apply_migrations()` (additive `ALTER TABLE`s + the partial
-index, guarded by `PRAGMA table_info` so re-running `init_db` never double-adds) rather
-than being in the base `CREATE TABLE`, so an existing `reader.db` upgrades in place.
+`default_deck`, `translator_backend`. All columns and tables marked "Epic 9"/"Epic 11"/
+"Epic 15" above are applied via `db._apply_migrations()` (additive `ALTER TABLE`s + the
+partial index, guarded by `PRAGMA table_info` so re-running `init_db` never double-adds)
+rather than being in the base `CREATE TABLE`, so an existing `reader.db` upgrades in
+place. `status` (Epic 15) is the one additive column with a `CHECK` constraint — see
+DECISIONS.md for why, a deliberate deviation from every other additive column here.
 `vocab_levels` (Epic 13) is a brand-new table (`CREATE TABLE IF NOT EXISTS` directly,
 same as `feeds` in Epic 11 — no migration entry needed for a new table) but its *rows*
 are seeded, not hand-written: `db._seed_vocab_levels()` runs after `_apply_migrations`
 in `init_db`, reads `server/data/vocab_levels.tsv`, and bulk-inserts only if the table
 is currently empty (`SELECT COUNT(*)` guard), so re-running `init_db` never duplicates
-the ~5,543 rows.
+the ~5,543 rows. `feeds` (Epic 15) gets its own seeding, `db._seed_feeds()` — but keyed
+per-`url_or_channel_id` rather than a blanket `COUNT(*)` guard, since (unlike
+`vocab_levels`) it's a small, individually-meaningful roster expected to grow by hand
+across future curation sessions; a hand-added row must survive re-seeding the two
+built-in feeds after an upgrade, and re-running `init_db` must never duplicate those two.
 
 ### Page splitting (`server/paging.py`, Epic 2 — implemented)
 
@@ -160,10 +172,10 @@ book has at least one (possibly empty) page.
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | `?topic=&archived=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read}]` — filters **implemented (Epic 11)**, base shape (Epic 2), score fields (Epic 9) |
-| POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11)** |
+| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15) |
+| POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)** |
 | GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
-| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?}` | full updated book row (as `GET /api/books` shape) — **implemented (Epic 2, extended Epic 11)** |
+| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?, status?}` | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)** |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
@@ -178,6 +190,9 @@ book has at least one (possibly empty) page.
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
+| POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
+| POST `/api/books/{id}/score` | – | full updated book row, personal + general difficulty cached under one `scored_at` — **implemented (Epic 9, general fields Epic 15)** |
+| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled `rss`-type feeds, inserts new items as `status='candidate'` books, dedups on `source_ref` — **implemented (Epic 15)** |
 
 **Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
 as its own row in the `settings` (key/value) table, JSON-encoded in the `value`
@@ -320,6 +335,62 @@ real data, not a guess. No frontend changes — `/score` and book-scoring alread
 render whatever `coverage`/`new_per_page` the API returns, so the add-book "Check
 difficulty" preview and per-book score line pick up the new cold-start numbers with
 no code changes needed on that side.
+
+**Epic 15 status:** two independent additions — a general/public difficulty tag, and
+a feed-fetch curation queue — plus a small source-type filter riding along since the
+`source` column already existed. `server/difficulty.py` gained
+`GENERAL_WEIGHTS = {"A": 1.0, "B": 0.5, "C": 0.15}` (unlisted lemmas implicitly 0.0)
+and `score_general_difficulty(text, frequency) -> {general_coverage, general_level}`
+— a weighted average of each unique lemma's grade weight, with **no personal `known`
+set at all**; labels at `>=0.75`/`>=0.45`/else "easy"/"medium"/"hard" (recalibrated
+lower than `score_text`'s 0.95/0.85 bands — see DECISIONS.md, flagged as tunable).
+Shown *alongside* `score_text`'s personal `coverage`, never blended into it — the two
+answer different questions. `server/db.py`: `books` gained `status` (`'library'|
+'candidate'|'discarded'`, `DEFAULT 'library'`, the one additive column with a `CHECK`
+— see DECISIONS.md for the deviation) and `general_coverage`/`general_level`
+(cached under the same `scored_at` as `coverage`/`new_per_page`); `_seed_feeds()`
+(new, keyed per-URL) inserts the two RSS feeds verified live in Epic 10 (Inven,
+Ruliweb game news), called from `init_db` right after `_seed_vocab_levels`.
+`server/feeds.py` (new, stdlib `xml.etree.ElementTree` only): `fetch_feed_xml`
+(`httpx.get(..., follow_redirects=True)` — Inven's URL 301-redirects http→https) and
+`parse_rss` (iterates `<item>`, falls back to `<link>` when `<guid>` is absent),
+raising `FeedFetchError` on an unreachable URL or unparsable XML. `server/routes/
+books.py` gained `_score_and_cache()`, extracted out of `POST /api/books/{id}/score`
+so both that route and the new feed fetcher compute personal + general difficulty
+under one `scored_at` without duplicating the scoring logic; `insert_book()` gained a
+`status` parameter (default `"library"`, so every pre-Epic-15 caller is unaffected).
+`server/routes/feeds.py` (new): `POST /api/feeds/fetch` (optional `?feed_id=` for
+manual retry) iterates enabled feeds, skips non-`rss` types gracefully (no fetch
+logic yet for `youtube`/`scraper`), checks `source_ref` *before* calling
+`fetch_article` (avoids a wasted trafilatura call on an already-imported item),
+inserts new items as `status="candidate"` via `insert_book()`, scores each via
+`_score_and_cache()`, and isolates per-feed and per-item failures (one bad feed or
+unparsable article never blocks the rest — same isolation pattern as
+`anki_sync.py`'s per-note failures). `GET /api/books` gained `?source=` (exact match)
+and now defaults `?status=` to `"library"` when omitted — the one behavior change to
+an existing endpoint, judged safe because every book created before this epic already
+defaults to `status='library'` (verified by reading every book-creation call site in
+`test_books.py`/`test_difficulty.py`/`test_imports.py`). `BookPatch` gained `status`,
+so the Queue's Promote/Discard reuse the existing `PATCH /api/books/{id}` — no new
+endpoints for the lifecycle transition itself. Frontend: `web/lib/score-display.tsx`
+(new) hoists `ScoreLine`/`coverageClass` out of `page.tsx` (unchanged behavior) and
+adds `GeneralScoreLine`/`generalLevelClass`, shared by the home list and the new
+`/queue` page; `web/app/page.tsx` gained a source-type `<select>` filter alongside
+the existing topic filter, a general-difficulty line per book row, the general
+%+label folded into the add-book "Check difficulty" preview, and a **Queue** nav
+link with a candidate-count badge (`listBooks({status:"candidate"})` on mount, no
+new count endpoint — matches this app's existing single-user-scale conventions);
+new `web/app/queue/page.tsx` (modeled on `/terms`) lists `status="candidate"` books
+with both score lines, a "Fetch new candidates" button, and Promote/Discard buttons.
+**Verified:** 129/129 tests green, including real (non-mocked) sanity checks —
+`server.feeds.fetch_feed_xml`/`parse_rss` against both live seeded feed URLs (25/15
+items parsed correctly), and `score_general_difficulty` against Epic 13's real
+STORY/RARE_STORY sentences through the actual seeded `vocab_levels` table (1.0/
+"easy" vs. 0.358/"hard" — the same "rare harder than common" shape Epic 13
+established). Deliberately not run through `POST /api/feeds/fetch` against the
+user's real `reader.db`, per the standing convention. **Not verified in a browser**
+(no browser tooling in this environment) — the Queue page and source filter join
+the already-owed Epics 4-13 pass.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

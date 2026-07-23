@@ -395,3 +395,91 @@ conservative: low enough that a user who's saved a real, personal vocabulary
 handful of terms saved while just poking around during onboarding doesn't
 prematurely disable the fallback before it's done any good. All three are easy to
 revisit if real usage shows the fallback over- or under-shoots.
+
+## 2026-07-23 — Epic 15 named after the already-planned Epic 14/15, not in place of them
+The user had already planned Epic 14 (daily fetch job, capstone) and Epic 15 (UI
+makeover + go-live) in `docs/STATUS.md`. This session's plan — a curation queue, a
+general/public difficulty tag, and a source-type filter — was drafted independently and
+initially wasn't sure where it fit; the plan's own footer even said "mark Epic 14 done."
+Asked the user directly: this work becomes **Epic 15**, the old Epic 15 (UI makeover)
+shifts to **Epic 16**, and the old Epic 14 (daily fetch job) entry stays in place but
+gets a short amendment noting its scope is now much smaller (see its STATUS.md entry) —
+rather than being silently rewritten, since the user might decide it's not needed at all
+once `/queue`'s manual "Fetch new candidates" button exists.
+
+## 2026-07-23 — Epic 15: `status` gets a CHECK constraint, unlike every prior additive column
+Epics 9/11/13 all added columns via `_ADDED_COLUMNS`/`_apply_migrations` with no CHECK
+(`coverage`, `topic`, `archived`, etc.) — incidental flags/caches where a bad value just
+means bad data, not bad behavior. `status` is different: it's a central enum (`'library'|
+'candidate'|'discarded'`) that `GET /api/books`'s default filter, the Queue page, and the
+promote/discard flow all key off of — a typo'd value would silently break filtering
+everywhere at once. Worth the deviation. Still applied through the same idempotent
+`ALTER TABLE ... ADD COLUMN` path (the full declaration string, CHECK included, is just a
+longer value in the same `{col: decl}` dict) — no new migration mechanism needed.
+
+## 2026-07-23 — Epic 15: candidate lifecycle is a `books.status` value, not a separate table
+A feed-fetched candidate needs full page content (to read/score it) and a cached
+difficulty score (to judge it) before the user decides — i.e. it's structurally a book
+already, not a lighter-weight preview record. Reusing `books` with a `status` column
+means "promote" is a single `PATCH .../status=library`, not a copy across tables with a
+new id; the reader, scorer, and every existing book route work on a candidate with zero
+special-casing. The alternative (a `candidates` table) would have needed its own page-
+storage, its own scoring path, and a real INSERT-into-books + DELETE-from-candidates
+migration step at promote time for no real benefit at this single-user scale.
+
+## 2026-07-23 — Epic 15: discard is a soft delete (`status='discarded'`), never a real DELETE
+Rejected `DELETE /api/books/{id}` for the Queue's Discard button specifically because the
+`source_ref` unique index (Epic 11) is what stops the same feed item from being re-fetched
+and re-created on every subsequent `POST /api/feeds/fetch` run — a hard delete would free
+up that `source_ref` and the exact item the user already said no to would reappear next
+fetch. `status='discarded'` keeps the row (and its `source_ref`) around forever, at the
+cost of a permanently-growing `books` table — an acceptable tradeoff for a single-user app
+where "discarded" items are a small fraction of total volume. `DELETE /api/books/{id}`
+still exists for a genuine hard-delete need (e.g. a future "empty discarded" action), just
+not wired to Discard.
+
+## 2026-07-23 — Epic 15: general/public difficulty is a separate function, never blended with personal coverage
+`score_general_difficulty(text, frequency)` takes no `known` set at all — it answers "how
+hard is this for a typical learner" using only the `vocab_levels` grade distribution,
+while `score_text`'s `coverage` answers "how hard is this for *me*". Epic 13's cold-start
+fallback already blends frequency-grade data into personal coverage when the user's own
+vocabulary is thin, which could look similar at a glance — but that blend is a *temporary,
+threshold-gated stand-in* for personal coverage during onboarding, whereas this is a
+*permanent, independent* second number shown side by side, useful even after the user has
+thousands of saved terms (a text can be "80% covered by what I personally know" and still
+be "hard for a typical learner" if it's full of book-specific proper nouns, or vice versa).
+Keeping them as two separate functions/fields (`coverage` vs `general_coverage`) rather
+than one blended score means the two numbers can never silently contaminate each other's
+meaning as usage evolves — verified directly:
+`test_general_difficulty_is_independent_of_personal_known_set` saves a personal term and
+confirms `general_coverage`/`general_level` don't move while `coverage` does.
+
+## 2026-07-23 — Epic 15: general-difficulty weights (A=1.0/B=0.5/C=0.15/unlisted=0) and 0.75/0.45 bands
+Judgment calls, flagged here as tunable (same spirit as Epic 13's threshold-50 note):
+**grade C gets a small nonzero floor (0.15), not 0** — a text tagged "advanced" in NIKL's
+scheme is often still partly loanwords/technical terms a learner half-recognizes, so
+treating it identically to a totally unlisted lemma felt too harsh. **Unlisted lemmas get
+0**, the most conservative choice, since an unrecognized word (proper noun, slang, typo,
+a word simply missing from a 5.5k-entry list) is *more* likely to trip up a learner than
+a word NIKL bothered to grade at all, not less. **Bands recalibrated to 0.75/0.45**
+(lower than `score_text`'s 0.95/0.85): a weighted average across every unique lemma in a
+real text — including its inevitable minority of unlisted/rare words — rarely climbs into
+the high-90s even for genuinely easy text, so reusing the personal-coverage bands verbatim
+would have mislabeled almost everything "hard". Verified this matches intuition on the two
+real reference sentences from Epic 13: the all-common STORY scored 1.0/"easy", the mixed/
+mostly-unlisted RARE_STORY scored 0.358/"hard" (see STATUS.md's Epic 15 entry for the live
+`vocab_levels`-backed numbers, not hand-built test dicts). All four numbers are easy to
+retune once real candidate text (from the actual feeds) has been scored and eyeballed.
+
+## 2026-07-23 — Epic 15: `GET /api/books` defaults `?status=` to `"library"`, judged a safe widening
+Before this epic, `list_books` had no concept of `status` and returned every row. Now that
+candidates/discarded rows exist, returning everything by default would mean a fresh
+`POST /api/feeds/fetch` run immediately clutters the home page with un-vetted candidates —
+exactly what Epic 15 exists to prevent. Defaulting the filter to `'library'` when the
+query param is omitted keeps the home page's existing behavior *for every book that
+existed before this epic* (all default to `status='library'` per the column's own
+`DEFAULT`), while giving `/queue` an explicit `?status=candidate` to see the rest. Checked
+every existing `test_books.py`/`test_difficulty.py`/`test_imports.py` book-creation call
+site: all go through `insert_book`/`BookCreate`, both of which default `status="library"`,
+so nothing currently visible becomes hidden — confirmed by reading all three files, not
+just reasoning about it.

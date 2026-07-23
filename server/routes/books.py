@@ -1,16 +1,24 @@
 """Books & pages API. See docs/SPEC.md section 5."""
 import json
 import sqlite3
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from .. import db as db_module
-from ..difficulty import frequency_grades, known_lemmas, score_text
+from ..difficulty import (
+    frequency_grades,
+    known_lemmas,
+    score_general_difficulty,
+    score_text,
+)
 from ..paging import split_pages
 from ..tokenizer import tokenize
 
 router = APIRouter(prefix="/api/books", tags=["books"])
+
+BookStatus = Literal["library", "candidate", "discarded"]
 
 
 class BookCreate(BaseModel):
@@ -22,6 +30,7 @@ class BookCreate(BaseModel):
     source_url: str = ""
     source_ref: str | None = None
     fetched: str | None = None
+    status: BookStatus = "library"
 
 
 class BookPatch(BaseModel):
@@ -31,6 +40,7 @@ class BookPatch(BaseModel):
     tags: list[str] | None = None
     archived: bool | None = None
     read: bool | None = None
+    status: BookStatus | None = None
 
 
 def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
@@ -57,6 +67,9 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "fetched": row["fetched"],
         "archived": bool(row["archived"]),
         "read": bool(row["read"]),
+        "status": row["status"],
+        "general_coverage": row["general_coverage"],
+        "general_level": row["general_level"],
     }
 
 
@@ -82,14 +95,16 @@ def insert_book(
     source_url: str = "",
     source_ref: str | None = None,
     fetched: str | None = None,
+    status: BookStatus = "library",
 ) -> dict:
-    """Shared by the paste/txt route and the Epic 12 importers: insert the book
-    row + split pages, or raise DuplicateSourceRef on a source_ref collision."""
+    """Shared by the paste/txt route, the Epic 12 importers, and Epic 15's feed
+    fetcher: insert the book row + split pages, or raise DuplicateSourceRef on a
+    source_ref collision."""
     try:
         cur = conn.execute(
-            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (title, source, topic, json.dumps(tags or []), source_url, source_ref, fetched),
+            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (title, source, topic, json.dumps(tags or []), source_url, source_ref, fetched, status),
         )
     except sqlite3.IntegrityError:
         raise DuplicateSourceRef(source_ref)
@@ -103,12 +118,52 @@ def insert_book(
     return _book_dict(conn, book_id)
 
 
+def _score_and_cache(
+    conn: sqlite3.Connection,
+    book_id: int,
+    text: str,
+    known: set[str] | None = None,
+    frequency: dict[str, str] | None = None,
+) -> dict:
+    """Shared by POST /api/books/{id}/score and Epic 15's feed fetcher: compute
+    both personal (score_text) and general/public (score_general_difficulty)
+    difficulty and cache all five fields onto the book row under one scored_at.
+    `known`/`frequency` are optional so a caller scoring many candidates in one
+    fetch run can load them once and pass them through, rather than re-querying
+    per item."""
+    if known is None:
+        known = known_lemmas(conn)
+    if frequency is None:
+        frequency = frequency_grades(conn)
+    personal = score_text(text, known, frequency)
+    general = score_general_difficulty(text, frequency)
+    conn.execute(
+        "UPDATE books SET coverage = ?, new_per_page = ?, general_coverage = ?, "
+        "general_level = ?, scored_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (
+            personal["coverage"],
+            personal["new_per_page"],
+            general["general_coverage"],
+            general["general_level"],
+            book_id,
+        ),
+    )
+    conn.commit()
+    return _book_dict(conn, book_id)
+
+
 @router.get("")
 def list_books(
     topic: str | None = None,
     archived: bool | None = None,
+    source: str | None = None,
+    status: BookStatus | None = None,
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
+    # Epic 15: defaults to "library" when omitted, so candidates/discarded books
+    # don't clutter the main list — the one behavior change to this endpoint (see
+    # docs/DECISIONS.md; every pre-Epic-15 book defaults to 'library' so nothing
+    # currently visible becomes hidden).
     query = "SELECT id FROM books WHERE 1=1"
     params: list = []
     if topic:
@@ -117,6 +172,11 @@ def list_books(
     if archived is not None:
         query += " AND archived = ?"
         params.append(int(archived))
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    query += " AND status = ?"
+    params.append(status or "library")
     query += " ORDER BY id"
     rows = conn.execute(query, params).fetchall()
     return [_book_dict(conn, row["id"]) for row in rows]
@@ -135,6 +195,7 @@ def create_book(body: BookCreate, conn: sqlite3.Connection = Depends(db_module.g
             source_url=body.source_url,
             source_ref=body.source_ref,
             fetched=body.fetched,
+            status=body.status,
         )
     except DuplicateSourceRef:
         raise HTTPException(
@@ -180,20 +241,13 @@ def delete_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
 
 @router.post("/{book_id}/score")
 def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    """Compute the book's difficulty against the user's vocab and cache it on the row."""
+    """Compute the book's personal + general difficulty and cache it on the row."""
     _get_book_or_404(conn, book_id)
     rows = conn.execute(
         "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
     ).fetchall()
     text = "\n".join(row["content"] for row in rows)
-    result = score_text(text, known_lemmas(conn), frequency_grades(conn))
-    conn.execute(
-        "UPDATE books SET coverage = ?, new_per_page = ?, scored_at = CURRENT_TIMESTAMP "
-        "WHERE id = ?",
-        (result["coverage"], result["new_per_page"], book_id),
-    )
-    conn.commit()
-    return _book_dict(conn, book_id)
+    return _score_and_cache(conn, book_id, text)
 
 
 @router.get("/{book_id}/pages/{page_no}")

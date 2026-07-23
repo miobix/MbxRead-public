@@ -3,33 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type Book, type ScoreResult } from "@/lib/api";
+import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
 
 type Sort = "recent" | "easiest";
 
 const TOPICS = ["gaming", "fitness", "news", "literature", "other"] as const;
-
-// Coverage bands from docs/NEXT_STAGE_OPTIONS.md: ~0.95+ comfortable, 0.90-0.95
-// productive study zone, <0.85 a slog. Colour the % so difficulty reads at a glance.
-function coverageClass(coverage: number): string {
-  if (coverage >= 0.95) return "text-accent";
-  if (coverage < 0.85) return "text-danger";
-  return "text-ink";
-}
-
-function ScoreLine({ book }: { book: Book }) {
-  if (!book.scored_at) return null;
-  return (
-    <span className="text-xs text-muted">
-      {book.coverage !== null && (
-        <span className={coverageClass(book.coverage)}>
-          {Math.round(book.coverage * 100)}% known
-        </span>
-      )}
-      {book.coverage !== null && book.new_per_page !== null && " · "}
-      {book.new_per_page !== null && `${book.new_per_page} new/pg`}
-    </span>
-  );
-}
+const SOURCES = ["paste", "txt", "yt", "pdf", "article"] as const;
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
@@ -38,16 +17,27 @@ export default function HomePage() {
   const [sort, setSort] = useState<Sort>("recent");
   const [scoring, setScoring] = useState<number | null>(null);
   const [topicFilter, setTopicFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [candidateCount, setCandidateCount] = useState<number | null>(null);
 
   const refresh = () => {
     api
-      .listBooks({ topic: topicFilter || undefined, archived: showArchived })
+      .listBooks({ topic: topicFilter || undefined, source: sourceFilter || undefined, archived: showArchived })
       .then(setBooks)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load books."));
   };
 
-  useEffect(refresh, [topicFilter, showArchived]);
+  useEffect(refresh, [topicFilter, sourceFilter, showArchived]);
+
+  useEffect(() => {
+    api
+      .listBooks({ status: "candidate" })
+      .then((b) => setCandidateCount(b.length))
+      .catch(() => {
+        // best-effort — the Queue badge just stays hidden on failure
+      });
+  }, []);
 
   const score = async (id: number) => {
     setScoring(id);
@@ -92,6 +82,14 @@ export default function HomePage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold font-serif">Korean Reader</h1>
         <div className="flex items-center gap-3">
+          <Link href="/queue" className="text-sm text-muted hover:text-ink transition-colors">
+            Queue
+            {!!candidateCount && (
+              <span className="ml-1 rounded-full bg-accent text-accent-ink text-xs px-1.5 py-0.5">
+                {candidateCount}
+              </span>
+            )}
+          </Link>
           <Link href="/terms" className="text-sm text-muted hover:text-ink transition-colors">
             Terms
           </Link>
@@ -120,6 +118,19 @@ export default function HomePage() {
           {TOPICS.map((t) => (
             <option key={t} value={t}>
               {t}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted">Source:</span>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">All</option>
+          {SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {s}
             </option>
           ))}
         </select>
@@ -183,6 +194,7 @@ export default function HomePage() {
             </Link>
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <ScoreLine book={book} />
+              <GeneralScoreLine book={book} />
               <button
                 onClick={() => score(book.id)}
                 disabled={scoring === book.id}
@@ -418,6 +430,12 @@ function AddBookModal({
                   )}
                   {preview.coverage !== null && " · "}
                   {preview.new_per_page} new/pg
+                  {preview.general_level !== null && preview.general_coverage !== null && (
+                    <>
+                      {" · general: "}
+                      {preview.general_level} ({Math.round(preview.general_coverage * 100)}%)
+                    </>
+                  )}
                 </span>
               )}
             </div>
