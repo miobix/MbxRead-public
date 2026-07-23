@@ -483,3 +483,47 @@ every existing `test_books.py`/`test_difficulty.py`/`test_imports.py` book-creat
 site: all go through `insert_book`/`BookCreate`, both of which default `status="library"`,
 so nothing currently visible becomes hidden — confirmed by reading all three files, not
 just reasoning about it.
+
+## 2026-07-23 — Epic 16: stats/reading-time tracking deliberately un-backlogged
+SPEC §227's backlog explicitly listed "stats/reading-time tracking" as out-of-scope, do
+not build. Epic 16 reverses that at the user's direct request: they want a stats screen for
+accountability (stay honest about reading) and to show off progress ("instagrammable"),
+plus two specific asks — new words per book (watch the curve flatten) and new words per
+page. The §227 line is amended to point here. The original exclusion was about not gold-
+plating the core reading tool; now that the tool is complete, a stats layer is a
+deliberate, wanted addition, not scope creep.
+
+## 2026-07-23 — Epic 16: term provenance is two nullable columns, forward-only
+`terms.source_book_id`/`source_page` (added via the same `_ADDED_COLUMNS` path as Epics
+9/11/15) record where a word was *first* saved — a term is one global row per lemma, so
+the origin is unambiguous (you saved it once). Nullable and no FK: terms saved outside the
+reader (e.g. `/terms`) have no origin, and a later book delete just leaves a harmless
+dangling id (the stats join is an inner join, so orphaned ids simply drop out). Forward-
+only — the handful of pre-Epic-16 test terms stay NULL, which is fine since real reading
+starts at go-live. This is what makes "new words per book" a count of terms actually
+learned *from* that book, not a re-derivation from the difficulty scorer's coverage.
+
+## 2026-07-23 — Epic 16: reading-log dedup via PRIMARY KEY + 5s dwell gate
+Two safeguards the user asked for. **No double-count:** `page_reads` is keyed
+`PRIMARY KEY(book_id, page_no)` and writes with `INSERT OR IGNORE`, so the first genuine
+read of a page inserts a row (stamped `read_at`) and every later revisit — e.g. re-checking
+a word on a page read yesterday — is a silent no-op. "Pages read" is therefore *distinct
+pages ever read*, each counting once on the day it was first read. **Dwell gate:** the
+reader client only pings `POST /api/reads` after the page has been visible for
+`READ_DWELL_MS = 5000`, cancelled if the tab is hidden — so flicking past a page in under
+5s never counts. Streak = the union of days a word was saved OR a page was first read; pure
+re-reading (no new page, no new word) does not extend the streak, matching the user's
+"shouldn't count" intent. Both the 5s window and the union rule are tunable.
+
+## 2026-07-23 — Epic 16: page size is a setting; difficulty stays pinned to the paging default
+`settings.page_size` (default 650 chars, ~one phone screen at the reader's
+text-lg/leading-loose) is passed to `split_pages` at import time and on a library-wide
+re-pagination when the setting changes. **Difficulty scoring is deliberately NOT coupled to
+it:** `difficulty.score_text` keeps calling `split_pages(text)` with its own 1500-char
+default as a fixed reference, so a book's `new_per_page` means the same thing regardless of
+how the user has set their reading page size — otherwise every score would silently shift
+when the setting changed. Re-pagination reconstructs each book's original text by joining
+its stored page slices (lossless — `split_pages` slices are contiguous), re-splits,
+preserves reading position by character offset, and **clears that book's `page_reads`
+rows** (page_no boundaries moved, so old read marks no longer map — accepted, since re-
+pagination is deliberate and rare, and there's near-zero read history pre-go-live).

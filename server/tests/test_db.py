@@ -16,7 +16,27 @@ def test_schema_creates_on_temp_db(tmp_path):
     }
     conn.close()
 
-    assert {"books", "pages", "terms", "settings", "feeds", "vocab_levels"} <= tables
+    assert {
+        "books",
+        "pages",
+        "terms",
+        "settings",
+        "feeds",
+        "vocab_levels",
+        "page_reads",
+    } <= tables
+
+
+def test_terms_migration_adds_epic16_provenance_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(terms)")]
+    conn.close()
+    for name in ("source_book_id", "source_page"):
+        assert cols.count(name) == 1
 
 
 def test_init_db_is_idempotent(tmp_path):

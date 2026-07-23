@@ -111,6 +111,35 @@ export type Settings = {
   decks: string[];
   default_deck: string;
   translator_backend: "deepl" | "claude";
+  page_size: number;
+};
+
+export type StatsActivity = { date: string; words: number; pages: number };
+
+export type StatsBookRow = {
+  book_id: number;
+  title: string;
+  new_words: number;
+  pages_read: number;
+};
+
+export type Stats = {
+  totals: {
+    words_learning: number;
+    words_known: number;
+    words_total: number;
+    books_finished: number;
+    words_week: number;
+    pages_week: number;
+  };
+  streak: { current: number; longest: number };
+  activity: StatsActivity[];
+  new_words_per_book: StatsBookRow[];
+  vocab_depth: {
+    buckets: { A: number; B: number; C: number; unlisted: number };
+    beginner_pct: number | null;
+    total_a: number;
+  };
 };
 
 class ApiError extends Error {}
@@ -200,6 +229,8 @@ export const api = {
     status?: TermStatus;
     deck?: string;
     sentence?: string;
+    source_book_id?: number;
+    source_page?: number;
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
 
   patchTerm: (
@@ -257,4 +288,12 @@ export const api = {
   },
 
   fetchFeeds: () => request<FeedFetchResult>("/feeds/fetch", { method: "POST" }),
+
+  getStats: () => request<Stats>("/stats"),
+
+  markPageRead: (bookId: number, pageNo: number) =>
+    request<{ counted: boolean }>("/reads", {
+      method: "POST",
+      body: JSON.stringify({ book_id: bookId, page_no: pageNo }),
+    }),
 };

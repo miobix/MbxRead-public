@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type Settings } from "@/lib/api";
 
+const PAGE_SIZE_PRESETS = [
+  { label: "Short", chars: 450 },
+  { label: "Medium", chars: 650 },
+  { label: "Long", chars: 1200 },
+] as const;
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [newDeck, setNewDeck] = useState("");
@@ -137,6 +143,32 @@ export default function SettingsPage() {
             </select>
           </section>
 
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-muted">Page size</h2>
+            <p className="text-xs text-muted">
+              How much text fits on one reader page. Smaller pages scroll less on a phone.
+              Changing this re-paginates your whole library (and resets pages-read counts).
+            </p>
+            <div className="flex gap-2">
+              {PAGE_SIZE_PRESETS.map((p) => (
+                <button
+                  key={p.chars}
+                  onClick={() => save({ ...settings, page_size: p.chars })}
+                  disabled={saving}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                    settings.page_size === p.chars
+                      ? "border-accent text-ink font-medium"
+                      : "border-border text-muted hover:border-accent"
+                  }`}
+                >
+                  {p.label}
+                  <span className="block text-xs text-muted">{p.chars} chars</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {saving && <p className="text-sm text-muted">Saving…</p>}
           {saved && !saving && <p className="text-sm text-accent">Saved.</p>}
         </>
       )}

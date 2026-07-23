@@ -107,9 +107,19 @@ CREATE TABLE IF NOT EXISTS terms (
   anki_note_id INTEGER,                          -- NULL until first sync
   anki_dirty INTEGER NOT NULL DEFAULT 0,         -- 1 = edited since last sync
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
+  source_page INTEGER                            -- Epic 16: page it was first saved from
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- Epic 16: reading-activity log for /stats. One row per page ever read; the
+-- PRIMARY KEY + INSERT OR IGNORE dedup means a revisit never double-counts.
+CREATE TABLE IF NOT EXISTS page_reads (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  page_no INTEGER NOT NULL,
+  read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (book_id, page_no)
+);
 -- Epic 11: the model a future settings page edits. No CRUD routes yet — Epic 15
 -- seeds two rows directly (see db._seed_feeds) and reads via POST /api/feeds/fetch;
 -- a settings UI for adding/editing feeds by hand is still future work.
@@ -179,20 +189,22 @@ book has at least one (possibly empty) page.
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?}` | created term (409 if lemma exists) — **implemented (Epic 3)** |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, source_book_id?, source_page?}` | created term (409 if lemma exists); `source_*` capture where a word was first saved — **implemented (Epic 3, provenance Epic 16)** |
 | PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3)** |
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend}` — **implemented (Epic 7)** |
-| PUT `/api/settings` | any subset of the above | full settings dict after merge — **implemented (Epic 7)** |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size}` — **implemented (Epic 7, `page_size` Epic 16)** |
+| PUT `/api/settings` | any subset of the above | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
 | POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
 | POST `/api/books/{id}/score` | – | full updated book row, personal + general difficulty cached under one `scored_at` — **implemented (Epic 9, general fields Epic 15)** |
 | POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled `rss`-type feeds, inserts new items as `status='candidate'` books, dedups on `source_ref` — **implemented (Epic 15)** |
+| POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
+| GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}}` — **implemented (Epic 16)** |
 
 **Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
 as its own row in the `settings` (key/value) table, JSON-encoded in the `value`

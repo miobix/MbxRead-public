@@ -12,6 +12,8 @@ export type PopoverTarget = {
 
 export function TokenPopover({
   target,
+  bookId,
+  pageNo,
   decks,
   defaultDeck,
   translatorBackend,
@@ -20,6 +22,8 @@ export function TokenPopover({
   onDeleted,
 }: {
   target: PopoverTarget;
+  bookId: number | null;
+  pageNo: number | null;
   decks: string[];
   defaultDeck: string;
   translatorBackend?: string;
@@ -89,6 +93,9 @@ export function TokenPopover({
             deck,
             sentence: target.sentence,
             status: "learning",
+            // Provenance: record where this word was first saved (Epic 16 stats).
+            source_book_id: bookId ?? undefined,
+            source_page: pageNo ?? undefined,
           });
       onSaved(target.lemma, trimmedLemma, term);
       onClose();

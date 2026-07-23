@@ -14,6 +14,11 @@ import {
 import { extractSentence } from "@/lib/sentence";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
+// A page only counts as "read" once it's been visible this long — filters out
+// flicking past a page, and (with the server's INSERT OR IGNORE) revisits never
+// double-count. See docs/DECISIONS.md.
+const READ_DWELL_MS = 5000;
+
 export default function ReadPage() {
   return (
     <Suspense fallback={<main className="flex-1 px-4 py-6 text-muted">Loading…</main>}>
@@ -56,6 +61,39 @@ function ReadPageContent() {
       .then((book) => loadPage(bookId, book.current_page))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load book."));
   }, [bookId, loadPage]);
+
+  // Log a genuine read once the current page has stayed visible for the dwell
+  // window. Re-runs per page; pauses while the tab is hidden.
+  useEffect(() => {
+    if (bookId === null || !page) return;
+    const pageNo = page.page_no;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let logged = false;
+
+    const start = () => {
+      if (logged || timer) return;
+      timer = setTimeout(() => {
+        logged = true;
+        api.markPageRead(bookId, pageNo).catch(() => {
+          // best-effort — a missed read-log ping shouldn't disrupt reading
+        });
+      }, READ_DWELL_MS);
+    };
+    const stop = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [bookId, page]);
 
   const goToPage = (pageNo: number) => {
     if (bookId === null || !page || pageNo < 1 || pageNo > page.page_count) return;
@@ -190,6 +228,8 @@ function ReadPageContent() {
       {target && (
         <TokenPopover
           target={target}
+          bookId={bookId}
+          pageNo={page?.page_no ?? null}
           decks={settings?.decks ?? ["Korean"]}
           defaultDeck={settings?.default_deck ?? "Korean"}
           translatorBackend={settings?.translator_backend}

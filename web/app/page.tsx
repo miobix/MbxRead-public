@@ -90,6 +90,9 @@ export default function HomePage() {
               </span>
             )}
           </Link>
+          <Link href="/stats" className="text-sm text-muted hover:text-ink transition-colors">
+            Stats
+          </Link>
           <Link href="/terms" className="text-sm text-muted hover:text-ink transition-colors">
             Terms
           </Link>

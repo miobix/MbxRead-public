@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS terms (
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- Epic 16: reading-activity log for the stats screen. One row per page ever read
+-- (PRIMARY KEY dedup + INSERT OR IGNORE on write) so revisiting a page — e.g. to
+-- re-check a word on a page read yesterday — never double-counts; read_at stamps
+-- the first genuine read, which is what the streak/heatmap bucket by.
+CREATE TABLE IF NOT EXISTS page_reads (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  page_no INTEGER NOT NULL,
+  read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (book_id, page_no)
+);
 CREATE TABLE IF NOT EXISTS feeds (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -67,8 +77,15 @@ CREATE TABLE IF NOT EXISTS vocab_levels (
 # init_db so an existing reader.db upgrades in place (SQLite has no ADD COLUMN IF
 # NOT EXISTS, so we guard on PRAGMA table_info). Epic 9: cached difficulty scores.
 # Epic 11: content-catalog metadata (topic/tags/provenance/archived/read). Epic 15:
-# candidate-queue lifecycle (status) + cached general/public difficulty.
+# candidate-queue lifecycle (status) + cached general/public difficulty. Epic 16:
+# term provenance (which book/page a term was first saved from) for per-book and
+# per-page stats — both nullable, forward-only (historical terms stay NULL), no FK
+# so a later book delete just leaves a harmless dangling id.
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "terms": {
+        "source_book_id": "INTEGER",
+        "source_page": "INTEGER",
+    },
     "books": {
         "coverage": "REAL",
         "new_per_page": "REAL",

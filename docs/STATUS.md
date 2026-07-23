@@ -423,12 +423,40 @@ later epic until the real sources are known.
   **Not verified in a browser** (no browser tooling in this environment) — the new
   Queue page and source-type filter join the already-owed Epics 4–13 browser/touch
   pass.
-- [ ] **Epic 16 — UI makeover + go-live (final stage).** Fuller per-page UI makeover
-  over the now-complete screen set (library filters, feeds/queue, imports) — done last
-  so screens are polished once. Then execute Epic 8's still-pending cold-start +
-  Tailscale verification and go live day-to-day. **Acceptance:** the makeover the user
-  has wanted since the Epic 8 "paper" palette baseline, plus a verified cold-start
-  `start.ps1` run reachable from the phone over Tailscale.
+- [x] **Epic 16 — Stats screen + UI makeover** — done (2026-07-23). Re-scoped from the
+  old "UI makeover + go-live": the user wanted a reading **stats screen** for
+  accountability + sharing ("instagrammable"), with two specific asks — new words per
+  book (watch the curve flatten) and new words per page. Go-live splits to **Epic 17**.
+  SPEC §227's backlog had explicitly excluded "stats/reading-time tracking" — this epic
+  **deliberately reverses that** at the user's request (logged in DECISIONS.md; §227
+  amended). Backend: `terms` gained nullable `source_book_id`/`source_page` (forward-only
+  provenance, via the same `_ADDED_COLUMNS` path); new `page_reads` table
+  (`PRIMARY KEY(book_id,page_no)` + `INSERT OR IGNORE` so revisits never double-count) +
+  `POST /api/reads`; `GET /api/stats` aggregates totals/streak (union of word-save days +
+  first-read-page days, local-time buckets)/365-day activity/new-words-per-book
+  (provenance join)/vocab depth by NIKL grade + beginner %; `settings.page_size`
+  (default 650) drives `split_pages` at import and re-paginates the whole library on
+  change (position preserved by char offset, `page_reads` cleared) while difficulty's
+  `new_per_page` stays pinned to the 1500 reference so scores don't drift. Reader pings
+  `/api/reads` only after a **5s visible-dwell** gate (`READ_DWELL_MS`), and passes
+  book/page provenance to `POST /api/terms` on new-term save. Frontend: new `/stats`
+  (hero tiles, GitHub-style activity heatmap, new-words-per-book SVG line, vocab-depth
+  bar, milestone badges — all hand-rolled SVG/CSS, **no new npm deps**), a page-size
+  control in `/settings`, a Stats nav link. 150/150 tests green (21 new: `test_stats.py`
+  streak-logic + aggregation, `test_reads.py` dedup/cascade/404, `test_settings.py`
+  page_size + repaginate/position-preserve/clears-reads, `test_db.py` provenance +
+  page_reads migration idempotency). `npm run build`/`lint` clean. Five DECISIONS.md
+  entries (backlog reversal, provenance shape, read-log dedup+dwell, page-size-as-setting
+  + difficulty decoupling), SPEC §227 + Epic 16 entry, ARCHITECTURE.md schema + API table.
+  **Not verified in a browser** (no browser tooling in this environment) — the `/stats`
+  screen, the dwell-gated read logging, and the page-size re-pagination join the already-
+  owed Epics 4–15 browser/touch pass. The makeover this epic did is the stats screen
+  itself as the visual anchor + a Stats nav link; a fuller per-screen polish pass can
+  still ride along with Epic 17 if wanted.
+- [ ] **Epic 17 — Go-live (final stage).** Execute Epic 8's still-pending cold-start +
+  Tailscale verification and go live day-to-day, optionally with a fuller per-page UI
+  polish pass. **Acceptance:** a verified cold-start `start.ps1` run reachable from the
+  phone over Tailscale.
 
 ## Known issues / deviations
 
@@ -454,13 +482,17 @@ later epic until the real sources are known.
   its checklist entry's 2026-07-23 update: Epic 15 already built fetch→clean→score→
   dedup behind `POST /api/feeds/fetch`, so what's left (if still wanted at all,
   given `/queue`'s manual "Fetch new candidates" button) is just Task Scheduler
-  wiring. **Epic 16 — UI makeover + go-live** is next after that (or could jump
-  ahead of Epic 14 if the manual fetch button turns out to be enough).
+  wiring. **Epic 16 — Stats screen + UI makeover** is now done (2026-07-23);
+  the go-live work split out to **Epic 17 — Go-live** (cold-start + Tailscale,
+  optionally a fuller UI polish pass), which is the last remaining stage.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
-  the same still-owed pass. That pass (paste a YouTube URL, upload a PDF, paste an
-  article URL, try the Queue's Fetch/Promote/Discard flow, plus the older Epic 4-11
+  the same still-owed pass; Epic 16 adds the `/stats` screen, the reader's dwell-gated
+  read logging, and the page-size setting's re-pagination. That pass (paste a YouTube
+  URL, upload a PDF, paste an article URL, try the Queue's Fetch/Promote/Discard flow,
+  check the Stats screen after saving words + reading a few pages, change page size and
+  confirm books re-paginate with reading position preserved, plus the older Epic 4-11
   checklist items above) is still owed whenever the user is ready.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this

@@ -224,7 +224,28 @@ Rewrite `start.ps1`: build `web/` if stale, launch single uvicorn `server.main:a
 Personal-coverage difficulty: score any text against the user's own vocabulary before committing to it. `server/difficulty.py` — `score_text(text, known)` → `{coverage, new_lemmas, total_lemmas, new_per_page}` (coverage is `None` when no lemmas resolve; `new_per_page` normalizes by the reader's own `paging.split_pages` count) and `known_lemmas(conn)` (every saved term, all statuses). `routes/difficulty.py` — `POST /api/score` for ad-hoc candidate text. `routes/books.py` — `POST /api/books/{id}/score` caches `coverage`/`new_per_page`/`scored_at` onto the book row. `db.py` — idempotent additive-migration path (`_apply_migrations`) adds those three `books` columns so an existing `reader.db` upgrades in place. Frontend: "Check difficulty" in the add-book modal, a per-book score line + Score/re-score button, and an "Easiest unread" sort on `/`. Tests in `test_difficulty.py`.
 **Accept:** `pytest` + `npm run build`/`lint` green; `POST /api/score {"text":…}` returns coverage + new-per-page; scoring a stored book caches onto its row and it sorts under "Easiest unread". *(The rest of Cycle 2 — Epics 10–16 — is tracked in `docs/STATUS.md`; per-epic specs get fleshed out when each is started.)*
 
-**Backlog (explicitly out of scope, do not build):** Lute term migration script, auth for public deployment, always-on hosting off the PC, stats/reading-time tracking, audio/TTS, spaced-repetition inside the app.
+**Backlog (explicitly out of scope, do not build):** Lute term migration script, auth for public deployment, always-on hosting off the PC, audio/TTS, spaced-repetition inside the app. *(Stats/reading-time tracking was here too, but was deliberately un-backlogged and built in Epic 16 — see docs/DECISIONS.md 2026-07-23 and the Epic 16 entry below.)*
+
+### Epic 16 — Stats screen + UI makeover (Cycle 2)
+Reading stats for accountability + sharing, plus a UI polish pass. **Term provenance:**
+`terms.source_book_id`/`source_page` (nullable, forward-only) capture where a word was first
+saved (reader passes both to `POST /api/terms`). **Reading log:** `page_reads` table
+(`PRIMARY KEY(book_id,page_no)`, `INSERT OR IGNORE`) via `POST /api/reads`, pinged by the
+reader only after a 5s visible-dwell gate so revisits/flick-throughs don't count. **Stats:**
+`GET /api/stats` aggregates totals (words learning/known/total, books finished, this-week),
+streak (union of word-save days + first-read-page days, local-time buckets), a 365-day
+activity list, new-words-per-book (provenance join, reading order), and vocab depth by NIKL
+grade + beginner %. **Page size:** `settings.page_size` (default 650) drives `split_pages` at
+import; changing it re-paginates the library (position preserved by char offset, `page_reads`
+cleared). Difficulty's `new_per_page` stays pinned to `split_pages`'s 1500 default so scores
+don't drift. Frontend: `/stats` (hero tiles, activity heatmap, new-words-per-book line, vocab
+depth bar, milestone badges — all hand-rolled SVG/CSS, no new deps), a page-size control in
+`/settings`, a Stats nav link. Tests: `test_stats.py`, `test_reads.py`, plus `test_db.py`/
+`test_settings.py` additions.
+**Accept:** `pytest` + `npm run build`/`lint` green; saving a word from the reader records
+its book/page; a page counts once after 5s and never on revisit; `GET /api/stats` returns
+sane totals/streak/per-book; changing page size re-paginates and preserves position. *(Cold-
+start + Tailscale go-live moves to a later epic.)*
 
 ## 11. End-to-end verification (after Epic 8)
 
