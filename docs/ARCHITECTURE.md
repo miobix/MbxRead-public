@@ -120,9 +120,11 @@ CREATE TABLE IF NOT EXISTS page_reads (
   read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (book_id, page_no)
 );
--- Epic 11: the model a future settings page edits. No CRUD routes yet — Epic 15
--- seeds two rows directly (see db._seed_feeds) and reads via POST /api/feeds/fetch;
--- a settings UI for adding/editing feeds by hand is still future work.
+-- Epic 11: the subscription roster the fetch job iterates. Epic 14 seeds the full
+-- curated multi-topic roster (db._SEED_FEEDS; see docs/CONTENT_CATALOG.md) and adds
+-- CRUD (GET/POST/PATCH/DELETE /api/feeds) edited by the /feeds page — the user can
+-- swap/enable/disable sources by hand. youtube feeds store the bare UC channel id
+-- in url_or_channel_id.
 CREATE TABLE IF NOT EXISTS feeds (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -202,7 +204,11 @@ book has at least one (possibly empty) page.
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
 | POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
 | POST `/api/books/{id}/score` | – | full updated book row, personal + general difficulty cached under one `scored_at` — **implemented (Epic 9, general fields Epic 15)** |
-| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled `rss`-type feeds, inserts new items as `status='candidate'` books, dedups on `source_ref` — **implemented (Epic 15)** |
+| GET `/api/feeds` | – | `[{id,name,type,url_or_channel_id,topic,enabled,difficulty_min,difficulty_max,last_fetched}]` — **implemented (Epic 14)** |
+| POST `/api/feeds` | `{name, type, url_or_channel_id, topic?, enabled?, difficulty_min?, difficulty_max?}` | created feed — **implemented (Epic 14)** |
+| PATCH `/api/feeds/{id}` | any editable field | updated feed — **implemented (Epic 14)** |
+| DELETE `/api/feeds/{id}` | – | 204 — **implemented (Epic 14)** |
+| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)** |
 | POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
 | GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}}` — **implemented (Epic 16)** |
 

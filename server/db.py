@@ -106,16 +106,38 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     },
 }
 
-# Epic 15: seeded (not migrated) `feeds` rows — the two RSS feeds verified live in
-# Epic 10 (Inven, Ruliweb game news), to prove the fetch->score->queue path
-# end-to-end. Curating the full multi-topic source list is a separate future
-# planning session; this only proves the infrastructure. Guarded per-URL (not a
-# blanket COUNT(*) like _seed_vocab_levels) since `feeds` is a small, individually-
-# meaningful roster that keeps growing across future curation sessions — a future
-# hand-added feed row must survive re-seeding these two after an upgrade.
+# Epic 14: the curated multi-topic source roster, replacing Epic 15's two-feed
+# proof-of-infrastructure seed. Every entry was verified live this session — RSS
+# feeds fetched with the app's own no-UA httpx path (server.feeds.fetch_feed_xml),
+# YouTube channel IDs resolved and confirmed against each channel's Atom feed
+# (see docs/CONTENT_CATALOG.md for the full vetted list + channel IDs). Curated to
+# the user's stated tastes: male-presenter, idea-exposition/science-focused
+# essayists over variety/lifestyle content. youtube feeds store the bare UC channel
+# id in url_or_channel_id; server.feeds.youtube_feed_url builds the fetch URL.
+# Guarded per-URL by _seed_feeds (not a blanket COUNT(*)) so a hand-added or
+# hand-edited feed survives re-seeding after an upgrade.
 _SEED_FEEDS: list[tuple[str, str, str, str]] = [
+    # gaming
     ("Inven game news", "rss", "https://webzine.inven.co.kr/news/rss.php", "gaming"),
     ("Ruliweb PS/game news", "rss", "https://bbs.ruliweb.com/news/524/rss", "gaming"),
+    ("김성회의 G식백과", "youtube", "UCZ0bi2aVJngKLwFTU5g_fLQ", "gaming"),
+    ("중년게이머 김실장", "youtube", "UCSgvQDek_7CQj08fu7kp1Iw", "gaming"),
+    # ideas (society, philosophy, urbanism, geopolitics)
+    ("슈카월드", "youtube", "UCsJ6RuBiTVWRX156FVbeaGg", "ideas"),
+    ("충코의 철학", "youtube", "UCUV9bHklegmYbdt091TNvjA", "ideas"),
+    ("셜록현준", "youtube", "UC7uDyFIqExDnfXAIZqumFrQ", "ideas"),
+    ("최준영 박사의 지구본 연구소", "youtube", "UCstI8HwGQsHdqLDgyH0PImw", "ideas"),
+    # science
+    ("리뷰엉이", "youtube", "UCrBpV_pG2kyMMEHCMTNzjAQ", "science"),
+    # fitness
+    ("김명섭의 헬스교실", "youtube", "UCc5mVNF4R6ywMqbty91J0rQ", "fitness"),
+    # tech / software
+    ("조코딩", "youtube", "UCQNE2JmbasNYbjGAcuBiRRg", "tech"),
+    ("요즘IT", "rss", "https://yozm.wishket.com/magazine/feed/", "tech"),
+    # news / long-form essays
+    ("ㅍㅍㅅㅅ", "rss", "https://www.ppss.kr/rss/allArticle.xml", "news"),
+    ("슬로우뉴스", "rss", "https://slownews.kr/feed", "news"),
+    ("뉴스페퍼민트", "rss", "https://newspeppermint.com/feed/", "news"),
 ]
 
 

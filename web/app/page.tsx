@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type Book, type ScoreResult } from "@/lib/api";
 import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
+import { TOPICS } from "@/lib/topics";
 
 type Sort = "recent" | "easiest";
 
-const TOPICS = ["gaming", "fitness", "news", "literature", "other"] as const;
 const SOURCES = ["paste", "txt", "yt", "pdf", "article"] as const;
 
 export default function HomePage() {
@@ -92,6 +92,9 @@ export default function HomePage() {
           </Link>
           <Link href="/stats" className="text-sm text-muted hover:text-ink transition-colors">
             Stats
+          </Link>
+          <Link href="/feeds" className="text-sm text-muted hover:text-ink transition-colors">
+            Feeds
           </Link>
           <Link href="/terms" className="text-sm text-muted hover:text-ink transition-colors">
             Terms

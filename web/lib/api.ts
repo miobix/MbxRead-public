@@ -41,10 +41,25 @@ export type FeedFetchResult = {
     items_seen?: number;
     created?: number;
     skipped_duplicate?: number;
+    skipped_no_subs?: number;
     failed?: number;
     fetch_error?: string;
     skipped_type?: string;
   }[];
+};
+
+export type FeedType = "rss" | "youtube" | "scraper";
+
+export type Feed = {
+  id: number;
+  name: string;
+  type: FeedType;
+  url_or_channel_id: string;
+  topic: string;
+  enabled: boolean;
+  difficulty_min: number | null;
+  difficulty_max: number | null;
+  last_fetched: string | null;
 };
 
 export type BookDetail = {
@@ -288,6 +303,23 @@ export const api = {
   },
 
   fetchFeeds: () => request<FeedFetchResult>("/feeds/fetch", { method: "POST" }),
+
+  listFeeds: () => request<Feed[]>("/feeds"),
+
+  createFeed: (body: {
+    name: string;
+    type: FeedType;
+    url_or_channel_id: string;
+    topic?: string;
+    enabled?: boolean;
+  }) => request<Feed>("/feeds", { method: "POST", body: JSON.stringify(body) }),
+
+  patchFeed: (
+    id: number,
+    body: Partial<Pick<Feed, "name" | "type" | "url_or_channel_id" | "topic" | "enabled">>
+  ) => request<Feed>(`/feeds/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  deleteFeed: (id: number) => request<void>(`/feeds/${id}`, { method: "DELETE" }),
 
   getStats: () => request<Stats>("/stats"),
 

@@ -527,3 +527,58 @@ its stored page slices (lossless — `split_pages` slices are contiguous), re-sp
 preserves reading position by character offset, and **clears that book's `page_reads`
 rows** (page_no boundaries moved, so old read marks no longer map — accepted, since re-
 pagination is deliberate and rare, and there's near-zero read history pre-go-live).
+
+## 2026-07-23 — Epic 14: the curated feed roster (content selection over automation)
+The "curated list of content" the user dreaded. Sources were **selected by the assistant
+to the user's stated tastes** (they don't consume this content themselves, so "go with the
+popular ones that fit"): male-presenter, idea-exposition/science-focused essayists over
+variety/lifestyle/interview content. Final roster (15 feeds, see docs/CONTENT_CATALOG.md
+for names + channel IDs): gaming (Inven, Ruliweb RSS + G식백과, 김실장 YouTube), ideas
+(슈카월드, 충코의 철학, 셜록현준, 최준영 지구본연구소), science (리뷰엉이), fitness
+(김명섭의 헬스교실), tech (조코딩 YouTube + 요즘IT RSS), news/long-form (ㅍㅍㅅㅅ,
+슬로우뉴스, 뉴스페퍼민트 RSS). **Every feed was verified live this session** — RSS via the
+app's own no-UA `fetch_feed_xml` (slownews 403s *with* a browser UA but works without one,
+which is exactly how the app fetches; ppss lives at the CMS `/rss/allArticle.xml` path),
+YouTube channel IDs resolved via yt-dlp and confirmed against each channel's Atom feed.
+Dropped in review: 김지윤 지식Play (user cut), 1분과학 (dead ~1yr), 과학드림 (biology/low
+cadence), 피지컬갤러리·핏블리 (variety/mixed-gender), 씨리얼 (documentary, no host),
+운동하는 물리치료사 자반 (too clinical), 얄팍한 코딩사전 (user cut), 디스이즈게임 (RSS
+hard-403s every path — Inven/Ruliweb already cover gaming). Shipped as seeds (db._SEED_FEEDS,
+guarded per-URL by _seed_feeds), not a migration — a growing hand-editable roster.
+
+## 2026-07-23 — Epic 14: YouTube-channel fetch support (channel feed → transcript)
+Epic 15's fetcher only handled `rss` (article feeds) and skipped `youtube`. Since the
+curated roster is mostly YouTube essayists, the fetch job would have been inert without
+this. `server.feeds.parse_youtube_feed` parses a channel's Atom feed
+(youtube.com/feeds/videos.xml?channel_id=UC…, ~15 latest, `<yt:videoId>` per entry);
+`routes/feeds._process_youtube` dedupes each video on `source_ref="yt:<video_id>"` **before**
+fetching, then pulls the Korean transcript via the existing `import_tools.yt_subs.fetch_subs`
+(yt-dlp) and inserts a `status='candidate'` book scored like any other. Decisions:
+(1) reuses the **same `yt:<video_id>` source_ref shape as Epic 12's manual YouTube import**,
+so a video imported by hand and via feed collapse to one book. (2) A video with **no Korean
+subtitles is `skipped_no_subs`, not `failed`** — it's an expected outcome, not an error, and
+shouldn't read as a broken feed. (3) `YOUTUBE_MAX_PER_FETCH = 5` caps new videos processed
+per channel per run — each transcript is a yt-dlp round-trip, so an uncapped first run over
+9 channels could stall the interactive "Fetch new candidates" button for minutes; later runs
+pick up the rest. All three are tunable. Verified live (network-only, no DB): 조코딩's feed →
+real 37k-char transcript end-to-end.
+
+## 2026-07-23 — Epic 14: feeds CRUD + /feeds page (retouch the roster without code)
+The user wanted to "easily retouch the content list to swap something later." Added
+GET/POST/PATCH/DELETE `/api/feeds` and a `/feeds` management page (add / inline-edit /
+enable-disable toggle / delete), so the roster is user-editable at runtime — swapping a
+channel or turning a noisy source off is a few taps, not a re-seed. No UNIQUE constraint on
+`url_or_channel_id` (single-user, UI-curated — a duplicate is the user's call to make, and
+the fetch job dedupes on `books.source_ref` regardless). The topic vocabulary grew to
+gaming/ideas/science/tech/fitness/news/literature/other (shared `web/lib/topics.ts`), used
+by the home filter, add-book modal, and feeds editor.
+
+## 2026-07-23 — Epic 14: Queue title-translate button; Task Scheduler timing deferred
+Folded in a per-row **"Translate" button on the Queue** (calls `POST /api/translate` on the
+candidate's title) so an unfamiliar auto-fetched item can be judged at a glance before
+promote/discard — the user flagged that judging content they can't read is otherwise hard.
+Candidate **category is already handled**: each fetched item inherits its feed's `topic`
+(+ the feed name as a tag), shown on the Queue row. **Deferred to a later Task Scheduler
+session** (the user's call): the actual scheduled timer that pings `POST /api/feeds/fetch`,
+and the policy for new-content cadence / retention/archival of stale candidates. The manual
+"Fetch new candidates" button on /queue covers the workflow until then.

@@ -119,3 +119,36 @@ anything else):** 대도서관, 감스트, 우왁굳 (games); 피지컬갤러리
 - TOPIK past-exam passages
 - The five literature candidates above — try a sample chapter via "Check difficulty"
   before committing to a full book
+
+## Epic 14 — final curated roster (2026-07-23, verified live & seeded)
+
+Selected to the user's tastes (male-presenter, idea-exposition/science over variety), each
+feed verified live this session and seeded via `db._SEED_FEEDS`. YouTube feeds store the
+bare `UC…` channel id. Editable at runtime via the `/feeds` page.
+
+| Source | Topic | Type | id / URL |
+|---|---|---|---|
+| 인벤 (Inven) | gaming | rss | https://webzine.inven.co.kr/news/rss.php |
+| 루리웹 (Ruliweb) | gaming | rss | https://bbs.ruliweb.com/news/524/rss |
+| 김성회의 G식백과 | gaming | youtube | `UCZ0bi2aVJngKLwFTU5g_fLQ` |
+| 중년게이머 김실장 | gaming | youtube | `UCSgvQDek_7CQj08fu7kp1Iw` |
+| 슈카월드 | ideas | youtube | `UCsJ6RuBiTVWRX156FVbeaGg` |
+| 충코의 철학 | ideas | youtube | `UCUV9bHklegmYbdt091TNvjA` |
+| 셜록현준 (유현준) | ideas | youtube | `UC7uDyFIqExDnfXAIZqumFrQ` |
+| 최준영 박사의 지구본 연구소 | ideas | youtube | `UCstI8HwGQsHdqLDgyH0PImw` |
+| 리뷰엉이 | science | youtube | `UCrBpV_pG2kyMMEHCMTNzjAQ` |
+| 김명섭의 헬스교실 | fitness | youtube | `UCc5mVNF4R6ywMqbty91J0rQ` |
+| 조코딩 | tech | youtube | `UCQNE2JmbasNYbjGAcuBiRRg` |
+| 요즘IT | tech | rss | https://yozm.wishket.com/magazine/feed/ |
+| ㅍㅍㅅㅅ | news | rss | https://www.ppss.kr/rss/allArticle.xml |
+| 슬로우뉴스 | news | rss | https://slownews.kr/feed |
+| 뉴스페퍼민트 | news | rss | https://newspeppermint.com/feed/ |
+
+**Dropped in review (with reasons):** 김지윤 지식Play (user cut), 1분과학 (dead ~1yr),
+과학드림 (biology / low cadence), 피지컬갤러리·핏블리 (variety / mixed-gender), 씨리얼
+(documentary, no single host), 운동하는 물리치료사 자반 (too clinical/rehab), 얄팍한
+코딩사전 (user cut), 디스이즈게임 (RSS hard-403s every path tried).
+
+**Still open / future curation:** a true Not-Just-Bikes-style Korean urbanism/transit-critique
+channel (none found; 셜록현준 carries the urban-design angle for now); literature is still
+one-time PDF/paste imports, not feeds.

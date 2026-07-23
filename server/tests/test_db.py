@@ -85,15 +85,16 @@ def test_existing_books_default_to_library_status(tmp_path):
 def test_feeds_seeded_and_idempotent(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)
+    seed_count = len(db._SEED_FEEDS)  # Epic 14: the full curated roster
     conn = db.get_connection(db_path)
     try:
         rows = conn.execute("SELECT name, url_or_channel_id FROM feeds").fetchall()
-        assert len(rows) == 2
+        assert len(rows) == seed_count
         urls = {r["url_or_channel_id"] for r in rows}
-        assert "https://webzine.inven.co.kr/news/rss.php" in urls
-        assert "https://bbs.ruliweb.com/news/524/rss" in urls
+        assert "https://webzine.inven.co.kr/news/rss.php" in urls  # a seeded RSS feed
+        assert "UCZ0bi2aVJngKLwFTU5g_fLQ" in urls  # a seeded YouTube channel id
 
-        # A hand-added feed must survive re-seeding, and the seeded 2 must not duplicate.
+        # A hand-added feed must survive re-seeding, and seeds must not duplicate.
         conn.execute(
             "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (?, ?, ?, ?)",
             ("My channel", "youtube", "UCxxxx", "gaming"),
@@ -106,12 +107,8 @@ def test_feeds_seeded_and_idempotent(tmp_path):
     conn = db.get_connection(db_path)
     try:
         rows = conn.execute("SELECT name FROM feeds").fetchall()
-        assert len(rows) == 3
-        assert {r["name"] for r in rows} == {
-            "Inven game news",
-            "Ruliweb PS/game news",
-            "My channel",
-        }
+        assert len(rows) == seed_count + 1  # no seed re-duplicated
+        assert "My channel" in {r["name"] for r in rows}
     finally:
         conn.close()
 

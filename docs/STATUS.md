@@ -339,21 +339,39 @@ later epic until the real sources are known.
   all three are easy to revisit later if real usage shows over/under-shooting.
   **Not verified in a browser** (no browser tooling in this environment) — carry
   forward with the other pending browser passes (Epics 4–12).
-- [ ] **Epic 14 — Daily fetch job (capstone).** Windows Task Scheduler script: fetch
-  feeds → clean (Epic 12 importers) → score (Epics 9 + 13) → dedup (`source_ref`) →
-  auto-create a topic-tagged book within a `feeds` difficulty band. Deferred until 10–13
-  exist — it's blocked by its own dependencies (importers, `source_ref` dedup, `feeds`
-  band columns, scorer) and by the doc's "interest list before automation" caution, not
-  by priority. **Acceptance:** a scheduled run auto-imports new items from a `feeds` row
-  within its band, never a duplicate.
-  **Update (2026-07-23, after Epic 15):** the auto-create-directly design above is now
-  superseded in spirit — Epic 15 built the same fetch→clean→score→dedup pipeline but
-  lands results in a browsable `status='candidate'` queue instead of silently creating
-  library books (see Epic 15's own rationale below). What's left for this epic, if it's
-  still wanted, is much smaller: a Task Scheduler entry that calls the now-existing
-  `POST /api/feeds/fetch` on a timer. Left unmarked/unscoped rather than rewritten,
-  since the user may decide the manual "Fetch new candidates" button on `/queue` is
-  enough and this epic isn't needed at all.
+- [x] **Epic 14 — Curated content list + feeds management + YouTube fetch** — done
+  (2026-07-23). Re-scoped from the old "Daily fetch job": Epic 15 already built
+  fetch→clean→score→dedup behind `POST /api/feeds/fetch`, so the user redirected this epic
+  to what actually mattered — **curating the real multi-topic source roster** (the part
+  they "dreaded") and being able to **retouch it later**. Three deliverables:
+  **(1) Curated roster.** 15 verified feeds seeded via `db._SEED_FEEDS`, selected by the
+  assistant to the user's tastes (male-presenter, idea-exposition/science over
+  variety/lifestyle) across gaming/ideas/science/tech/fitness/news — full list + channel
+  IDs + drop reasons in `docs/CONTENT_CATALOG.md`. Every feed verified live (RSS via the
+  app's no-UA `fetch_feed_xml`; YouTube channel IDs resolved via yt-dlp and confirmed
+  against each Atom feed). **(2) YouTube fetch support.** `server/feeds.py`
+  `parse_youtube_feed`/`youtube_feed_url` + `routes/feeds._process_youtube`: a channel's
+  Atom feed → new videos (dedup on `source_ref="yt:<video_id>"`, the same shape as Epic
+  12's manual import, *before* fetching) → Korean transcript via `import_tools.yt_subs`
+  (yt-dlp) → scored `candidate`; no-subs videos are `skipped_no_subs` (not failed);
+  `YOUTUBE_MAX_PER_FETCH=5` bounds per-channel work per run. **(3) Feeds CRUD + `/feeds`
+  page.** GET/POST/PATCH/DELETE `/api/feeds` + a management page (add / inline-edit /
+  enable-disable / delete) so the roster is user-editable at runtime. Also: a per-row
+  **"Translate" button on the Queue** (judge unfamiliar titles fast); shared
+  `web/lib/topics.ts` taxonomy (added ideas/science/tech); a **Feeds** nav link.
+  157/157 tests green (7 new in `test_feeds.py`: youtube parse/create/dedup/no-subs, feeds
+  CRUD, disabled-feed-skip; `test_db.py` seed test generalized to the full roster).
+  `npm run build`/`lint` clean. Docs: CONTENT_CATALOG.md roster, 4 DECISIONS.md entries,
+  ARCHITECTURE.md feeds CRUD + youtube-fetch API rows and feeds-table comment.
+  **Real (non-mocked) sanity check, network-only, no DB writes:** 조코딩's channel feed →
+  real 37k-char transcript, and ㅍㅍㅅㅅ RSS → cleaned article, both end-to-end through the
+  live pipeline. **Not verified in a browser** (no browser tooling here) — the `/feeds`
+  page, the Queue translate button, and a real feed-fetch-into-queue run join the owed
+  Epics 4–16 browser pass.
+  **Still deferred to a later session (user's call):** the Windows **Task Scheduler**
+  timer that pings `POST /api/feeds/fetch` on a schedule, plus the new-content
+  cadence / stale-candidate retention policy. The manual "Fetch new candidates" button
+  covers it until then.
 - [x] **Epic 15 — Curation queue + general difficulty tag + source-type filter** —
   done (2026-07-23). Two gaps from Epics 12/13: no difficulty signal independent of the
   user's personal vocabulary, and no automation path that doesn't risk silently
@@ -476,24 +494,27 @@ later epic until the real sources are known.
 - **The original 9 epics (0-8) are done** and Lute is retired (Epic 8, see above).
   A second cycle — **content sourcing** — is now planned in the "Cycle 2" section
   above. Epics 9 (difficulty scorer), 10 (content catalog), 11 (DB expansion +
-  library UX), 12 (import wiring), 13 (cold-start difficulty signal), and 15
-  (curation queue + general difficulty + source filter) are done. **Epic 14 —
-  Daily fetch job** is unstarted and now much smaller than originally scoped — see
-  its checklist entry's 2026-07-23 update: Epic 15 already built fetch→clean→score→
-  dedup behind `POST /api/feeds/fetch`, so what's left (if still wanted at all,
-  given `/queue`'s manual "Fetch new candidates" button) is just Task Scheduler
-  wiring. **Epic 16 — Stats screen + UI makeover** is now done (2026-07-23);
-  the go-live work split out to **Epic 17 — Go-live** (cold-start + Tailscale,
-  optionally a fuller UI polish pass), which is the last remaining stage.
+  library UX), 12 (import wiring), 13 (cold-start difficulty signal), 15 (curation
+  queue + general difficulty + source filter), and **14 (curated content roster +
+  feeds management + YouTube fetch, done 2026-07-23)** are done. **Epic 16 — Stats
+  screen + UI makeover** is done (2026-07-23). Only **Epic 17 — Go-live** remains
+  (cold-start + Tailscale, optionally a fuller UI polish pass) — the last stage.
+  The Windows **Task Scheduler** timer for `POST /api/feeds/fetch` (the last sliver
+  of the original Epic 14 "daily job") is still deferred by the user's choice; fold
+  it into Epic 17 or a small follow-up whenever the app goes live day-to-day.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
   the same still-owed pass; Epic 16 adds the `/stats` screen, the reader's dwell-gated
-  read logging, and the page-size setting's re-pagination. That pass (paste a YouTube
+  read logging, and the page-size setting's re-pagination; Epic 14 adds the `/feeds`
+  management page, the Queue's per-row Translate button, and a real feed-fetch run (hit
+  "Fetch new candidates" and confirm YouTube channels produce transcript candidates and
+  RSS feeds produce article candidates, all topic-tagged). That pass (paste a YouTube
   URL, upload a PDF, paste an article URL, try the Queue's Fetch/Promote/Discard flow,
-  check the Stats screen after saving words + reading a few pages, change page size and
-  confirm books re-paginate with reading position preserved, plus the older Epic 4-11
-  checklist items above) is still owed whenever the user is ready.
+  add/edit/disable a feed on `/feeds`, check the Stats screen after saving words + reading
+  a few pages, change page size and confirm books re-paginate with reading position
+  preserved, plus the older Epic 4-11 checklist items above) is still owed whenever the
+  user is ready.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

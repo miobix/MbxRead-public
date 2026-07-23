@@ -14,6 +14,10 @@ export default function QueuePage() {
   const [fetchResult, setFetchResult] = useState<FeedFetchResult | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Quick title translation so an unfamiliar candidate can be judged at a glance.
+  const [titleTx, setTitleTx] = useState<Record<number, string>>({});
+  const [txId, setTxId] = useState<number | null>(null);
+
   const refresh = () => {
     api
       .listBooks({ status: "candidate" })
@@ -37,6 +41,21 @@ export default function QueuePage() {
     }
   };
 
+  const translateTitle = async (book: Book) => {
+    setTxId(book.id);
+    try {
+      const r = await api.translate(book.title);
+      setTitleTx((prev) => ({ ...prev, [book.id]: r.translation }));
+    } catch (e) {
+      setTitleTx((prev) => ({
+        ...prev,
+        [book.id]: e instanceof Error ? `(${e.message})` : "(translation failed)",
+      }));
+    } finally {
+      setTxId(null);
+    }
+  };
+
   const decide = async (id: number, status: "library" | "discarded") => {
     setBusyId(id);
     try {
@@ -51,9 +70,14 @@ export default function QueuePage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Books
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/" className="text-sm text-muted hover:text-ink transition-colors">
+          ← Books
+        </Link>
+        <Link href="/feeds" className="text-sm text-muted hover:text-ink transition-colors">
+          Manage feeds
+        </Link>
+      </div>
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold font-serif">Queue</h1>
@@ -111,7 +135,19 @@ export default function QueuePage() {
             className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-2"
           >
             <div>
-              <span className="font-medium">{book.title}</span>
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium">{book.title}</span>
+                <button
+                  onClick={() => translateTitle(book)}
+                  disabled={txId === book.id}
+                  className="shrink-0 text-xs text-muted hover:text-ink transition-colors disabled:opacity-50"
+                >
+                  {txId === book.id ? "…" : "Translate"}
+                </button>
+              </div>
+              {titleTx[book.id] && (
+                <p className="text-sm text-accent mt-0.5">{titleTx[book.id]}</p>
+              )}
               <div className="text-xs text-muted mt-0.5">
                 {[book.source, book.topic, ...book.tags].filter(Boolean).join(" · ")}
               </div>
