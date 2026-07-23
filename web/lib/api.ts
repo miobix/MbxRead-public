@@ -20,6 +20,8 @@ export type Book = {
   status: BookStatus;
   general_coverage: number | null;
   general_level: "easy" | "medium" | "hard" | null;
+  word_count: number | null;
+  duration_seconds: number | null;
 };
 
 export type ScoreResult = {

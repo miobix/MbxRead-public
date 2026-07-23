@@ -206,7 +206,9 @@ def test_fetch_feeds_youtube_creates_candidate(client, db_path, monkeypatch):
         lambda xml: [FeedItem(title="영상", link="https://youtu.be/vid1", guid="vid1")],
     )
     monkeypatch.setattr(
-        feeds_route, "fetch_subs", lambda url: ("영상 제목", "자막 본문 내용입니다.", "vid1")
+        feeds_route,
+        "fetch_subs",
+        lambda url: ("영상 제목", "자막 본문 내용입니다.", "vid1", 612),
     )
 
     resp = client.post("/api/feeds/fetch", params={"feed_id": feed_id})
@@ -220,6 +222,8 @@ def test_fetch_feeds_youtube_creates_candidate(client, db_path, monkeypatch):
     assert candidates[0]["source"] == "yt"
     assert candidates[0]["source_ref"] == "yt:vid1"
     assert candidates[0]["scored_at"] is not None
+    # Epic 18: real yt-dlp duration threaded through the feed-fetch path too.
+    assert candidates[0]["duration_seconds"] == 612
 
 
 def test_fetch_feeds_youtube_skips_video_without_subs(client, db_path, monkeypatch):
@@ -252,7 +256,9 @@ def test_fetch_feeds_youtube_dedupes_on_second_run(client, db_path, monkeypatch)
         "parse_youtube_feed",
         lambda xml: [FeedItem(title="영상", link="https://youtu.be/dup", guid="dup")],
     )
-    monkeypatch.setattr(feeds_route, "fetch_subs", lambda url: ("제목", "본문 내용입니다.", "dup"))
+    monkeypatch.setattr(
+        feeds_route, "fetch_subs", lambda url: ("제목", "본문 내용입니다.", "dup", None)
+    )
 
     first = client.post("/api/feeds/fetch", params={"feed_id": feed_id}).json()
     assert first["candidates_created"] == 1

@@ -508,19 +508,32 @@ later epic until the real sources are known.
   the Queue visual overhaul are Epic 18 scope, not touched here.
   **Not verified in a browser** (no browser tooling in this environment) — do a
   real pass together with the other owed epics: change the retention setting in
-  `/settings` and confirm it round-trips; register the Task Scheduler entry per the
-  new README section and confirm a triggered run appends to `scripts/
-  fetch_feeds.log` and updates `last_fetch_attempt`; skim the built UI for the new
-  "Library"/"+ Add"/"Book"-badge copy.
-- [ ] **Epic 18 — Queue browsing UX: cards, chips, sort/filter, length, source link,
-  back-to-top.** Planned 2026-07-23 — full scope in `docs/SPEC.md` §10. Card/list
-  toggle (localStorage-persisted, cards default, no images); one colored chip per
-  source type (YouTube/Article); a real length stat (`word_count` for text, actual
-  `duration_seconds` pulled from yt-dlp's info dict for video — not a transcript-
-  based estimate); an "↗ open source" link per item; a sort-by picker (newest
-  fetched / easiest / shortest, mirroring `/`'s existing "Easiest unread" pattern);
-  a back-to-top floating button; the Epic 17 `last_fetch_attempt` timestamp
-  surfaced at the top of the page.
+  `/settings` and confirm it round-trips; skim the built UI for the new
+  "Library"/"+ Add"/"Book"-badge copy. **Registering `scripts/fetch_feeds.ps1` in
+  Task Scheduler is deliberately NOT part of this pass** — the user confirmed
+  (2026-07-23) the script itself is fine as written, but actually wiring it into
+  Task Scheduler on their machine is Epic 20 (go-live) work, not now.
+- [x] **Epic 18 — Queue browsing UX: cards, chips, sort/filter, length, source
+  link, back-to-top** — done (2026-07-23), as planned in `docs/SPEC.md` §10 with
+  no deviations. `import_tools/yt_subs.fetch_subs()` now returns a 4-tuple
+  (added real `duration_seconds` from yt-dlp's own metadata — not a transcript
+  estimate); every call site (`routes/imports.py`, `routes/feeds.py`, the CLI)
+  updated. `books` gained `word_count` (every source, computed in
+  `insert_book()`) and `duration_seconds` (yt only) as additive columns.
+  Frontend: `web/lib/chips.tsx` (`SourceChip`, palette-token colors, no new
+  hues), `web/lib/length.ts` (`formatLength` for display, `estimatedMinutes`
+  — a 250-wpm heuristic used only to rank the "Shortest first" sort, never
+  shown). `web/app/queue/page.tsx` rewritten: Cards/List toggle
+  (`localStorage`-persisted, cards default), a sort-by picker (newest fetched
+  / easiest / shortest), the Epic 17 `last_fetch_attempt` line, an "↗"
+  source link per item, a back-to-top floating button, and the fetch-result
+  panel now also shows Epic 17's `expired` count. 172/172 tests green (1 new
+  in `test_db.py`; existing YouTube-import tests extended with
+  `duration_seconds`/`word_count` assertions). `npm run build`/`lint` clean.
+  **Not verified in a browser** (no browser tooling in this environment) — the
+  card/list toggle, chips, sort, length stat, source link, and back-to-top all
+  join the already-owed browser/touch pass; also worth a real feed-fetch of an
+  actual YouTube video to confirm `duration_seconds` matches its real runtime.
 - [ ] **Epic 19 — Promotion stats: what gets read vs. what doesn't.** Planned
   2026-07-23 — full scope in `docs/SPEC.md` §10. New `feed_id` provenance column on
   `books` (replaces the fragile tags-as-join-key back to a feed); a `discard_reason`
@@ -532,8 +545,11 @@ later epic until the real sources are known.
 - [ ] **Epic 20 — Go-live (final stage, renumbered from Epic 17 on 2026-07-23 to make
   room for Epics 17-19 above).** Execute Epic 8's still-pending cold-start +
   Tailscale verification and go live day-to-day, optionally with a fuller per-page UI
-  polish pass. **Acceptance:** a verified cold-start `start.ps1` run reachable from the
-  phone over Tailscale.
+  polish pass. **Also register `scripts/fetch_feeds.ps1` in Windows Task Scheduler
+  here** (per the README section Epic 17 added) — the user confirmed 2026-07-23 the
+  script itself needs no changes, actually wiring it up on their machine is part of
+  go-live, not before. **Acceptance:** a verified cold-start `start.ps1` run reachable
+  from the phone over Tailscale, and the scheduled fetch task registered and firing.
 
 ## Known issues / deviations
 
@@ -558,15 +574,14 @@ later epic until the real sources are known.
   feeds management + YouTube fetch, done 2026-07-23)** are done. **Epic 16 — Stats
   screen + UI makeover** is done (2026-07-23).
 - **2026-07-23 planning session: Epics 17-19 added, Go-live renumbered to Epic 20**,
-  full scope in `docs/SPEC.md` §10 — see that session's decisions summarized in the
-  Epic 18/19 checklist entries below (chip/length/sort design for 18; `feed_id`/
-  `discard_reason`/stats grouping for 19). **Epic 17 is now done** (see above) — next
-  up is **Epic 18** (Queue cards/chips/sort/length/source-link/back-to-top), which
-  is where `last_fetch_attempt` (already returned by `GET /api/settings` since
-  Epic 17) actually gets displayed on the page. Epic 19 has one small forward
-  dependency worth remembering when it's picked up: it revisits Epic 17's
-  `_expire_stale_candidates()` query in `routes/feeds.py` to also set
-  `discard_reason='expired'` once that column exists.
+  full scope in `docs/SPEC.md` §10. **Epics 17 and 18 are now both done** (see above)
+  — next up is **Epic 19** (promotion stats: `feed_id` provenance, `discard_reason`,
+  the `curation` stats breakdown). Epic 19 has one small forward dependency worth
+  remembering when it's picked up: it revisits Epic 17's `_expire_stale_candidates()`
+  query in `routes/feeds.py` to also set `discard_reason='expired'` once that column
+  exists. Separately, registering `scripts/fetch_feeds.ps1` in the user's actual
+  Windows Task Scheduler is deliberately deferred to **Epic 20** (go-live), not any
+  epic before it — the user confirmed 2026-07-23 the script itself is fine as-is.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to

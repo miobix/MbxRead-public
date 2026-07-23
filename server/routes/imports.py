@@ -35,7 +35,7 @@ class UrlImport(BaseModel):
 @router.post("/youtube", status_code=201)
 def import_youtube(body: UrlImport, conn: sqlite3.Connection = Depends(db_module.get_db)):
     try:
-        title, text, video_id = fetch_subs(body.url)
+        title, text, video_id, duration = fetch_subs(body.url)
     except Exception as e:
         return JSONResponse(status_code=502, content={"error": str(e)})
     try:
@@ -48,6 +48,7 @@ def import_youtube(body: UrlImport, conn: sqlite3.Connection = Depends(db_module
             tags=body.tags,
             source_url=body.url,
             source_ref=f"yt:{video_id}",
+            duration_seconds=duration,
         )
     except DuplicateSourceRef:
         raise HTTPException(status_code=409, detail="this video has already been imported")

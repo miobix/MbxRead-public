@@ -7,7 +7,9 @@ from server.routes import imports as imports_route
 
 def test_youtube_import_creates_scored_ready_book(client, monkeypatch):
     monkeypatch.setattr(
-        imports_route, "fetch_subs", lambda url: ("영상 제목", "안녕하세요 여러분.", "abc123")
+        imports_route,
+        "fetch_subs",
+        lambda url: ("영상 제목", "안녕하세요 여러분.", "abc123", 754),
     )
 
     resp = client.post(
@@ -24,11 +26,14 @@ def test_youtube_import_creates_scored_ready_book(client, monkeypatch):
     assert body["topic"] == "gaming"
     assert body["tags"] == ["대도서관"]
     assert body["page_count"] >= 1
+    # Epic 18: real yt-dlp duration round-trips; word_count is derived from the text.
+    assert body["duration_seconds"] == 754
+    assert body["word_count"] == 2
 
 
 def test_youtube_import_dedupes_on_video_id(client, monkeypatch):
     monkeypatch.setattr(
-        imports_route, "fetch_subs", lambda url: ("제목", "본문 내용입니다.", "dupe1")
+        imports_route, "fetch_subs", lambda url: ("제목", "본문 내용입니다.", "dupe1", None)
     )
 
     first = client.post("/api/import/youtube", json={"url": "https://youtu.be/dupe1"})
@@ -68,6 +73,8 @@ def test_article_import_creates_book(client, monkeypatch):
     assert body["title"] == "기사 제목"
     assert body["source"] == "article"
     assert body["source_ref"] == "article:https://example.com/a"
+    assert body["word_count"] == 3
+    assert body["duration_seconds"] is None
 
 
 def test_article_import_dedupes_on_url(client, monkeypatch):

@@ -214,7 +214,7 @@ def _process_youtube(conn, feed, known, frequency) -> dict:
             break
         processed += 1
         try:
-            title, text, _vid = fetch_subs(item.link)
+            title, text, _vid, duration = fetch_subs(item.link)
         except NoSubtitlesError:
             summary["skipped_no_subs"] += 1
             continue
@@ -223,13 +223,14 @@ def _process_youtube(conn, feed, known, frequency) -> dict:
             continue
         _insert_and_score(
             conn, title or item.title, text, "yt", item.link, source_ref,
-            feed, known, frequency, summary,
+            feed, known, frequency, summary, duration_seconds=duration,
         )
     return summary
 
 
 def _insert_and_score(
-    conn, title, text, source, source_url, source_ref, feed, known, frequency, summary
+    conn, title, text, source, source_url, source_ref, feed, known, frequency, summary,
+    duration_seconds=None,
 ) -> None:
     try:
         book = insert_book(
@@ -242,6 +243,7 @@ def _insert_and_score(
             source_url=source_url,
             source_ref=source_ref,
             status="candidate",
+            duration_seconds=duration_seconds,
         )
     except DuplicateSourceRef:
         summary["skipped_duplicate"] += 1

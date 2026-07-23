@@ -130,6 +130,7 @@ def test_list_books_shape(client):
             "coverage", "new_per_page", "scored_at",
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
             "status", "general_coverage", "general_level",
+            "word_count", "duration_seconds",
         }
         assert book["status"] == "library"
 

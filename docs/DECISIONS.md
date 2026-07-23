@@ -640,3 +640,24 @@ was added next to `pdf`/`epub`-sourced rows on `/` to reserve that specific word
 (`Book`, `book_id`, `NewWordsPerBook`, etc.) are unchanged — renaming those would be a much
 bigger, purely-cosmetic migration for zero user-facing benefit beyond what the copy pass
 already delivers.
+
+## 2026-07-23 — Epic 18: source-type chips reuse the existing palette, no new hues
+Considered per-source arbitrary Tailwind colors (red for YouTube, blue for articles,
+etc.), rejected in favor of the existing warm "paper" theme tokens (`accent`/`border`/
+`muted`) — the palette was deliberately kept small and cohesive (see the Epic 16-era
+DECISIONS entry on the Tailwind redesign), and only two source types reach the Queue
+today. `web/lib/chips.tsx` stays a one-file lookup table, easy to extend with a new
+hue if a third source type genuinely needs its own color later.
+
+## 2026-07-23 — Epic 18: word_count computed for every source, not just text ones
+`insert_book()` derives `word_count` from `text.split()` unconditionally rather than
+only for `article`/`pdf`/`epub` — simpler (one code path, no source-type branching)
+and harmless for `yt` (a transcript's word count is still a real, useful number,
+`formatLength()` just prefers `duration_seconds` when both are present).
+
+## 2026-07-23 — Epic 18: "Shortest first" sort uses a 250-wpm heuristic, never shown
+Ranking a short article against a 2-hour video transcript needs one common unit.
+`estimatedMinutes()` (`web/lib/length.ts`) converts both to a rough "minutes to
+consume" number using a standard reading-speed constant — but only to order the list;
+`formatLength()` always displays the *exact* word count or *exact* duration, never the
+estimate, so the heuristic's imprecision never reaches the user as a stated fact.

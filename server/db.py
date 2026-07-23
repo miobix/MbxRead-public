@@ -103,6 +103,12 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         ),
         "general_coverage": "REAL",
         "general_level": "TEXT",
+        # Epic 18: length stat for the Queue. word_count is set at insert time for
+        # every source; duration_seconds is yt-dlp's real video length (not a
+        # transcript estimate), set only for source='yt'. Both NULL for anything
+        # inserted before this epic (backfilling is not attempted).
+        "word_count": "INTEGER",
+        "duration_seconds": "INTEGER",
     },
 }
 

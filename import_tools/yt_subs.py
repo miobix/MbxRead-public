@@ -18,8 +18,12 @@ class NoSubtitlesError(Exception):
     """Raised when a video has no Korean subtitles (manual or auto-generated)."""
 
 
-def fetch_subs(url: str) -> tuple[str, str, str]:
-    """Returns (title, cleaned_text, video_id)."""
+def fetch_subs(url: str) -> tuple[str, str, str, int | None]:
+    """Returns (title, cleaned_text, video_id, duration_seconds).
+
+    duration_seconds is yt-dlp's own info["duration"] (real video length, not a
+    transcript-based estimate) — Epic 18 needs it for the Queue's length stat.
+    None on the rare video where yt-dlp doesn't report it."""
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             "skip_download": True,
@@ -34,10 +38,11 @@ def fetch_subs(url: str) -> tuple[str, str, str]:
             info = ydl.extract_info(url, download=True)
         title = info.get("title", "untitled")
         video_id = info["id"]
+        duration = info.get("duration")
         vtts = list(Path(tmp).glob("*.vtt"))
         if not vtts:
             raise NoSubtitlesError("No Korean subtitles found for this video.")
-        return title, clean_vtt(vtts[0].read_text(encoding="utf-8")), video_id
+        return title, clean_vtt(vtts[0].read_text(encoding="utf-8")), video_id, duration
 
 
 def clean_vtt(vtt: str) -> str:
@@ -68,7 +73,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
     try:
-        title, text, _video_id = fetch_subs(sys.argv[1])
+        title, text, _video_id, _duration = fetch_subs(sys.argv[1])
     except NoSubtitlesError as e:
         raise SystemExit(str(e))
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(

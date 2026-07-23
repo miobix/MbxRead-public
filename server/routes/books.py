@@ -71,6 +71,8 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "status": row["status"],
         "general_coverage": row["general_coverage"],
         "general_level": row["general_level"],
+        "word_count": row["word_count"],
+        "duration_seconds": row["duration_seconds"],
     }
 
 
@@ -97,15 +99,23 @@ def insert_book(
     source_ref: str | None = None,
     fetched: str | None = None,
     status: BookStatus = "library",
+    duration_seconds: int | None = None,
 ) -> dict:
     """Shared by the paste/txt route, the Epic 12 importers, and Epic 15's feed
     fetcher: insert the book row + split pages, or raise DuplicateSourceRef on a
-    source_ref collision."""
+    source_ref collision. word_count (Epic 18) is derived from `text` for every
+    source; duration_seconds is only ever passed for source='yt' (real yt-dlp
+    video length, not a transcript-based estimate)."""
+    word_count = len(text.split())
     try:
         cur = conn.execute(
-            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, fetched, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (title, source, topic, json.dumps(tags or []), source_url, source_ref, fetched, status),
+            "INSERT INTO books (title, source, topic, tags, source_url, source_ref, "
+            "fetched, status, word_count, duration_seconds) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                title, source, topic, json.dumps(tags or []), source_url, source_ref,
+                fetched, status, word_count, duration_seconds,
+            ),
         )
     except sqlite3.IntegrityError:
         raise DuplicateSourceRef(source_ref)

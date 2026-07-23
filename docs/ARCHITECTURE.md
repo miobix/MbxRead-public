@@ -185,7 +185,7 @@ book has at least one (possibly empty) page.
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15) |
+| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18) |
 | POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)** |
 | GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
 | PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?, status?}` | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)** |
@@ -200,7 +200,7 @@ book has at least one (possibly empty) page.
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
 | GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
 | PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days` Epic 17)** |
-| POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12)** |
+| POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
 | POST `/api/import/epub` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated) | created book (source `epub`, `source_ref="epub:<sha256 of file bytes>"`); 502 `{error}` if extraction fails or the EPUB has no extractable text; 409 on re-upload of the same bytes — **implemented (EPUB import, 2026-07-23)** |
@@ -450,6 +450,44 @@ across nav links, the add-content modal ("Add to Library", "+ Add"), and
 renaming (see `docs/DECISIONS.md`). `last_fetch_attempt`'s actual on-page
 display (and the rest of the Queue UX — cards, chips, sort, length, source
 link, back-to-top) is Epic 18 scope, not this one.
+
+**Epic 18 status:** Queue browsing UX — cards, chips, sort/filter, length,
+source link, back-to-top. `import_tools/yt_subs.fetch_subs()`'s return grew a
+4th value, `duration_seconds` (`info["duration"]` off the yt-dlp info dict
+already being read — real video length, not a transcript-based estimate);
+every call site updated for the new 4-tuple: `routes/imports.py`'s `POST
+/api/import/youtube`, `routes/feeds.py`'s `_process_youtube`/
+`_insert_and_score` (gained an optional `duration_seconds` passthrough
+parameter), and the CLI `__main__`. `books` gained two additive columns:
+`word_count` (`len(text.split())`, computed in `insert_book()` for every
+source, so every path — paste, all four importers, the feed fetcher — gets it
+for free) and `duration_seconds` (NULL except for `source='yt'`). Frontend:
+`web/lib/chips.tsx` (`SourceChip`) maps `source` → a small colored badge
+(`yt`/`article` today, extendable), styled from the existing warm-palette
+tokens (`accent`/`border`/`muted`) rather than new hues, so it stays
+theme-aware without touching `globals.css`. `web/lib/length.ts` exposes
+`formatLength()` (exact word count or exact duration, whichever field is
+non-null — never an estimate) and `estimatedMinutes()` (a 250-wpm heuristic
+used *only* to rank mixed source types against each other for the "Shortest
+first" sort — never displayed). `web/app/queue/page.tsx` rewritten: a Cards/
+List view toggle (`localStorage["queueViewMode"]`, read after mount so the
+static export's build-time render never touches `localStorage`, cards
+default), a sort-by `<select>` (newest fetched / easiest first / shortest
+first — "easiest" mirrors `/`'s existing `new_per_page`-ascending comparator
+exactly), the Epic 17 `last_fetch_attempt` line at the top (re-fetched after
+every manual "Fetch new candidates" click so it updates without a reload),
+an "↗" source-link per item using the existing `source_url` column, and a
+back-to-top floating button once scrolled past ~2 viewport heights. The fetch-
+result panel also now surfaces Epic 17's `expired` count. 172/172 tests green
+(1 new: `test_db.py`'s migration idempotency for the two new columns; existing
+YouTube-import tests in `test_imports.py`/`test_feeds.py` extended with
+`duration_seconds`/`word_count` assertions, and `test_books.py`'s book-shape
+key-set test updated for the two new fields). `npm run build`/`lint` clean.
+**Not verified in a browser** (no browser tooling in this environment) — the
+card/list toggle, chips, sort, length stat, source link, and back-to-top all
+join the already-owed browser/touch pass; a real feed-fetch pulling a real
+YouTube video (to confirm `duration_seconds` reflects its actual length, not
+an estimate) is worth doing alongside that pass.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json
