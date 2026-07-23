@@ -33,6 +33,7 @@ korean-reader/
                            now also imported as libraries by routes/imports.py (Epic 12)
   docs/                    living design docs (see Executor conventions)
   requirements.txt         direct Python deps
+  scripts/fetch_feeds.ps1  Task Scheduler action: POSTs /api/feeds/fetch — Epic 17
   start.ps1                single-server launcher — rewritten in Epic 8
   reader.db                app data — never commit
 ```
@@ -197,18 +198,19 @@ book has at least one (possibly empty) page.
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size}` — **implemented (Epic 7, `page_size` Epic 16)** |
-| PUT `/api/settings` | any subset of the above | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16)** |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
+| PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
+| POST `/api/import/epub` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated) | created book (source `epub`, `source_ref="epub:<sha256 of file bytes>"`); 502 `{error}` if extraction fails or the EPUB has no extractable text; 409 on re-upload of the same bytes — **implemented (EPUB import, 2026-07-23)** |
 | POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
 | POST `/api/books/{id}/score` | – | full updated book row, personal + general difficulty cached under one `scored_at` — **implemented (Epic 9, general fields Epic 15)** |
 | GET `/api/feeds` | – | `[{id,name,type,url_or_channel_id,topic,enabled,difficulty_min,difficulty_max,last_fetched}]` — **implemented (Epic 14)** |
 | POST `/api/feeds` | `{name, type, url_or_channel_id, topic?, enabled?, difficulty_min?, difficulty_max?}` | created feed — **implemented (Epic 14)** |
 | PATCH `/api/feeds/{id}` | any editable field | updated feed — **implemented (Epic 14)** |
 | DELETE `/api/feeds/{id}` | – | 204 — **implemented (Epic 14)** |
-| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)** |
+| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17)** |
 | POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
 | GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}}` — **implemented (Epic 16)** |
 
@@ -299,9 +301,15 @@ extractable article text. Dedup keys: YouTube on `yt:<video_id>` (from yt-dlp's
 isn't detected, judged acceptable for a personal single-user app); PDF on
 `pdf:<sha256 of the uploaded bytes>` (works even though PDFs have no natural id;
 re-uploading the identical file always dedupes, a re-export with different bytes
-won't — same rationale). All three routes catch their fetch/extract exception and
-return `502 {"error": ...}` (matching `routes/translate.py`'s existing convention),
-then catch `DuplicateSourceRef` separately for the 409. Tests
+won't — same rationale); EPUB on `epub:<sha256 of the uploaded bytes>` (same
+byte-hash rationale as PDF). The EPUB path uses `import_tools/epub_text.py`
+(`ebooklib` walks the spine in reading order; a small stdlib `HTMLParser`
+subclass strips each XHTML document to text, so no BeautifulSoup dependency) and
+additionally returns `502` when the extracted text is empty (a DRM'd or
+image-only EPUB yields nothing to read). The fetch/extract routes catch their
+exception and return `502 {"error": ...}` (matching `routes/translate.py`'s
+existing convention), then catch `DuplicateSourceRef` separately for the 409.
+Tests
 (`server/tests/test_imports.py`) monkeypatch `imports.fetch_subs` /
 `imports.fetch_article` / `imports.extract_pdf` at the route-module boundary, same
 convention as `test_translate.py`; PDF upload tests exercise real multipart
@@ -409,6 +417,39 @@ established). Deliberately not run through `POST /api/feeds/fetch` against the
 user's real `reader.db`, per the standing convention. **Not verified in a browser**
 (no browser tooling in this environment) — the Queue page and source filter join
 the already-owed Epics 4-13 pass.
+
+**Epic 17 status:** fetch automation, candidate retention, and a terminology pass.
+`scripts/fetch_feeds.ps1` (new) is the Task Scheduler action — a one-shot
+`Invoke-RestMethod` POST to the already-existing `/api/feeds/fetch`, logging its
+result (or error) to `scripts/fetch_feeds.log`; no new server code is needed for
+automation itself, since it reuses the same endpoint the Queue's manual button
+calls (the user confirmed the server is expected to run continuously on
+Tailscale, so no standalone DB-only fetch path was built). `routes/settings.py`
+gained `candidate_retention_days` (default 7, `SettingsPut`-editable,
+`ge=1,le=90`) and `last_fetch_attempt` (nullable, **deliberately absent from
+`SettingsPut`** — system-stamped only, via the new `stamp_last_fetch_attempt()`
+helper, using SQLite's own `CURRENT_TIMESTAMP` to match every other
+TIMESTAMP-shaped value in the app). `routes/feeds.py`'s `fetch_feeds()` now does
+two things before it touches any feed: stamps `last_fetch_attempt`, then runs
+`_expire_stale_candidates()` — a single `UPDATE books SET status='discarded'
+WHERE status='candidate' AND created <= datetime('now', '-N days')` (N from the
+retention setting), reported back as a new `expired` count in the response.
+Both run unconditionally on every call (scheduled, manual whole-roster, or a
+single-`feed_id` retry) since the check is cheap/idempotent — see
+`docs/DECISIONS.md` for why this doesn't need a separate scheduled job, and why
+expiry reuses the existing `status='discarded'` value instead of a new enum
+member. 171/171 tests green (8 new: `test_settings.py`'s
+`candidate_retention_days` round-trip/bounds and the ignored-in-PUT-body case
+for `last_fetch_attempt`; `test_feeds.py`'s expiry/retention-setting/
+within-window/last-fetch-attempt-stamped-even-on-total-failure cases).
+`npm run build`/`lint` clean. Frontend: `/settings` gained a "Queue candidate
+retention" numeric input; the umbrella word "book(s)" was swept to **"Library"**
+across nav links, the add-content modal ("Add to Library", "+ Add"), and
+`/stats` headings/milestones, with **"Book"** now reserved as a small badge on
+`pdf`/`epub`-sourced rows on `/` — copy-layer only, no schema/table/column/API
+renaming (see `docs/DECISIONS.md`). `last_fetch_attempt`'s actual on-page
+display (and the rest of the Queue UX — cards, chips, sort, length, source
+link, back-to-top) is Epic 18 scope, not this one.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

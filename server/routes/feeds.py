@@ -12,6 +12,10 @@
   Every item is scored (personal + general difficulty) and deduped on source_ref
   BEFORE the expensive fetch. Per-feed/per-item failures are isolated so one bad feed
   or article never blocks the rest (same pattern as anki_sync's per-note failures).
+  Epic 17: every call (scheduled via Task Scheduler + scripts/fetch_feeds.ps1, or the
+  Queue's manual button) first stamps settings.last_fetch_attempt, then auto-discards
+  any candidate older than settings.candidate_retention_days (see
+  _expire_stale_candidates) before touching any feed.
 """
 import sqlite3
 from typing import Literal
@@ -31,6 +35,7 @@ from ..feeds import (
 )
 from import_tools.yt_subs import NoSubtitlesError, fetch_subs
 
+from . import settings as settings_route
 from .books import DuplicateSourceRef, _score_and_cache, insert_book
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
@@ -245,10 +250,32 @@ def _insert_and_score(
     summary["created"] += 1
 
 
+def _expire_stale_candidates(conn: sqlite3.Connection) -> int:
+    """Auto-discards candidates older than the configured retention window (Epic
+    17). Reuses the existing status='discarded' value exactly — permanent, same as
+    a manual discard — rather than a new status, per the user's confirmed choice.
+    Runs on every call (scheduled, manual whole-roster, or a single-feed retry):
+    it's a single indexed UPDATE, cheap and idempotent, so there's no reason to
+    special-case any trigger path."""
+    retention_days = settings_route.get_candidate_retention_days(conn)
+    cur = conn.execute(
+        "UPDATE books SET status = 'discarded' "
+        "WHERE status = 'candidate' AND created <= datetime('now', ?)",
+        (f"-{retention_days} days",),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 @router.post("/fetch")
 def fetch_feeds(
     feed_id: int | None = None, conn: sqlite3.Connection = Depends(db_module.get_db)
 ):
+    # Stamped first, before touching any feed, so a run that errors out partway
+    # still records that an attempt happened (Epic 17).
+    settings_route.stamp_last_fetch_attempt(conn)
+    expired = _expire_stale_candidates(conn)
+
     query = "SELECT * FROM feeds WHERE enabled = 1"
     params: list = []
     if feed_id is not None:
@@ -289,5 +316,6 @@ def fetch_feeds(
         "checked_feeds": checked_feeds,
         "skipped_feed_types": skipped_feed_types,
         "candidates_created": candidates_created,
+        "expired": expired,
         "feeds": feed_summaries,
     }

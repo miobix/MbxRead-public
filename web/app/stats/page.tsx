@@ -19,7 +19,7 @@ export default function StatsPage() {
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Link href="/" className="text-sm text-muted hover:text-ink transition-colors">
-          ← Books
+          ← Library
         </Link>
         <h1 className="text-2xl font-semibold font-serif">Stats</h1>
       </div>
@@ -47,7 +47,7 @@ function HeroRow({ stats }: { stats: Stats }) {
   const tiles = [
     { label: "Words learned", value: totals.words_total, hint: `${totals.words_known} known` },
     { label: "Day streak", value: streak.current, hint: `best ${streak.longest} 🔥` },
-    { label: "Books finished", value: totals.books_finished, hint: "" },
+    { label: "Finished", value: totals.books_finished, hint: "" },
     { label: "This week", value: totals.words_week, hint: `${totals.pages_week} pages` },
   ];
   return (
@@ -155,7 +155,7 @@ function NewWordsPerBook({ stats }: { stats: Stats }) {
   if (rows.length === 0) {
     return (
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted">New words per book</h2>
+        <h2 className="text-sm font-medium text-muted">New words per item</h2>
         <p className="text-xs text-muted">
           Save words while reading and this line appears — watch it flatten as a genre or
           author stops surprising you.
@@ -177,9 +177,9 @@ function NewWordsPerBook({ stats }: { stats: Stats }) {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium text-muted">New words per book</h2>
+      <h2 className="text-sm font-medium text-muted">New words per item</h2>
       <div className="rounded-xl border border-border bg-surface p-3 shadow-sm">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="New words per book">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="New words per item">
           <polyline
             points={points}
             fill="none"
@@ -199,7 +199,7 @@ function NewWordsPerBook({ stats }: { stats: Stats }) {
         </svg>
       </div>
       <p className="text-xs text-muted">
-        {rows.length} book{rows.length === 1 ? "" : "s"} · newest on the right
+        {rows.length} item{rows.length === 1 ? "" : "s"} · newest on the right
       </p>
     </section>
   );
@@ -285,7 +285,7 @@ function Milestones({ stats }: { stats: Stats }) {
 
   push(stats.totals.words_total, wordTiers, (t) => `${t} words`);
   push(stats.streak.longest, streakTiers, (t) => `${t}-day streak`);
-  push(stats.totals.books_finished, bookTiers, (t) => `${t} books`);
+  push(stats.totals.books_finished, bookTiers, (t) => `${t} finished`);
 
   return (
     <section className="flex flex-col gap-2 pb-4">

@@ -35,6 +35,7 @@ export type FeedFetchResult = {
   checked_feeds: number;
   skipped_feed_types: number;
   candidates_created: number;
+  expired: number;
   feeds: {
     id: number;
     name: string;
@@ -127,6 +128,10 @@ export type Settings = {
   default_deck: string;
   translator_backend: "deepl" | "claude";
   page_size: number;
+  candidate_retention_days: number;
+  // System-managed (stamped by POST /api/feeds/fetch) — read-only in the UI, see
+  // SettingsPut on the backend, which deliberately has no field for this.
+  last_fetch_attempt: string | null;
 };
 
 export type StatsActivity = { date: string; words: number; pages: number };
@@ -300,6 +305,15 @@ export const api = {
     if (body.tags) fd.set("tags", body.tags);
     if (body.pages) fd.set("pages", body.pages);
     return requestForm<Book>("/import/pdf", fd);
+  },
+
+  importEpub: (body: { file: File; title?: string; topic?: string; tags?: string }) => {
+    const fd = new FormData();
+    fd.set("file", body.file);
+    if (body.title) fd.set("title", body.title);
+    if (body.topic) fd.set("topic", body.topic);
+    if (body.tags) fd.set("tags", body.tags);
+    return requestForm<Book>("/import/epub", fd);
   },
 
   fetchFeeds: () => request<FeedFetchResult>("/feeds/fetch", { method: "POST" }),

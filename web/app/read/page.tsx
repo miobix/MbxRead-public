@@ -59,7 +59,7 @@ function ReadPageContent() {
     api
       .getBook(bookId)
       .then((book) => loadPage(bookId, book.current_page))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load book."));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load item."));
   }, [bookId, loadPage]);
 
   // Log a genuine read once the current page has stayed visible for the dwell
@@ -181,11 +181,11 @@ function ReadPageContent() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Books
+        ← Library
       </Link>
 
       {bookId === null && (
-        <p className="text-danger text-sm">No book selected.</p>
+        <p className="text-danger text-sm">No item selected.</p>
       )}
 
       {error && <p className="text-danger text-sm">{error}</p>}

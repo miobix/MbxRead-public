@@ -8,3 +8,4 @@ web/node_modules/
 web/.next/
 web/out/
 .idea/
+scripts/fetch_feeds.log

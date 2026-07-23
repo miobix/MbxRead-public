@@ -328,3 +328,68 @@ def test_fetch_feeds_isolates_per_item_extraction_failure(client, db_path, monke
     assert body["candidates_created"] == 1
     assert body["feeds"][0]["failed"] == 1
     assert len(client.get("/api/books?status=candidate").json()) == 1
+
+
+# --- Retention / auto-expiry + last-fetch-attempt (Epic 17) ---
+
+
+def _seed_candidate(db_path, title: str, days_old: int) -> None:
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO books (title, source, status, created) "
+        "VALUES (?, 'article', 'candidate', datetime('now', ?))",
+        (title, f"-{days_old} days"),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_fetch_feeds_expires_stale_candidates(client, db_path):
+    _seed_candidate(db_path, "Old candidate", days_old=8)  # older than the 7-day default
+    _seed_candidate(db_path, "Fresh candidate", days_old=1)
+
+    # feed_id filters to a feed that doesn't exist, isolating expiry from any actual
+    # fetch — expiry runs unconditionally before the feed loop regardless.
+    body = client.post("/api/feeds/fetch", params={"feed_id": 999999}).json()
+    assert body["expired"] == 1
+    assert body["checked_feeds"] == 0
+
+    remaining = client.get("/api/books?status=candidate").json()
+    assert [b["title"] for b in remaining] == ["Fresh candidate"]
+
+    discarded_titles = {b["title"] for b in client.get("/api/books?status=discarded").json()}
+    assert "Old candidate" in discarded_titles
+
+
+def test_fetch_feeds_expiry_respects_custom_retention_setting(client, db_path):
+    client.put("/api/settings", json={"candidate_retention_days": 2})
+    _seed_candidate(db_path, "Three days old", days_old=3)
+
+    body = client.post("/api/feeds/fetch", params={"feed_id": 999999}).json()
+    assert body["expired"] == 1
+    assert client.get("/api/books?status=candidate").json() == []
+
+
+def test_fetch_feeds_does_not_expire_candidates_within_the_window(client, db_path):
+    _seed_candidate(db_path, "Two days old", days_old=2)
+
+    body = client.post("/api/feeds/fetch", params={"feed_id": 999999}).json()
+    assert body["expired"] == 0
+    assert len(client.get("/api/books?status=candidate").json()) == 1
+
+
+def test_fetch_feeds_stamps_last_fetch_attempt(client):
+    assert client.get("/api/settings").json()["last_fetch_attempt"] is None
+    client.post("/api/feeds/fetch", params={"feed_id": 999999})
+    assert client.get("/api/settings").json()["last_fetch_attempt"] is not None
+
+
+def test_fetch_feeds_stamps_last_fetch_attempt_even_when_every_feed_errors(
+    client, monkeypatch
+):
+    def raise_error(url):
+        raise FeedFetchError("boom")
+
+    monkeypatch.setattr(feeds_route, "fetch_feed_xml", raise_error)
+    client.post("/api/feeds/fetch")
+    assert client.get("/api/settings").json()["last_fetch_attempt"] is not None

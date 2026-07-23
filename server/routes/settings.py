@@ -15,11 +15,20 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # fits without scrolling. Tunable; changing it re-paginates the whole library.
 DEFAULT_PAGE_SIZE = 650
 
+# Epic 17: how many days an unpromoted/undiscarded candidate sits in the Queue
+# before the fetch job auto-discards it (see _expire_stale_candidates in
+# routes/feeds.py). Tunable from /settings.
+DEFAULT_CANDIDATE_RETENTION_DAYS = 7
+
 DEFAULTS = {
     "decks": ["Korean"],
     "default_deck": "Korean",
     "translator_backend": "deepl",
     "page_size": DEFAULT_PAGE_SIZE,
+    "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
+    # Epic 17: system-managed, not user-editable — see SettingsPut below. Stamped by
+    # POST /api/feeds/fetch (scheduled or manual) via stamp_last_fetch_attempt().
+    "last_fetch_attempt": None,
 }
 
 
@@ -28,6 +37,10 @@ class SettingsPut(BaseModel):
     default_deck: str | None = None
     translator_backend: str | None = None
     page_size: int | None = Field(default=None, ge=100, le=5000)
+    candidate_retention_days: int | None = Field(default=None, ge=1, le=90)
+    # last_fetch_attempt is deliberately NOT a field here — it's stamped internally
+    # by the fetch job, never by the user, so a PUT body can't overwrite it (an
+    # unknown field in the request body is simply ignored by pydantic).
 
 
 def _read(conn: sqlite3.Connection) -> dict:
@@ -38,6 +51,24 @@ def _read(conn: sqlite3.Connection) -> dict:
 
 def get_page_size(conn: sqlite3.Connection) -> int:
     return _read(conn)["page_size"]
+
+
+def get_candidate_retention_days(conn: sqlite3.Connection) -> int:
+    return _read(conn)["candidate_retention_days"]
+
+
+def stamp_last_fetch_attempt(conn: sqlite3.Connection) -> None:
+    """Records that a fetch was attempted, regardless of whether it succeeds —
+    called first thing in POST /api/feeds/fetch so a run that errors out partway
+    still leaves an accurate timestamp. Uses SQLite's own CURRENT_TIMESTAMP (not
+    Python's clock) to match every other TIMESTAMP column's format in this app."""
+    now = conn.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('last_fetch_attempt', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (json.dumps(now),),
+    )
+    conn.commit()
 
 
 def repaginate_all(conn: sqlite3.Connection, new_size: int) -> None:

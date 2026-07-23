@@ -582,3 +582,61 @@ Candidate **category is already handled**: each fetched item inherits its feed's
 session** (the user's call): the actual scheduled timer that pings `POST /api/feeds/fetch`,
 and the policy for new-content cadence / retention/archival of stale candidates. The manual
 "Fetch new candidates" button on /queue covers the workflow until then.
+
+## 2026-07-23 — EPUB import: ebooklib + stdlib HTML-strip, byte-hash dedup
+Added a fifth importer (`POST /api/import/epub`, source `epub`) mirroring the PDF path
+exactly: multipart upload → in-memory bytes → `import_tools/epub_text.py:extract(bytes)`
+→ shared `insert_book` with `source_ref="epub:<sha256 of bytes>"` (same byte-hash
+rationale as PDF — EPUBs have no natural id, an identical re-upload always dedupes).
+**Library choice:** `ebooklib` (already had `lxml` transitively via trafilatura, so the
+only genuinely new package) to walk the OPF spine in reading order, plus a small stdlib
+`HTMLParser` subclass to strip each XHTML document to text rather than pulling in
+BeautifulSoup — the extraction we need (drop script/style, insert newlines at block
+boundaries, collapse whitespace) is small enough to own. **Spine order over
+declaration order:** iterate `book.spine` and resolve each idref to its document so
+chapters come out in reading order, falling back to `get_items_of_type(ITEM_DOCUMENT)`
+only if a book declares no spine. **Empty-text 502:** unlike the PDF route, the EPUB
+route explicitly returns `502 {"error": "No extractable text in this EPUB."}` when the
+strip yields nothing — a DRM'd or purely image-based EPUB parses without raising but has
+nothing to read, and a silently-empty book is worse than a clear error. **Title:** taken
+from the typed field or the filename stem (same as PDF), not the EPUB's embedded `DC:title`
+metadata — kept the `extract()` boundary returning a plain `str` so the route tests can
+mock it exactly like `extract_pdf`; using embedded metadata is an easy future enhancement
+if the filename-stem default proves annoying.
+
+## 2026-07-23 — Epic 17: retention reuses status='discarded', no new enum value
+The user considered a distinct "expired" status but chose to keep candidate auto-expiry
+indistinguishable from a manual discard: both flip `books.status` to `'discarded'`, so the
+existing permanent `source_ref` block (never re-fetched) applies identically either way —
+no schema/CHECK-constraint change, no new branch in any code that already switches on
+`status`. The tradeoff (can't tell "aged out" from "actively rejected" in stats) is
+deliberately deferred to Epic 19, which is free to add a `discard_reason` column later
+without touching this epic's code again.
+
+## 2026-07-23 — Epic 17: expiry piggybacks on every /api/feeds/fetch call, no separate cron
+Considered a second Task Scheduler entry dedicated to expiry so its cadence could be tuned
+independently of the fetch interval. Rejected: the expiry check is a single indexed
+`UPDATE ... WHERE status='candidate' AND created <= cutoff`, cheap and idempotent, so
+running it on every fetch call (scheduled or manual, whole-roster or single-feed retry)
+costs nothing extra — and a second scheduled entry is a second thing that can silently fail
+with no user-visible symptom, for a feature the first entry already covers for free.
+
+## 2026-07-23 — Epic 17: last_fetch_attempt is a settings row, not a fetch_log table
+A single nullable `settings` key (`last_fetch_attempt`, JSON-encoded string like every
+other settings value) rather than a new append-only log table — the requirement is "when
+did we last try," not a history of every run (scripts/fetch_feeds.log already covers
+after-the-fact debugging of individual runs). Deliberately excluded from `SettingsPut` so
+a `PUT /api/settings` body can never clobber it — pydantic silently drops unknown fields,
+so sending it back is harmless, it just never writes. Stamped via SQLite's own
+`CURRENT_TIMESTAMP` (not Python's clock) to match the string format every other
+TIMESTAMP-ish column in this app already uses (`books.created`, `feeds.last_fetched`).
+
+## 2026-07-23 — Epic 17: "Library" replaces "book(s)" as the umbrella word, copy-only
+The user found "book" overloaded — used for both "your whole reading list" and "an actual
+long-form book" (PDF/EPUB import). Resolved as a **UI copy pass only**: nav links, the
+add-content modal, and stats headings now say "Library"/"item(s)"; a small "Book" badge
+was added next to `pdf`/`epub`-sourced rows on `/` to reserve that specific word. The
+`books` table, `source` column values, every API field name, and every TS type/identifier
+(`Book`, `book_id`, `NewWordsPerBook`, etc.) are unchanged — renaming those would be a much
+bigger, purely-cosmetic migration for zero user-facing benefit beyond what the copy pass
+already delivers.

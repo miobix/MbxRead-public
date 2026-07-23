@@ -62,7 +62,7 @@ export default function QueuePage() {
       await api.patchBook(id, { status });
       setBooks((prev) => prev?.filter((b) => b.id !== id) ?? prev);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update book.");
+      setError(e instanceof Error ? e.message : "Failed to update item.");
     } finally {
       setBusyId(null);
     }
@@ -72,7 +72,7 @@ export default function QueuePage() {
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <Link href="/" className="text-sm text-muted hover:text-ink transition-colors">
-          ← Books
+          ← Library
         </Link>
         <Link href="/feeds" className="text-sm text-muted hover:text-ink transition-colors">
           Manage feeds

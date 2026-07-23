@@ -67,12 +67,41 @@ neither the app nor port 8002 is ever exposed to the public internet.
 
 ## Importing texts
 
-- **Paste or upload**: in the app, "+ Add book" → paste text or upload a `.txt` file.
+- **Paste or upload**: in the app, "+ Add" → paste text or upload a `.txt` file.
 - **YouTube**: `.venv\Scripts\python import_tools\yt_subs.py "https://youtube.com/watch?v=..."`
   → creates a cleaned `.txt` (manual Korean subs preferred, auto-subs as fallback).
   Paste the result into the app.
 - **PDF**: `.venv\Scripts\python import_tools\pdf_text.py book.pdf --pages 1-30` →
   `.txt`. Paste the result into the app.
+
+## Automated content fetching (Task Scheduler)
+
+The Queue (`/queue`) pulls new candidates from your feeds on demand via the "Fetch new
+candidates" button (`POST /api/feeds/fetch`). To also run this automatically on a
+schedule, register `scripts/fetch_feeds.ps1` as a Windows Task Scheduler action:
+
+1. Open **Task Scheduler** → **Create Task…** (not "Create Basic Task" — you need the
+   full dialog for the arguments below).
+2. **General**: name it e.g. `korean-reader fetch feeds`.
+3. **Triggers** → **New…**: Daily, pick a time (e.g. 6:00 AM), recur every 1 day.
+4. **Actions** → **New…**: Program/script `powershell.exe`; arguments:
+   `-ExecutionPolicy Bypass -File "C:\path\to\korean-reader\scripts\fetch_feeds.ps1"`
+   (adjust the path to where you cloned this repo).
+5. **Conditions**: uncheck "Start the task only if the computer is on AC power" if this
+   machine should still fetch on battery.
+
+The script assumes **the server is already running** — it just POSTs to the existing
+`/api/feeds/fetch` endpoint on `localhost:8002`, exactly like the manual button. Its
+result (or error) is appended to `scripts/fetch_feeds.log`; Task Scheduler's own run
+history also shows failures, since the script exits non-zero on one.
+
+Two related settings, editable in `/settings`:
+- **Queue candidate retention** — how many days an unpromoted, undiscarded candidate
+  sits in the Queue before the fetch job auto-discards it (default 7 days). Checked on
+  every fetch call, scheduled or manual.
+- The timestamp of the last fetch *attempt* (scheduled or manual) is tracked
+  internally (`GET /api/settings` → `last_fetch_attempt`) and will be surfaced on the
+  Queue page itself in a later pass.
 
 ## Switching translation backends
 
@@ -87,6 +116,7 @@ web/                    Next.js frontend, built to web/out and served by server/
 translate_svc/          DeepL/Claude translation + cache + krdict, imported as a library
 import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
+scripts/fetch_feeds.ps1 Task Scheduler action for automated feed fetching (see above)
 start.ps1               rebuilds web/ if stale, launches the server, opens the browser
 ANKI.md                 Anki sync setup and daily-use guide
 .env                    your API keys (copy from .env.example)

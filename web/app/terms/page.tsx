@@ -71,7 +71,7 @@ export default function TermsPage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Books
+        ← Library
       </Link>
 
       <div className="flex items-center justify-between">

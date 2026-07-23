@@ -56,7 +56,7 @@ export default function SettingsPage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Books
+        ← Library
       </Link>
 
       <h1 className="text-2xl font-semibold font-serif">Settings</h1>
@@ -165,6 +165,31 @@ export default function SettingsPage() {
                   <span className="block text-xs text-muted">{p.chars} chars</span>
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-muted">Queue candidate retention</h2>
+            <p className="text-xs text-muted">
+              How many days an unpromoted, undiscarded item sits in the Queue before the
+              fetch job automatically discards it.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={settings.candidate_retention_days}
+                onChange={(e) => {
+                  const days = Number(e.target.value);
+                  if (Number.isFinite(days) && days >= 1 && days <= 90) {
+                    save({ ...settings, candidate_retention_days: days });
+                  }
+                }}
+                disabled={saving}
+                className="w-20 rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+              />
+              <span className="text-sm text-muted">days</span>
             </div>
           </section>
 

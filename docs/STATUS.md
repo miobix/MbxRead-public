@@ -471,7 +471,66 @@ later epic until the real sources are known.
   owed Epics 4–15 browser/touch pass. The makeover this epic did is the stats screen
   itself as the visual anchor + a Stats nav link; a fuller per-screen polish pass can
   still ride along with Epic 17 if wanted.
-- [ ] **Epic 17 — Go-live (final stage).** Execute Epic 8's still-pending cold-start +
+- **EPUB import (2026-07-23, not a numbered epic — user request between Epics 16 and 17).**
+  Added a fifth importer alongside Epic 12's four. `import_tools/epub_text.py` (new): `ebooklib`
+  walks the OPF spine in reading order, a small stdlib `HTMLParser` subclass strips each XHTML
+  document to text (no BeautifulSoup). `server/routes/imports.py`: `POST /api/import/epub`
+  (multipart `file` + `title?/topic?/tags?`), source `epub`, dedup `epub:<sha256 of bytes>`
+  (same byte-hash shape as PDF), plus a 502 when the EPUB has no extractable text (DRM'd /
+  image-only). New dep `ebooklib==0.20` (only `lxml`, already transitively present, added).
+  Frontend: add-book modal gained an "EPUB" mode; `lib/api.ts` `importEpub`. 163/163 tests
+  green (6 new in `test_imports.py`: route create/dedup/extract-failure/empty-text, plus two
+  **real non-mocked** tests that build a tiny EPUB in memory with `ebooklib` and run the actual
+  extractor + full import through `TestClient`). `npm run build`/`lint` clean. See DECISIONS.md
+  (ebooklib + stdlib-strip, spine-order, empty-text 502, filename-title) and ARCHITECTURE.md
+  (import API row + dedup-key note). **Browser-unverified** — joins the owed Epics 4–16 pass:
+  open the add-book modal, pick EPUB, upload a real Korean `.epub`, confirm it becomes a
+  scored-ready book and that re-uploading the same file 409s.
+- [x] **Epic 17 — Fetch automation, candidate retention, terminology pass** — done
+  (2026-07-23). Full scope was written up in `docs/SPEC.md` §10 in a prior planning
+  session; this session implemented it as planned, with no deviations. `scripts/
+  fetch_feeds.ps1` (new) is the Task Scheduler action — POSTs to the existing `POST
+  /api/feeds/fetch`, logs the result/error to `scripts/fetch_feeds.log`; no new
+  server code needed for automation itself since it reuses the manual button's exact
+  endpoint (server assumed always-up on Tailscale, per the user). `routes/
+  settings.py` gained `candidate_retention_days` (default 7, editable, `ge=1,le=90`)
+  and a system-stamped-only `last_fetch_attempt` (deliberately excluded from
+  `SettingsPut`). `routes/feeds.py`'s `fetch_feeds()` now stamps
+  `last_fetch_attempt` and auto-discards (`status='discarded'`, no new status enum)
+  any candidate past the retention window on **every** call — scheduled, manual, or
+  a single-feed retry — reporting the count as a new `expired` field; no separate
+  cron, see `docs/DECISIONS.md`. 171/171 tests green (8 new). `npm run build`/`lint`
+  clean. Frontend: `/settings` gained a retention-days input; UI copy swept
+  "book(s)" → **"Library"** (nav links, add-content modal, `/stats` headings/
+  milestones), with **"Book"** now a small badge reserved for `pdf`/`epub`-sourced
+  rows on `/` — copy-layer only, no schema renaming. README gained a Task Scheduler
+  registration walkthrough. `last_fetch_attempt`'s on-page display and the rest of
+  the Queue visual overhaul are Epic 18 scope, not touched here.
+  **Not verified in a browser** (no browser tooling in this environment) — do a
+  real pass together with the other owed epics: change the retention setting in
+  `/settings` and confirm it round-trips; register the Task Scheduler entry per the
+  new README section and confirm a triggered run appends to `scripts/
+  fetch_feeds.log` and updates `last_fetch_attempt`; skim the built UI for the new
+  "Library"/"+ Add"/"Book"-badge copy.
+- [ ] **Epic 18 — Queue browsing UX: cards, chips, sort/filter, length, source link,
+  back-to-top.** Planned 2026-07-23 — full scope in `docs/SPEC.md` §10. Card/list
+  toggle (localStorage-persisted, cards default, no images); one colored chip per
+  source type (YouTube/Article); a real length stat (`word_count` for text, actual
+  `duration_seconds` pulled from yt-dlp's info dict for video — not a transcript-
+  based estimate); an "↗ open source" link per item; a sort-by picker (newest
+  fetched / easiest / shortest, mirroring `/`'s existing "Easiest unread" pattern);
+  a back-to-top floating button; the Epic 17 `last_fetch_attempt` timestamp
+  surfaced at the top of the page.
+- [ ] **Epic 19 — Promotion stats: what gets read vs. what doesn't.** Planned
+  2026-07-23 — full scope in `docs/SPEC.md` §10. New `feed_id` provenance column on
+  `books` (replaces the fragile tags-as-join-key back to a feed); a `discard_reason`
+  column (`user`/`expired`) so the stats can tell an active reject apart from an
+  aged-out candidate — flagged in the SPEC as a judgment call the executor can drop
+  if not worth it; `GET /api/stats` gains a `curation` breakdown by topic and by
+  feed/channel (promoted/user_discarded/expired/pending counts); a new `/stats`
+  section rendering it, hand-rolled SVG/CSS per the existing no-new-deps convention.
+- [ ] **Epic 20 — Go-live (final stage, renumbered from Epic 17 on 2026-07-23 to make
+  room for Epics 17-19 above).** Execute Epic 8's still-pending cold-start +
   Tailscale verification and go live day-to-day, optionally with a fuller per-page UI
   polish pass. **Acceptance:** a verified cold-start `start.ps1` run reachable from the
   phone over Tailscale.
@@ -497,11 +556,17 @@ later epic until the real sources are known.
   library UX), 12 (import wiring), 13 (cold-start difficulty signal), 15 (curation
   queue + general difficulty + source filter), and **14 (curated content roster +
   feeds management + YouTube fetch, done 2026-07-23)** are done. **Epic 16 — Stats
-  screen + UI makeover** is done (2026-07-23). Only **Epic 17 — Go-live** remains
-  (cold-start + Tailscale, optionally a fuller UI polish pass) — the last stage.
-  The Windows **Task Scheduler** timer for `POST /api/feeds/fetch` (the last sliver
-  of the original Epic 14 "daily job") is still deferred by the user's choice; fold
-  it into Epic 17 or a small follow-up whenever the app goes live day-to-day.
+  screen + UI makeover** is done (2026-07-23).
+- **2026-07-23 planning session: Epics 17-19 added, Go-live renumbered to Epic 20**,
+  full scope in `docs/SPEC.md` §10 — see that session's decisions summarized in the
+  Epic 18/19 checklist entries below (chip/length/sort design for 18; `feed_id`/
+  `discard_reason`/stats grouping for 19). **Epic 17 is now done** (see above) — next
+  up is **Epic 18** (Queue cards/chips/sort/length/source-link/back-to-top), which
+  is where `last_fetch_attempt` (already returned by `GET /api/settings` since
+  Epic 17) actually gets displayed on the page. Epic 19 has one small forward
+  dependency worth remembering when it's picked up: it revisits Epic 17's
+  `_expire_stale_candidates()` query in `routes/feeds.py` to also set
+  `discard_reason='expired'` once that column exists.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to

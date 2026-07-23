@@ -8,7 +8,7 @@ import { TOPICS } from "@/lib/topics";
 
 type Sort = "recent" | "easiest";
 
-const SOURCES = ["paste", "txt", "yt", "pdf", "article"] as const;
+const SOURCES = ["paste", "txt", "yt", "pdf", "epub", "article"] as const;
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
@@ -25,7 +25,7 @@ export default function HomePage() {
     api
       .listBooks({ topic: topicFilter || undefined, source: sourceFilter || undefined, archived: showArchived })
       .then(setBooks)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load books."));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load your library."));
   };
 
   useEffect(refresh, [topicFilter, sourceFilter, showArchived]);
@@ -45,7 +45,7 @@ export default function HomePage() {
       const updated = await api.scoreBook(id);
       setBooks((prev) => prev?.map((b) => (b.id === id ? updated : b)) ?? prev);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to score book.");
+      setError(e instanceof Error ? e.message : "Failed to score item.");
     } finally {
       setScoring(null);
     }
@@ -58,7 +58,7 @@ export default function HomePage() {
       await api.patchBook(id, { [field]: value });
       refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update book.");
+      setError(e instanceof Error ? e.message : "Failed to update item.");
     }
   };
 
@@ -106,7 +106,7 @@ export default function HomePage() {
             onClick={() => setModalOpen(true)}
             className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
-            + Add book
+            + Add
           </button>
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function HomePage() {
       {books === null && !error && <p className="text-muted">Loading…</p>}
 
       {books?.length === 0 && (
-        <p className="text-muted">No books match. Add one or adjust the filters.</p>
+        <p className="text-muted">Nothing matches. Add something or adjust the filters.</p>
       )}
 
       {books && books.length > 0 && (
@@ -187,6 +187,11 @@ export default function HomePage() {
             >
               <div className="flex items-center gap-2">
                 <span className="font-medium">{book.title}</span>
+                {(book.source === "pdf" || book.source === "epub") && (
+                  <span className="text-xs text-muted border border-border rounded-full px-1.5">
+                    Book
+                  </span>
+                )}
                 {book.read && <span className="text-xs text-accent">✓ read</span>}
               </div>
               <div className="text-sm text-muted">
@@ -242,12 +247,13 @@ export default function HomePage() {
   );
 }
 
-type Mode = "paste" | "youtube" | "pdf" | "article";
+type Mode = "paste" | "youtube" | "pdf" | "epub" | "article";
 
 const MODES: { key: Mode; label: string }[] = [
   { key: "paste", label: "Paste / .txt" },
   { key: "youtube", label: "YouTube" },
   { key: "pdf", label: "PDF" },
+  { key: "epub", label: "EPUB" },
   { key: "article", label: "Article URL" },
 ];
 
@@ -268,6 +274,7 @@ function AddBookModal({
   const [url, setUrl] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfPages, setPdfPages] = useState("");
+  const [epubFile, setEpubFile] = useState<File | null>(null);
   const [topic, setTopic] = useState("");
   const [tags, setTags] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -313,7 +320,7 @@ function AddBookModal({
         await api.createBook({ title: title.trim(), text, source, topic, tags: tagList });
         onCreated();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to create book.");
+        setError(e instanceof Error ? e.message : "Failed to add item.");
         setSubmitting(false);
       }
       return;
@@ -329,6 +336,22 @@ function AddBookModal({
         const body = { url: url.trim(), topic, tags: tagList };
         if (mode === "youtube") await api.importYoutube(body);
         else await api.importArticle(body);
+        onCreated();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Import failed.");
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (mode === "epub") {
+      if (!epubFile) {
+        setError("Choose an EPUB file first.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await api.importEpub({ file: epubFile, title: title.trim(), topic, tags });
         onCreated();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Import failed.");
@@ -367,7 +390,7 @@ function AddBookModal({
         className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold font-serif">Add a book</h2>
+        <h2 className="text-lg font-semibold font-serif">Add to Library</h2>
 
         <div className="flex gap-1 rounded-lg bg-paper p-1 text-sm">
           {MODES.map((m) => (
@@ -483,11 +506,31 @@ function AddBookModal({
           </>
         )}
 
+        {mode === "epub" && (
+          <>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title (defaults to filename)"
+              className={inputClass}
+            />
+            <label className="text-sm text-muted flex flex-col gap-1">
+              EPUB file
+              <input
+                type="file"
+                accept=".epub,application/epub+zip"
+                onChange={(e) => setEpubFile(e.target.files?.[0] ?? null)}
+                className="text-sm"
+              />
+            </label>
+          </>
+        )}
+
         {mode !== "paste" && (
           <p className="text-xs text-muted -mt-1">
-            {mode === "pdf"
-              ? "Duplicate PDFs (same file re-uploaded) are detected automatically."
-              : "Re-importing the same link won't create a duplicate book."}
+            {mode === "pdf" || mode === "epub"
+              ? "Duplicate files (same file re-uploaded) are detected automatically."
+              : "Re-importing the same link won't create a duplicate item."}
           </p>
         )}
 
