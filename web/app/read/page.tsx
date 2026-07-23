@@ -132,9 +132,11 @@ function ReadPageContent() {
             existing: exact
               ? {
                   id: exact.id,
+                  lemma: exact.lemma,
                   translation: exact.translation,
                   status: exact.status,
                   deck: exact.deck,
+                  forms: exact.forms,
                 }
               : null,
           });
@@ -154,26 +156,38 @@ function ReadPageContent() {
     });
   };
 
-  const handleSaved = (originalLemma: string, newLemma: string, term: Term) => {
+  const handleSaved = (term: Term) => {
+    const summary: TermSummary = {
+      id: term.id,
+      lemma: term.lemma,
+      translation: term.translation,
+      status: term.status,
+      deck: term.deck,
+      forms: term.forms,
+    };
     setPage((prev) => {
       if (!prev) return prev;
       const nextTerms = { ...prev.terms };
-      if (originalLemma !== newLemma) delete nextTerms[originalLemma];
-      nextTerms[newLemma] = {
-        id: term.id,
-        translation: term.translation,
-        status: term.status,
-        deck: term.deck,
-      };
+      // Drop every key this term currently occupies (its old lemma and any removed
+      // forms), then re-key it by its current lemma + forms so highlights refresh
+      // without a refetch. A form that collides with another term's lemma keeps the
+      // direct lemma (matching the server's precedence).
+      for (const key of Object.keys(nextTerms)) {
+        if (nextTerms[key].id === term.id) delete nextTerms[key];
+      }
+      nextTerms[term.lemma] = summary;
+      for (const f of term.forms) if (!(f in nextTerms)) nextTerms[f] = summary;
       return { ...prev, terms: nextTerms };
     });
   };
 
-  const handleDeleted = (lemma: string) => {
+  const handleDeleted = (term: TermSummary) => {
     setPage((prev) => {
       if (!prev) return prev;
       const nextTerms = { ...prev.terms };
-      delete nextTerms[lemma];
+      for (const key of Object.keys(nextTerms)) {
+        if (nextTerms[key].id === term.id) delete nextTerms[key];
+      }
       return { ...prev, terms: nextTerms };
     });
   };

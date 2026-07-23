@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS terms (
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- Epic 20: extra surface forms a single term also covers (e.g. 승인서/승인하다 under
+-- lemma 승인). Each form both highlights in the reader (matched in books.get_page
+-- alongside the term's own lemma) and renders on the Korean face of the Anki card.
+-- `lemma` stays the one clean dictionary form so tokenizer matching is unaffected;
+-- these are the aliases. Plain CREATE TABLE (like `pages`/`page_reads`); ON DELETE
+-- CASCADE with the FK pragma already on, so deleting a term drops its forms.
+CREATE TABLE IF NOT EXISTS term_forms (
+  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+  form TEXT NOT NULL,
+  PRIMARY KEY (term_id, form)
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- Epic 16: reading-activity log for the stats screen. One row per page ever read
 -- (PRIMARY KEY dedup + INSERT OR IGNORE on write) so revisiting a page — e.g. to

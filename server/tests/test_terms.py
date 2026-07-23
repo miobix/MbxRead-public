@@ -131,6 +131,65 @@ def test_patch_missing_term_404(client):
     assert client.patch("/api/terms/999", json={"translation": "x"}).status_code == 404
 
 
+def test_create_term_round_trips_forms(client):
+    body = _create(client, lemma="승인", forms=["승인서", "승인하다"]).json()
+    assert body["forms"] == ["승인서", "승인하다"]
+    assert client.get("/api/terms").json()[0]["forms"] == ["승인서", "승인하다"]
+
+
+def test_create_term_normalizes_forms(client):
+    # blanks dropped, the lemma itself dropped, duplicates collapsed, order kept.
+    body = _create(
+        client, lemma="승인", forms=[" 승인서 ", "승인", "승인하다", "승인서", ""]
+    ).json()
+    assert body["forms"] == ["승인서", "승인하다"]
+
+
+def test_patch_rewrites_forms(client):
+    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+    body = client.patch(
+        f"/api/terms/{term_id}", json={"forms": ["승인하다", "승인권"]}
+    ).json()
+    assert body["forms"] == ["승인하다", "승인권"]
+
+
+def test_patch_forms_after_sync_marks_dirty(client, db_path):
+    term_id = _create(client, lemma="승인").json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"forms": ["승인서"]})
+    assert resp.status_code == 200
+    assert resp.json()["anki_dirty"] is True
+
+
+def test_patch_same_forms_after_sync_does_not_mark_dirty(client, db_path):
+    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"forms": ["승인서"]})
+    assert resp.json()["anki_dirty"] is False
+
+
+def test_delete_term_cascades_forms(client, db_path):
+    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+    assert client.delete(f"/api/terms/{term_id}").status_code == 204
+
+    conn = sqlite3.connect(db_path)
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM term_forms WHERE term_id = ?", (term_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert remaining == 0
+
+
 def test_delete_term(client):
     term_id = _create(client).json()["id"]
     assert client.delete(f"/api/terms/{term_id}").status_code == 204

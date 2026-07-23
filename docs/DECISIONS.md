@@ -689,3 +689,25 @@ than dropping the row. Manual imports (`routes/imports.py`'s four importers) and
 paste/txt (`routes/books.py`'s `create_book`) never set it, which is also exactly the
 condition the curation query uses to exclude non-automated content
 (`WHERE feed_id IS NOT NULL`) — no separate "is this feed-sourced" flag needed.
+
+## 2026-07-23 — Epic 20: term "forms" (aliases) as a normalized table doing double duty
+The reported bug: the user hand-edited a term's **lemma** into `승인 / 승인서` to keep the
+derived word 승인서 visible on the Anki card, which silently broke highlighting — matching
+is exact `token.lemma == terms key` equality and `승인 / 승인서` is no tokenizer lemma. Fix:
+a term can carry extra **forms** (aliases). Three choices worth recording:
+- **Normalized `term_forms(term_id, form)` table, not a JSON `forms` column on `terms`.**
+  Matching in `books.get_page` stays a set-membership `WHERE form IN (page_lemmas)` join
+  (the same shape as the existing lemma match), instead of loading every term's JSON to
+  test membership in Python. `ON DELETE CASCADE` + the always-on FK pragma means deleting
+  a term drops its forms; plain `CREATE TABLE IF NOT EXISTS` in `SCHEMA` (like
+  `pages`/`page_reads`), no migration bookkeeping.
+- **One `forms` list serves both highlighting and the Anki card** (the user's explicit
+  choice over two separate lists). Each form both lights up in the reader *and* renders on
+  the card's Korean face (`_render_front` → `lemma / form1 / form2`). `lemma` stays the one
+  clean dictionary form so the tokenizer/`known_lemmas` logic is untouched.
+- **`get_page` now returns `lemma` + `forms` per matched term, and keys the map by the
+  form string too** (direct-lemma match wins on collision). Carrying the parent `lemma`
+  lets the reader popover show 승인 when a 승인서 token is tapped; a forms change is a
+  dirty trigger so the card front re-syncs. Deferred to Epic 21 (no Claude, per the user):
+  interactive dictionary click-to-add, krdict example sentences, and a custom two-way Anki
+  note type with examples confined to each card's answer side.

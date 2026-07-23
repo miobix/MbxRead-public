@@ -20,6 +20,8 @@ class TermCreate(BaseModel):
     status: Status = "learning"
     deck: str = ""
     sentence: str = ""
+    # Epic 20: extra surface forms this term also covers (승인서/승인하다 under 승인).
+    forms: list[str] = []
     # Epic 16: which book/page this term was first saved from (reader passes both).
     # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
     source_book_id: int | None = None
@@ -33,9 +35,37 @@ class TermPatch(BaseModel):
     status: Status | None = None
     deck: str | None = None
     sentence: str | None = None
+    forms: list[str] | None = None
 
 
-def _term_dict(row: sqlite3.Row) -> dict:
+def _normalize_forms(forms: list[str], lemma: str) -> list[str]:
+    """Trim, drop blanks and the lemma itself, and dedupe while keeping order."""
+    seen: dict[str, None] = {}
+    for raw in forms:
+        form = raw.strip()
+        if form and form != lemma:
+            seen.setdefault(form, None)
+    return list(seen)
+
+
+def _forms_for(conn: sqlite3.Connection, term_id: int) -> list[str]:
+    return [
+        r["form"]
+        for r in conn.execute(
+            "SELECT form FROM term_forms WHERE term_id = ? ORDER BY rowid", (term_id,)
+        )
+    ]
+
+
+def _set_forms(conn: sqlite3.Connection, term_id: int, forms: list[str]) -> None:
+    conn.execute("DELETE FROM term_forms WHERE term_id = ?", (term_id,))
+    conn.executemany(
+        "INSERT INTO term_forms (term_id, form) VALUES (?, ?)",
+        [(term_id, f) for f in forms],
+    )
+
+
+def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
         "lemma": row["lemma"],
@@ -44,6 +74,7 @@ def _term_dict(row: sqlite3.Row) -> dict:
         "status": row["status"],
         "deck": row["deck"],
         "sentence": row["sentence"],
+        "forms": _forms_for(conn, row["id"]),
         "anki_note_id": row["anki_note_id"],
         "anki_dirty": bool(row["anki_dirty"]),
         "created": row["created"],
@@ -82,7 +113,7 @@ def list_terms(
     query += " ORDER BY id"
 
     rows = conn.execute(query, params).fetchall()
-    return [_term_dict(row) for row in rows]
+    return [_term_dict(conn, row) for row in rows]
 
 
 @router.post("", status_code=201)
@@ -104,8 +135,9 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
         )
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="a term with this lemma already exists")
+    _set_forms(conn, cur.lastrowid, _normalize_forms(body.forms, body.lemma))
     conn.commit()
-    return _term_dict(_get_term_or_404(conn, cur.lastrowid))
+    return _term_dict(conn, _get_term_or_404(conn, cur.lastrowid))
 
 
 @router.patch("/{term_id}")
@@ -114,8 +146,18 @@ def patch_term(
 ):
     row = _get_term_or_404(conn, term_id)
     fields = body.model_dump(exclude_unset=True)
-    if not fields:
-        return _term_dict(row)
+
+    # `forms` is not a terms column — pull it out and persist it separately. It's a
+    # dirty trigger like translation/deck (it changes the Anki card's Korean face).
+    forms_provided = "forms" in fields
+    new_forms = (
+        _normalize_forms(fields.pop("forms") or [], fields.get("lemma", row["lemma"]))
+        if forms_provided
+        else None
+    )
+
+    if not fields and not forms_provided:
+        return _term_dict(conn, row)
 
     if "lemma" in fields and fields["lemma"] != row["lemma"]:
         conflict = conn.execute(
@@ -124,8 +166,10 @@ def patch_term(
         if conflict is not None:
             raise HTTPException(status_code=409, detail="a term with this lemma already exists")
 
-    becomes_dirty = row["anki_note_id"] is not None and any(
-        key in _DIRTY_TRIGGER_FIELDS and value != row[key] for key, value in fields.items()
+    forms_changed = forms_provided and new_forms != _forms_for(conn, term_id)
+    becomes_dirty = row["anki_note_id"] is not None and (
+        any(key in _DIRTY_TRIGGER_FIELDS and value != row[key] for key, value in fields.items())
+        or forms_changed
     )
 
     set_parts = [f"{key} = ?" for key in fields]
@@ -137,8 +181,10 @@ def patch_term(
     conn.execute(
         f"UPDATE terms SET {', '.join(set_parts)} WHERE id = ?", (*values, term_id)
     )
+    if forms_provided:
+        _set_forms(conn, term_id, new_forms)
     conn.commit()
-    return _term_dict(_get_term_or_404(conn, term_id))
+    return _term_dict(conn, _get_term_or_404(conn, term_id))
 
 
 @router.delete("/{term_id}", status_code=204)
