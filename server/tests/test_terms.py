@@ -190,6 +190,49 @@ def test_delete_term_cascades_forms(client, db_path):
     assert remaining == 0
 
 
+def test_create_term_defaults_examples_empty(client):
+    body = _create(client).json()
+    assert body["examples"] == []
+
+
+def test_create_and_patch_round_trip_examples(client):
+    term_id = _create(
+        client, lemma="기타", examples=[" 기타를 치다 ", "기타를 치다", ""]
+    ).json()["id"]
+    # normalized: trimmed, deduped, blanks dropped
+    assert client.get("/api/terms").json()[0]["examples"] == ["기타를 치다"]
+
+    body = client.patch(
+        f"/api/terms/{term_id}", json={"examples": ["기타를 배우다", "기타를 치다"]}
+    ).json()
+    assert body["examples"] == ["기타를 배우다", "기타를 치다"]
+
+
+def test_patch_examples_after_sync_marks_dirty(client, db_path):
+    term_id = _create(client, lemma="기타").json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"examples": ["기타를 치다"]})
+    assert resp.status_code == 200
+    assert resp.json()["anki_dirty"] is True
+
+
+def test_patch_same_examples_after_sync_does_not_mark_dirty(client, db_path):
+    term_id = _create(client, lemma="기타", examples=["기타를 치다"]).json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"examples": ["기타를 치다"]})
+    assert resp.json()["anki_dirty"] is False
+
+
 def test_delete_term(client):
     term_id = _create(client).json()["id"]
     assert client.delete(f"/api/terms/{term_id}").status_code == 204

@@ -120,7 +120,9 @@ CREATE TABLE IF NOT EXISTS terms (
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
-  source_page INTEGER                            -- Epic 16: page it was first saved from
+  source_page INTEGER,                           -- Epic 16: page it was first saved from
+  examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence, shown on the Anki card back only
+  anki_model TEXT                                -- Epic 21: NULL/'Basic' = legacy note, else the custom two-way model name
 );
 -- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
 -- Highlights in the reader (matched alongside the lemma in get_page) and renders on the
@@ -210,11 +212,11 @@ book has at least one (possibly empty) page.
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, source_book_id?, source_page?}` | created term (409 if lemma exists); `source_*` capture where a word was first saved — **implemented (Epic 3, provenance Epic 16)** |
-| PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3)** |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?, examples?, source_book_id?, source_page?}` | created term (409 if lemma exists); `forms` (Epic 20) = highlight aliases, `examples` (Epic 21) = card-back usage examples; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21)** |
+| PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/forms/examples` changed and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3)** |
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
-| GET `/api/dict?word=…` | – | krdict entries as JSON list — **implemented (Epic 3)** |
+| GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call) — **implemented (Epic 3, examples Epic 21)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
 | GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
 | PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days` Epic 17)** |
@@ -687,14 +689,22 @@ Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or
    AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
-3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` (`modelName:
-   "Basic"`, Front = lemma **plus any Epic-20 `forms`, joined ` / `**, Back =
-   translation + `<br><br><i>sentence</i>` when present, tags `["korean-reader"]`,
-   `options.allowDuplicate: false`). Store returned id, clear dirty. On per-note error
-   (e.g. duplicate) record in `failed`, continue. (Epic 21 swaps `Basic` for a custom
-   two-way note type on new notes, keeping existing `Basic` notes' review history.)
-4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → `updateNoteFields` with the
-   same field rendering; on success clear `anki_dirty`.
+2b. **Epic 21:** `ensure_model()` — create the custom two-way note type
+   `"Korean Reader 2-way"` once (idempotent, guarded on `modelNames`). Fields
+   `Korean`/`English`/`Examples`; two card templates (KO→EN Front `{{Korean}}`,
+   EN→KO Front `{{English}}`) that **both** put `{{Examples}}` on the back only —
+   studying either direction never spoils the prompt. Best-effort like `createDeck`.
+3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21
+   two-way model** (`Korean` = lemma **plus any Epic-20 `forms`, joined ` / `**,
+   `English` = translation, `Examples` = clicked-in krdict examples + the captured
+   sentence joined by `<br>`), tags `["korean-reader"]`, `options.allowDuplicate: false`.
+   Store the returned id **and stamp `anki_model` with the model name**, clear dirty. On
+   per-note error (e.g. duplicate) record in `failed`, continue.
+4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → **branch by `anki_model`**:
+   the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples`; a legacy
+   `Basic` note (`anki_model` NULL, synced before Epic 21) → the old Front/Back
+   `updateNoteFields` (Front = lemma+forms, Back = translation + `<br><br><i>sentence
+   </i>`), so its SRS scheduling history is preserved. On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not
    synced (existing notes left alone).
 

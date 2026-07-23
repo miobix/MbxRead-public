@@ -8,6 +8,8 @@ export type PopoverTarget = {
   lemma: string;
   sentence: string;
   existing: TermSummary | null;
+  // Multi-word phrase selection → translate-only UI (no dictionary/forms/examples).
+  isPhrase: boolean;
 };
 
 export function TokenPopover({
@@ -32,6 +34,9 @@ export function TokenPopover({
   onDeleted: (term: TermSummary) => void;
 }) {
   const isEditing = target.existing !== null;
+  // Phrases are translate-only: the dictionary, forms, and examples affordances all
+  // hide, since a multi-word span has no single dictionary lemma or card-worthy forms.
+  const isPhrase = target.isPhrase;
   const deckOptions =
     target.existing?.deck && !decks.includes(target.existing.deck)
       ? [...decks, target.existing.deck]
@@ -44,6 +49,7 @@ export function TokenPopover({
   const [deck, setDeck] = useState(target.existing?.deck || defaultDeck);
   const [forms, setForms] = useState<string[]>(target.existing?.forms ?? []);
   const [formInput, setFormInput] = useState("");
+  const [examples, setExamples] = useState<string[]>(target.existing?.examples ?? []);
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +73,27 @@ export function TokenPopover({
   };
 
   const removeForm = (f: string) => setForms((prev) => prev.filter((x) => x !== f));
+
+  const addExample = (ex: string) => {
+    const value = ex.trim();
+    if (!value) return;
+    setExamples((prev) => (prev.includes(value) ? prev : [...prev, value]));
+  };
+
+  const removeExample = (ex: string) =>
+    setExamples((prev) => prev.filter((x) => x !== ex));
+
+  // Clicking a dictionary sense appends its English gloss to the translation.
+  const appendGloss = (gloss: string) => {
+    const value = gloss.trim();
+    if (!value) return;
+    setTranslation((prev) => {
+      const t = prev.trim();
+      if (!t) return value;
+      if (t.split(/;\s*/).includes(value)) return prev; // already there
+      return `${t}; ${value}`;
+    });
+  };
 
   const translateWord = async () => {
     if (!lemma.trim()) return;
@@ -116,6 +143,7 @@ export function TokenPopover({
             deck,
             sentence: target.sentence,
             forms: finalForms,
+            examples,
           })
         : await api.createTerm({
             lemma: trimmedLemma,
@@ -123,6 +151,7 @@ export function TokenPopover({
             deck,
             sentence: target.sentence,
             forms: finalForms,
+            examples,
             status: "learning",
             // Provenance: record where this word was first saved (Epic 16 stats).
             source_book_id: bookId ?? undefined,
@@ -182,40 +211,42 @@ export function TokenPopover({
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
-        <div className="flex flex-col gap-1.5">
-          {forms.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {forms.map((f) => (
-                <span
-                  key={f}
-                  className="inline-flex items-center gap-1 rounded-full bg-highlight/60 px-2 py-0.5 text-xs"
-                >
-                  {f}
-                  <button
-                    type="button"
-                    onClick={() => removeForm(f)}
-                    aria-label={`Remove ${f}`}
-                    className="text-muted hover:text-danger transition-colors"
+        {!isPhrase && (
+          <div className="flex flex-col gap-1.5">
+            {forms.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {forms.map((f) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center gap-1 rounded-full bg-highlight/60 px-2 py-0.5 text-xs"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <input
-            value={formInput}
-            onChange={(e) => setFormInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === "," || e.key === "/") {
-                e.preventDefault();
-                addForms(formInput);
-              }
-            }}
-            placeholder="Also highlight (e.g. 승인서, 승인하다)"
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-          />
-        </div>
+                    {f}
+                    <button
+                      type="button"
+                      onClick={() => removeForm(f)}
+                      aria-label={`Remove ${f}`}
+                      className="text-muted hover:text-danger transition-colors"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              value={formInput}
+              onChange={(e) => setFormInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "," || e.key === "/") {
+                  e.preventDefault();
+                  addForms(formInput);
+                }
+              }}
+              placeholder="Also highlight (e.g. 승인서, 승인하다)"
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+            />
+          </div>
+        )}
 
         <div className="flex gap-2 flex-wrap">
           <button
@@ -225,33 +256,88 @@ export function TokenPopover({
           >
             {busy === "translate" ? "Translating…" : "Translate"}
           </button>
-          <button
-            onClick={lookupDictionary}
-            disabled={busy !== null}
-            className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-          >
-            {busy === "dict" ? "Looking up…" : "Dictionary"}
-          </button>
+          {!isPhrase && (
+            <button
+              onClick={lookupDictionary}
+              disabled={busy !== null}
+              className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+            >
+              {busy === "dict" ? "Looking up…" : "Dictionary"}
+            </button>
+          )}
         </div>
 
         {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
 
-        {dictEntries && (
-          <div className="flex flex-col gap-2 max-h-40 overflow-y-auto border-t border-border pt-2">
+        {!isPhrase && dictEntries && (
+          <div className="flex flex-col gap-2 max-h-52 overflow-y-auto border-t border-border pt-2">
             {dictEntries.length === 0 && (
               <p className="text-xs text-muted">No dictionary entries found.</p>
             )}
             {dictEntries.map((entry, i) => (
               <div key={i} className="text-xs">
-                <span className="font-medium">{entry.word}</span>{" "}
+                {/* Tap a headword to add it as a highlighted form; tap a sense to
+                    append its gloss; tap an example to attach it to the card. */}
+                <button
+                  type="button"
+                  onClick={() => addForms(entry.word)}
+                  className="font-medium text-accent hover:underline"
+                  title="Add as a highlighted form"
+                >
+                  {entry.word}
+                </button>{" "}
                 <span className="text-muted">{entry.pos}</span>
-                <ul className="list-disc list-inside text-muted">
+                <ul className="mt-0.5 flex flex-col gap-0.5">
                   {entry.definitions.map((d, j) => (
                     <li key={j}>
-                      <b>{d.en_word}</b> — {d.en_def}
+                      <button
+                        type="button"
+                        onClick={() => appendGloss(d.en_word)}
+                        className="text-left text-muted hover:text-ink transition-colors"
+                        title="Append this gloss to the translation"
+                      >
+                        <b>{d.en_word}</b>
+                        {d.en_def ? ` — ${d.en_def}` : ""}
+                      </button>
                     </li>
                   ))}
                 </ul>
+                {entry.examples.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {entry.examples.map((ex, k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => addExample(ex)}
+                        className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-ink transition-colors"
+                        title="Attach this example to the card"
+                      >
+                        + {ex}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isPhrase && examples.length > 0 && (
+          <div className="flex flex-col gap-1 border-t border-border pt-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted">
+              Examples (card back)
+            </span>
+            {examples.map((ex) => (
+              <div key={ex} className="flex items-start gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => removeExample(ex)}
+                  aria-label={`Remove example`}
+                  className="text-muted hover:text-danger transition-colors"
+                >
+                  ×
+                </button>
+                <span>{ex}</span>
               </div>
             ))}
           </div>

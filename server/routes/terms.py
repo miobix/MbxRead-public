@@ -1,4 +1,5 @@
 """Terms API. See docs/SPEC.md section 5."""
+import json
 import sqlite3
 from typing import Literal
 
@@ -10,7 +11,10 @@ from .. import db as db_module
 router = APIRouter(prefix="/api/terms", tags=["terms"])
 
 Status = Literal["learning", "known", "ignored"]
-_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence"}
+# A change to any of these re-syncs the Anki card. `examples` (Epic 21) is a real
+# JSON column but the value is compared as its stored JSON string, so it fits the
+# same generic dirty check as the plain text columns.
+_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples"}
 
 
 class TermCreate(BaseModel):
@@ -22,6 +26,9 @@ class TermCreate(BaseModel):
     sentence: str = ""
     # Epic 20: extra surface forms this term also covers (승인서/승인하다 under 승인).
     forms: list[str] = []
+    # Epic 21: usage examples (krdict collocations + the reading sentence) shown on
+    # the back of the Anki card. Display-only, never matched against page tokens.
+    examples: list[str] = []
     # Epic 16: which book/page this term was first saved from (reader passes both).
     # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
     source_book_id: int | None = None
@@ -36,6 +43,7 @@ class TermPatch(BaseModel):
     deck: str | None = None
     sentence: str | None = None
     forms: list[str] | None = None
+    examples: list[str] | None = None
 
 
 def _normalize_forms(forms: list[str], lemma: str) -> list[str]:
@@ -45,6 +53,16 @@ def _normalize_forms(forms: list[str], lemma: str) -> list[str]:
         form = raw.strip()
         if form and form != lemma:
             seen.setdefault(form, None)
+    return list(seen)
+
+
+def _normalize_examples(examples: list[str]) -> list[str]:
+    """Trim, drop blanks, and dedupe while keeping order."""
+    seen: dict[str, None] = {}
+    for raw in examples:
+        ex = raw.strip()
+        if ex:
+            seen.setdefault(ex, None)
     return list(seen)
 
 
@@ -75,6 +93,7 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "deck": row["deck"],
         "sentence": row["sentence"],
         "forms": _forms_for(conn, row["id"]),
+        "examples": json.loads(row["examples"]),
         "anki_note_id": row["anki_note_id"],
         "anki_dirty": bool(row["anki_dirty"]),
         "created": row["created"],
@@ -121,7 +140,7 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
     try:
         cur = conn.execute(
             "INSERT INTO terms (lemma, translation, notes, status, deck, sentence, "
-            "source_book_id, source_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "examples, source_book_id, source_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 body.lemma,
                 body.translation,
@@ -129,6 +148,7 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 body.status,
                 body.deck,
                 body.sentence,
+                json.dumps(_normalize_examples(body.examples)),
                 body.source_book_id,
                 body.source_page,
             ),
@@ -155,6 +175,12 @@ def patch_term(
         if forms_provided
         else None
     )
+
+    # `examples` IS a column (JSON), but the value arrives as a list — normalize and
+    # re-encode it back into `fields` so the generic UPDATE + dirty check below both
+    # handle it (it's in _DIRTY_TRIGGER_FIELDS; the DB stores its JSON string).
+    if "examples" in fields:
+        fields["examples"] = json.dumps(_normalize_examples(fields["examples"] or []))
 
     if not fields and not forms_provided:
         return _term_dict(conn, row)

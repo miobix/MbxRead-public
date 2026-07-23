@@ -39,6 +39,18 @@ def test_terms_migration_adds_epic16_provenance_idempotently(tmp_path):
         assert cols.count(name) == 1
 
 
+def test_terms_migration_adds_epic21_columns_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(terms)")]
+    conn.close()
+    for name in ("examples", "anki_model"):
+        assert cols.count(name) == 1
+
+
 def test_init_db_is_idempotent(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)
