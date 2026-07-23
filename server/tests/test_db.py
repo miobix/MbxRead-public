@@ -81,6 +81,18 @@ def test_books_migration_adds_epic18_columns_idempotently(tmp_path):
         assert cols.count(name) == 1
 
 
+def test_books_migration_adds_epic19_columns_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
+    conn.close()
+    for name in ("feed_id", "discard_reason"):
+        assert cols.count(name) == 1
+
+
 def test_existing_books_default_to_library_status(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)

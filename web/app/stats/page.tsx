@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { api, type Stats } from "@/lib/api";
+import { api, type CurationCounts, type Stats } from "@/lib/api";
 
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -33,6 +33,7 @@ export default function StatsPage() {
           <Heatmap stats={stats} />
           <NewWordsPerBook stats={stats} />
           <VocabDepth stats={stats} />
+          <CurationBreakdown stats={stats} />
           <Milestones stats={stats} />
         </>
       )}
@@ -259,6 +260,90 @@ function VocabDepth({ stats }: { stats: Stats }) {
               ))}
             </div>
           </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Curation breakdown: what gets promoted vs. rejected (Epic 19) ---------- */
+
+const CURATION_META: { key: keyof CurationCounts; label: string; color: string }[] = [
+  { key: "promoted", label: "Promoted", color: "var(--color-accent)" },
+  { key: "user_discarded", label: "Discarded", color: "var(--color-danger)" },
+  { key: "expired", label: "Expired", color: "var(--color-highlight)" },
+  { key: "pending", label: "Pending", color: "var(--color-border)" },
+];
+
+function CurationRow({ label, counts }: { label: string; counts: CurationCounts }) {
+  const total = counts.promoted + counts.user_discarded + counts.expired + counts.pending;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between text-xs gap-2">
+        <span className="text-ink truncate">{label}</span>
+        <span className="text-muted tabular-nums shrink-0">{total}</span>
+      </div>
+      {total > 0 && (
+        <div className="flex h-2 w-full overflow-hidden rounded-full">
+          {CURATION_META.map((m) => {
+            const v = counts[m.key];
+            if (v === 0) return null;
+            return (
+              <div
+                key={m.key}
+                style={{ width: `${(v / total) * 100}%`, backgroundColor: m.color }}
+                title={`${m.label}: ${v}`}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CurationBreakdown({ stats }: { stats: Stats }) {
+  const { by_topic, by_feed } = stats.curation;
+
+  if (by_topic.length === 0) {
+    return (
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-muted">What gets promoted</h2>
+        <p className="text-xs text-muted">
+          Fetch candidates from your feeds and promote or discard a few from the Queue
+          — this section fills in once feed-sourced items have a fate.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="text-sm font-medium text-muted">What gets promoted</h2>
+        <div className="flex items-center gap-2 text-[10px] text-muted">
+          {CURATION_META.map((m) => (
+            <span key={m.key} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: m.color }} />
+              {m.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-medium text-muted uppercase tracking-wide">By topic</h3>
+          {by_topic.map((row) => (
+            <CurationRow key={row.topic || "(untagged)"} label={row.topic || "(untagged)"} counts={row} />
+          ))}
+        </div>
+        {by_feed.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h3 className="text-xs font-medium text-muted uppercase tracking-wide">By feed</h3>
+            {by_feed.map((row) => (
+              <CurationRow key={row.feed_id} label={row.feed_name} counts={row} />
+            ))}
+          </div>
         )}
       </div>
     </section>

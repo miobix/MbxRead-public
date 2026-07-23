@@ -16,6 +16,10 @@
   Queue's manual button) first stamps settings.last_fetch_attempt, then auto-discards
   any candidate older than settings.candidate_retention_days (see
   _expire_stale_candidates) before touching any feed.
+  Epic 19: every feed-sourced book gets a `feed_id` (see _insert_and_score) and, if
+  it's ever discarded, a `discard_reason` — 'expired' from _expire_stale_candidates
+  above, 'user' from a manual PATCH in routes/books.py — so GET /api/stats can break
+  down promoted/user_discarded/expired/pending by topic and by feed.
 """
 import sqlite3
 from typing import Literal
@@ -244,6 +248,7 @@ def _insert_and_score(
             source_ref=source_ref,
             status="candidate",
             duration_seconds=duration_seconds,
+            feed_id=feed["id"],
         )
     except DuplicateSourceRef:
         summary["skipped_duplicate"] += 1
@@ -261,7 +266,7 @@ def _expire_stale_candidates(conn: sqlite3.Connection) -> int:
     special-case any trigger path."""
     retention_days = settings_route.get_candidate_retention_days(conn)
     cur = conn.execute(
-        "UPDATE books SET status = 'discarded' "
+        "UPDATE books SET status = 'discarded', discard_reason = 'expired' "
         "WHERE status = 'candidate' AND created <= datetime('now', ?)",
         (f"-{retention_days} days",),
     )

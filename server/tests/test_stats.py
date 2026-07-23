@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import date, timedelta
 
 from server.db import get_connection
@@ -117,3 +118,75 @@ def test_vocab_depth_buckets_and_beginner_pct(client, db_path):
     assert depth["buckets"]["unlisted"] == 1
     assert depth["total_a"] == total_a
     assert depth["beginner_pct"] == round(1 / total_a, 4)
+
+
+# --- curation breakdown (Epic 19) ---
+
+
+def _insert_curation_book(db_path, topic, feed_id, status, discard_reason=None):
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO books (title, source, topic, feed_id, status, discard_reason) "
+        "VALUES (?, 'article', ?, ?, ?, ?)",
+        (f"book-{topic}-{status}-{discard_reason}", topic, feed_id, status, discard_reason),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_empty_curation_breakdown(client):
+    curation = client.get("/api/stats").json()["curation"]
+    assert curation == {"by_topic": [], "by_feed": []}
+
+
+def test_curation_breakdown_by_topic_and_feed(client, db_path):
+    feed_a = client.post(
+        "/api/feeds",
+        json={"name": "Feed A", "type": "rss", "url_or_channel_id": "https://a", "topic": "gaming"},
+    ).json()
+    feed_b = client.post(
+        "/api/feeds",
+        json={"name": "Feed B", "type": "rss", "url_or_channel_id": "https://b", "topic": "news"},
+    ).json()
+
+    _insert_curation_book(db_path, "gaming", feed_a["id"], "library")
+    _insert_curation_book(db_path, "gaming", feed_a["id"], "discarded", "user")
+    _insert_curation_book(db_path, "gaming", feed_a["id"], "discarded", "expired")
+    _insert_curation_book(db_path, "gaming", feed_a["id"], "candidate")
+    _insert_curation_book(db_path, "news", feed_b["id"], "library")
+    # A manually-pasted book has no feed_id and must be excluded entirely.
+    client.post("/api/books", json={"title": "manual", "text": STORY})
+
+    curation = client.get("/api/stats").json()["curation"]
+
+    by_topic = {row["topic"]: row for row in curation["by_topic"]}
+    assert by_topic["gaming"] == {
+        "topic": "gaming", "promoted": 1, "user_discarded": 1, "expired": 1, "pending": 1,
+    }
+    assert by_topic["news"] == {
+        "topic": "news", "promoted": 1, "user_discarded": 0, "expired": 0, "pending": 0,
+    }
+
+    by_feed = {row["feed_id"]: row for row in curation["by_feed"]}
+    assert by_feed[feed_a["id"]] == {
+        "feed_id": feed_a["id"], "feed_name": "Feed A",
+        "promoted": 1, "user_discarded": 1, "expired": 1, "pending": 1,
+    }
+    assert by_feed[feed_b["id"]] == {
+        "feed_id": feed_b["id"], "feed_name": "Feed B",
+        "promoted": 1, "user_discarded": 0, "expired": 0, "pending": 0,
+    }
+
+
+def test_curation_breakdown_handles_deleted_feed(client, db_path):
+    feed = client.post(
+        "/api/feeds",
+        json={"name": "Gone", "type": "rss", "url_or_channel_id": "https://gone", "topic": "tech"},
+    ).json()
+    _insert_curation_book(db_path, "tech", feed["id"], "library")
+    client.delete(f"/api/feeds/{feed['id']}")
+
+    by_feed = client.get("/api/stats").json()["curation"]["by_feed"]
+    row = next(r for r in by_feed if r["feed_id"] == feed["id"])
+    assert row["feed_name"] == f"(deleted feed #{feed['id']})"
+    assert row["promoted"] == 1

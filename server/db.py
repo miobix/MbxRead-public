@@ -109,6 +109,16 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # inserted before this epic (backfilling is not attempted).
         "word_count": "INTEGER",
         "duration_seconds": "INTEGER",
+        # Epic 19: promotion stats provenance. feed_id is a soft reference (no FK,
+        # same convention as terms.source_book_id) set only for feed-sourced
+        # candidates (routes/feeds.py); manual imports leave it NULL, which is also
+        # how the curation stats query excludes them. discard_reason ('user' or
+        # 'expired') is set at the two places status flips to 'discarded': the
+        # manual PATCH path (routes/books.py) and Epic 17's auto-expiry UPDATE
+        # (routes/feeds.py); left loose (no CHECK) since it's informational, not a
+        # lifecycle gate like status.
+        "feed_id": "INTEGER",
+        "discard_reason": "TEXT",
     },
 }
 

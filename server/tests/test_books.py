@@ -131,6 +131,7 @@ def test_list_books_shape(client):
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
             "status", "general_coverage", "general_level",
             "word_count", "duration_seconds",
+            "feed_id", "discard_reason",
         }
         assert book["status"] == "library"
 
@@ -260,6 +261,8 @@ def test_promote_and_discard_via_patch(client):
 
     discarded = client.patch(f"/api/books/{book_id}", json={"status": "discarded"})
     assert discarded.json()["status"] == "discarded"
+    # Epic 19: a manual discard (as opposed to Epic 17's auto-expiry) is tagged 'user'.
+    assert discarded.json()["discard_reason"] == "user"
     assert client.get("/api/books").json() == []
 
 

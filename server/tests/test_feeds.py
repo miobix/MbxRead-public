@@ -107,6 +107,8 @@ def test_fetch_feeds_creates_candidate_from_new_item(client, db_path, monkeypatc
     assert candidates[0]["source"] == "article"
     assert candidates[0]["source_ref"] == "article:https://webzine.inven.co.kr/a"
     assert candidates[0]["scored_at"] is not None
+    # Epic 19: feed-sourced candidates carry their feed's id (curation-stats provenance).
+    assert candidates[0]["feed_id"] == feed_id
 
 
 def test_fetch_feeds_dedupes_on_second_run(client, db_path, monkeypatch):
@@ -224,6 +226,8 @@ def test_fetch_feeds_youtube_creates_candidate(client, db_path, monkeypatch):
     assert candidates[0]["scored_at"] is not None
     # Epic 18: real yt-dlp duration threaded through the feed-fetch path too.
     assert candidates[0]["duration_seconds"] == 612
+    # Epic 19: feed-sourced candidates carry their feed's id.
+    assert candidates[0]["feed_id"] == feed_id
 
 
 def test_fetch_feeds_youtube_skips_video_without_subs(client, db_path, monkeypatch):
@@ -363,8 +367,12 @@ def test_fetch_feeds_expires_stale_candidates(client, db_path):
     remaining = client.get("/api/books?status=candidate").json()
     assert [b["title"] for b in remaining] == ["Fresh candidate"]
 
-    discarded_titles = {b["title"] for b in client.get("/api/books?status=discarded").json()}
+    discarded = client.get("/api/books?status=discarded").json()
+    discarded_titles = {b["title"] for b in discarded}
     assert "Old candidate" in discarded_titles
+    # Epic 19: auto-expiry is distinguishable from a manual discard in the stats.
+    old = next(b for b in discarded if b["title"] == "Old candidate")
+    assert old["discard_reason"] == "expired"
 
 
 def test_fetch_feeds_expiry_respects_custom_retention_setting(client, db_path):

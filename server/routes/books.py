@@ -73,6 +73,8 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "general_level": row["general_level"],
         "word_count": row["word_count"],
         "duration_seconds": row["duration_seconds"],
+        "feed_id": row["feed_id"],
+        "discard_reason": row["discard_reason"],
     }
 
 
@@ -100,21 +102,23 @@ def insert_book(
     fetched: str | None = None,
     status: BookStatus = "library",
     duration_seconds: int | None = None,
+    feed_id: int | None = None,
 ) -> dict:
     """Shared by the paste/txt route, the Epic 12 importers, and Epic 15's feed
     fetcher: insert the book row + split pages, or raise DuplicateSourceRef on a
     source_ref collision. word_count (Epic 18) is derived from `text` for every
     source; duration_seconds is only ever passed for source='yt' (real yt-dlp
-    video length, not a transcript-based estimate)."""
+    video length, not a transcript-based estimate). feed_id (Epic 19) is only
+    ever passed by routes/feeds.py — manual imports leave it NULL."""
     word_count = len(text.split())
     try:
         cur = conn.execute(
             "INSERT INTO books (title, source, topic, tags, source_url, source_ref, "
-            "fetched, status, word_count, duration_seconds) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "fetched, status, word_count, duration_seconds, feed_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title, source, topic, json.dumps(tags or []), source_url, source_ref,
-                fetched, status, word_count, duration_seconds,
+                fetched, status, word_count, duration_seconds, feed_id,
             ),
         )
     except sqlite3.IntegrityError:
@@ -233,6 +237,11 @@ def patch_book(
     fields = body.model_dump(exclude_unset=True)
     if "tags" in fields:
         fields["tags"] = json.dumps(fields["tags"])
+    # Epic 19: the manual discard path (the Queue's Discard button) is what sets
+    # discard_reason='user' — the other write site, auto-expiry, sets 'expired'
+    # directly in its own UPDATE (routes/feeds.py._expire_stale_candidates).
+    if fields.get("status") == "discarded":
+        fields["discard_reason"] = "user"
     if fields:
         set_clause = ", ".join(f"{key} = ?" for key in fields)
         conn.execute(

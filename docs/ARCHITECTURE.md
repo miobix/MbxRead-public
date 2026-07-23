@@ -88,7 +88,17 @@ CREATE TABLE IF NOT EXISTS books (
   status TEXT NOT NULL DEFAULT 'library'        -- library | candidate | discarded
     CHECK (status IN ('library','candidate','discarded')),
   general_coverage REAL,                        -- weighted-average NIKL-grade score; NULL if unscored
-  general_level TEXT                            -- easy | medium | hard; NULL if unscored
+  general_level TEXT,                           -- easy | medium | hard; NULL if unscored
+  -- Epic 18 (additive migration): length stat for the Queue.
+  word_count INTEGER,                            -- every source, at insert time
+  duration_seconds INTEGER,                      -- yt only, real yt-dlp video length
+  -- Epic 19 (additive migration): promotion-stats provenance. feed_id is a soft
+  -- reference (no FK, same convention as terms.source_book_id below) — set only for
+  -- feed-sourced candidates (routes/feeds.py), NULL for manual imports/paste, which
+  -- is also how the curation stats query tells them apart. discard_reason ('user' |
+  -- 'expired') is set at the two places status flips to 'discarded'.
+  feed_id INTEGER,
+  discard_reason TEXT
 );
 CREATE TABLE IF NOT EXISTS pages (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -185,10 +195,10 @@ book has at least one (possibly empty) page.
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18) |
-| POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)** |
+| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds,feed_id,discard_reason}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18), `feed_id`/`discard_reason` (Epic 19) |
+| POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)**. `feed_id` is set only by `routes/feeds.py`'s internal `insert_book()` call, not exposed on this request body — manual imports/paste always leave it NULL |
 | GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
-| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?, status?}` | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)** |
+| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?, status?}` | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
@@ -210,9 +220,9 @@ book has at least one (possibly empty) page.
 | POST `/api/feeds` | `{name, type, url_or_channel_id, topic?, enabled?, difficulty_min?, difficulty_max?}` | created feed — **implemented (Epic 14)** |
 | PATCH `/api/feeds/{id}` | any editable field | updated feed — **implemented (Epic 14)** |
 | DELETE `/api/feeds/{id}` | – | 204 — **implemented (Epic 14)** |
-| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17)** |
+| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded', discard_reason='expired'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17, `discard_reason` Epic 19)**. Every created candidate is also stamped with its `feed_id` (Epic 19) |
 | POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
-| GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}}` — **implemented (Epic 16)** |
+| GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}, curation:{by_topic:[{topic,promoted,user_discarded,expired,pending}], by_feed:[{feed_id,feed_name,promoted,user_discarded,expired,pending}]}}` — **implemented (Epic 16, `curation` Epic 19)**. `curation` is computed only over `books` rows with `feed_id IS NOT NULL` (feed-fetched content); manual imports/paste are outside its scope by construction |
 
 **Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
 as its own row in the `settings` (key/value) table, JSON-encoded in the `value`
@@ -488,6 +498,41 @@ card/list toggle, chips, sort, length stat, source link, and back-to-top all
 join the already-owed browser/touch pass; a real feed-fetch pulling a real
 YouTube video (to confirm `duration_seconds` reflects its actual length, not
 an estimate) is worth doing alongside that pass.
+
+**Epic 19 status:** Promotion stats — what gets read vs. what doesn't. `books`
+gained two additive columns: `feed_id` (soft reference, no FK, same convention
+as `terms.source_book_id` — set only by `routes/feeds.py`'s `_insert_and_score`
+for feed-sourced candidates, NULL for every manual import/paste) and
+`discard_reason` (`'user'` | `'expired'` | NULL, no `CHECK` — informational,
+not a lifecycle gate). Two write sites for `discard_reason`: `routes/books.py`'s
+`patch_book` sets `'user'` whenever a `PATCH` sets `status: "discarded"`;
+`routes/feeds.py`'s `_expire_stale_candidates` (Epic 17's auto-expiry `UPDATE`)
+sets `'expired'` in the same statement — both kept, per the SPEC's flagged
+judgment call (see `docs/DECISIONS.md` for why lumping them under plain
+`discarded` was rejected). `routes/stats.py` gained `_curation_breakdown()`:
+one query grouping `books` by `(topic, feed_id, status, discard_reason)` over
+rows with `feed_id IS NOT NULL`, folded in Python into `by_topic`/`by_feed`
+arrays of `{promoted, user_discarded, expired, pending}` counts (`status`
+directly gives `promoted`/`pending`; `discarded` rows split by
+`discard_reason`). `by_feed` `LEFT JOIN`s `feeds` for the display name and
+falls back to `"(deleted feed #<id>)"` if the feed was since deleted — feed
+deletion never touches the books it produced. 176/176 tests green (7 new:
+`test_db.py` migration idempotency for the two columns; `test_feeds.py`'s
+candidate-creation tests extended with `feed_id` assertions and the expiry
+test extended with a `discard_reason == "expired"` assertion; `test_books.py`'s
+manual-discard test extended with `discard_reason == "user"`, plus its
+book-shape key-set test updated for the two new fields; `test_stats.py` gained
+`_insert_curation_book()` plus tests for the empty case, a multi-topic/
+multi-feed aggregation across all four buckets, and a deleted-feed fallback
+name). `npm run build`/`lint` clean. Frontend: `web/lib/api.ts` gained
+`CurationCounts`/`CurationByTopic`/`CurationByFeed` types and `Stats.curation`;
+`web/app/stats/page.tsx` gained a "What gets promoted" section (two stacked-bar
+breakdowns, by topic and by feed, hand-rolled SVG/CSS — no new npm dependency,
+same convention as every other `/stats` chart) rendered after `VocabDepth`.
+**Not verified in a browser** (no browser tooling in this environment) — joins
+the already-owed pass; also worth confirming with real feed activity (promote
+a few candidates, let a few expire, discard a few by hand) that the by-topic/
+by-feed bars actually look meaningful at real-world counts, not just in tests.
 
 **Page payload** (the core endpoint, implemented in Epic 2):
 ```json

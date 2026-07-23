@@ -18,6 +18,64 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 ACTIVITY_WINDOW_DAYS = 365
 
 
+CURATION_BUCKETS = ("promoted", "user_discarded", "expired", "pending")
+
+
+def _curation_breakdown(conn: sqlite3.Connection) -> dict:
+    """Promoted/user_discarded/expired/pending counts by topic and by feed, over
+    feed-sourced books only (feed_id IS NOT NULL — manual imports never set it, so
+    they're naturally excluded, per SPEC's "what gets read vs. what doesn't" framing
+    being about the automated pipeline specifically). status='library' counts as
+    promoted, status='candidate' as pending, and status='discarded' splits by
+    discard_reason ('user' vs 'expired') — a discarded row with no reason (e.g. a
+    pre-Epic-19 discard) isn't counted in any of the four buckets, since it's
+    genuinely ambiguous which one it belongs to."""
+    rows = conn.execute(
+        "SELECT b.topic, b.feed_id, f.name feed_name, b.status, b.discard_reason, "
+        "  COUNT(*) c "
+        "FROM books b LEFT JOIN feeds f ON f.id = b.feed_id "
+        "WHERE b.feed_id IS NOT NULL "
+        "GROUP BY b.topic, b.feed_id, b.status, b.discard_reason"
+    ).fetchall()
+
+    by_topic: dict[str, dict] = {}
+    by_feed: dict[int, dict] = {}
+
+    for row in rows:
+        if row["status"] == "library":
+            bucket = "promoted"
+        elif row["status"] == "candidate":
+            bucket = "pending"
+        elif row["discard_reason"] == "user":
+            bucket = "user_discarded"
+        elif row["discard_reason"] == "expired":
+            bucket = "expired"
+        else:
+            continue
+
+        topic_counts = by_topic.setdefault(
+            row["topic"], {b: 0 for b in CURATION_BUCKETS}
+        )
+        topic_counts[bucket] += row["c"]
+
+        feed_counts = by_feed.setdefault(
+            row["feed_id"],
+            {"feed_name": row["feed_name"] or f"(deleted feed #{row['feed_id']})",
+             **{b: 0 for b in CURATION_BUCKETS}},
+        )
+        feed_counts[bucket] += row["c"]
+
+    return {
+        "by_topic": [
+            {"topic": topic, **counts} for topic, counts in sorted(by_topic.items())
+        ],
+        "by_feed": [
+            {"feed_id": feed_id, **counts}
+            for feed_id, counts in sorted(by_feed.items())
+        ],
+    }
+
+
 def _streak(active_days: set[date], today: date) -> dict:
     """current: consecutive active days ending today (or yesterday, so a day that
     isn't over yet doesn't prematurely break the streak). longest: the longest run
@@ -135,4 +193,5 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
             "beginner_pct": beginner_pct,
             "total_a": total_a,
         },
+        "curation": _curation_breakdown(conn),
     }

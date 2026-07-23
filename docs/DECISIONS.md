@@ -661,3 +661,31 @@ Ranking a short article against a 2-hour video transcript needs one common unit.
 consume" number using a standard reading-speed constant — but only to order the list;
 `formatLength()` always displays the *exact* word count or *exact* duration, never the
 estimate, so the heuristic's imprecision never reaches the user as a stated fact.
+
+## 2026-07-23 — Epic 19: kept discard_reason as its own column, per the spec's recommendation
+SPEC §10 flagged this as a judgment call: lump auto-expiry and manual discard under
+plain `status='discarded'`, or add `discard_reason` to tell them apart. Kept the
+column — a pile of `expired` candidates in one topic (nobody looked, cadence/volume
+problem) reads completely differently from a pile of `user`-discarded ones (looked,
+rejected, taste/relevance problem), and that distinction is the entire point of a
+"what's NOT being promoted" stats section; collapsing it would make half the feature
+unable to answer its own question. Nullable, no `CHECK` (unlike `status`) — it's
+informational, not a lifecycle gate, and pre-Epic-19 discards (and the
+`test_fetch_feeds_skips_scraper_feed_type`-era rows with no `feed_id` at all) simply
+have it NULL. Two write sites only: `routes/books.py`'s manual `PATCH
+status='discarded'` sets `'user'`; `routes/feeds.py`'s `_expire_stale_candidates`
+(Epic 17's auto-expiry `UPDATE`) sets `'expired'` in the same statement — no third
+place ever writes it.
+
+## 2026-07-23 — Epic 19: feed_id is a soft reference, no FK, mirrors terms.source_book_id
+`books.feed_id` replaces the old `tags=[feed["name"]]` join-back-to-a-feed convention
+(fragile across feed renames — Epic 14/15's `_insert_and_score` used to stash the
+feed's *name* as a tag) with a stable id, but deliberately without a foreign key: a
+deleted feed (`DELETE /api/feeds/{id}`) must never cascade-delete or orphan-block the
+books it produced, since those books' reading/curation history is worth keeping even
+after the subscription itself is gone. `GET /api/stats`'s curation breakdown handles a
+now-missing feed by `LEFT JOIN`-ing and falling back to `"(deleted feed #<id>)"` rather
+than dropping the row. Manual imports (`routes/imports.py`'s four importers) and
+paste/txt (`routes/books.py`'s `create_book`) never set it, which is also exactly the
+condition the curation query uses to exclude non-automated content
+(`WHERE feed_id IS NOT NULL`) — no separate "is this feed-sourced" flag needed.

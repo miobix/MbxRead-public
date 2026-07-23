@@ -22,6 +22,8 @@ export type Book = {
   general_level: "easy" | "medium" | "hard" | null;
   word_count: number | null;
   duration_seconds: number | null;
+  feed_id: number | null;
+  discard_reason: "user" | "expired" | null;
 };
 
 export type ScoreResult = {
@@ -145,6 +147,16 @@ export type StatsBookRow = {
   pages_read: number;
 };
 
+export type CurationCounts = {
+  promoted: number;
+  user_discarded: number;
+  expired: number;
+  pending: number;
+};
+
+export type CurationByTopic = CurationCounts & { topic: string };
+export type CurationByFeed = CurationCounts & { feed_id: number; feed_name: string };
+
 export type Stats = {
   totals: {
     words_learning: number;
@@ -161,6 +173,10 @@ export type Stats = {
     buckets: { A: number; B: number; C: number; unlisted: number };
     beginner_pct: number | null;
     total_a: number;
+  };
+  curation: {
+    by_topic: CurationByTopic[];
+    by_feed: CurationByFeed[];
   };
 };
 

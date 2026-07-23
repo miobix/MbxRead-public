@@ -534,14 +534,36 @@ later epic until the real sources are known.
   card/list toggle, chips, sort, length stat, source link, and back-to-top all
   join the already-owed browser/touch pass; also worth a real feed-fetch of an
   actual YouTube video to confirm `duration_seconds` matches its real runtime.
-- [ ] **Epic 19 — Promotion stats: what gets read vs. what doesn't.** Planned
-  2026-07-23 — full scope in `docs/SPEC.md` §10. New `feed_id` provenance column on
-  `books` (replaces the fragile tags-as-join-key back to a feed); a `discard_reason`
-  column (`user`/`expired`) so the stats can tell an active reject apart from an
-  aged-out candidate — flagged in the SPEC as a judgment call the executor can drop
-  if not worth it; `GET /api/stats` gains a `curation` breakdown by topic and by
-  feed/channel (promoted/user_discarded/expired/pending counts); a new `/stats`
-  section rendering it, hand-rolled SVG/CSS per the existing no-new-deps convention.
+- [x] **Epic 19 — Promotion stats: what gets read vs. what doesn't** — done
+  (2026-07-23), as planned in `docs/SPEC.md` §10. Kept the SPEC's flagged judgment
+  call rather than dropping it: `discard_reason` (`'user'`/`'expired'`/NULL, no
+  `CHECK`) ships alongside `feed_id`, since collapsing the two into plain
+  `discarded` would make the new stats section unable to tell "actively rejected"
+  apart from "aged out unread" — the entire point of the feature (see
+  DECISIONS.md). `books` gained two additive columns: `feed_id` (soft reference, no
+  FK, same convention as `terms.source_book_id` — set only by `routes/feeds.py`'s
+  `_insert_and_score` for feed-sourced candidates; manual imports/paste leave it
+  NULL, which doubles as the curation query's "is this feed-sourced" filter) and
+  `discard_reason`, written at its two call sites (`routes/books.py`'s manual
+  `PATCH status='discarded'` → `'user'`; Epic 17's auto-expiry `UPDATE` in
+  `routes/feeds.py` → `'expired'`, in the same statement). `GET /api/stats` gained
+  `curation: {by_topic, by_feed}` — one grouped query over `feed_id IS NOT NULL`
+  rows, folded into `{promoted, user_discarded, expired, pending}` counts per
+  topic and per feed (`by_feed` falls back to `"(deleted feed #<id>)"` if the feed
+  was since deleted — deleting a feed never touches the books it produced). 176/176
+  tests green (7 new: `test_db.py` migration idempotency; `test_feeds.py` `feed_id`/
+  `discard_reason` round-tripping at both write sites; `test_books.py` the manual-
+  discard reason plus the book-shape key-set update; `test_stats.py`'s new
+  aggregation cases — empty, multi-topic/multi-feed across all four buckets, and
+  the deleted-feed fallback name). `npm run build`/`lint` clean. Frontend: `/stats`
+  gained a "What gets promoted" section (two stacked-bar breakdowns, hand-rolled
+  SVG/CSS, no new npm dependency — same convention as every other `/stats` chart).
+  Two DECISIONS.md entries (keeping `discard_reason`; `feed_id` as a soft
+  reference), ARCHITECTURE.md schema block + API table + a full Epic 19 write-up.
+  **Not verified in a browser** (no browser tooling in this environment) — joins
+  the already-owed pass; also worth a real look once there's been enough feed
+  activity (some promotions, some expiries, some manual discards) for the by-topic/
+  by-feed bars to show something meaningful, not just small test-sized counts.
 - [ ] **Epic 20 — Go-live (final stage, renumbered from Epic 17 on 2026-07-23 to make
   room for Epics 17-19 above).** Execute Epic 8's still-pending cold-start +
   Tailscale verification and go live day-to-day, optionally with a fuller per-page UI
@@ -574,14 +596,11 @@ later epic until the real sources are known.
   feeds management + YouTube fetch, done 2026-07-23)** are done. **Epic 16 — Stats
   screen + UI makeover** is done (2026-07-23).
 - **2026-07-23 planning session: Epics 17-19 added, Go-live renumbered to Epic 20**,
-  full scope in `docs/SPEC.md` §10. **Epics 17 and 18 are now both done** (see above)
-  — next up is **Epic 19** (promotion stats: `feed_id` provenance, `discard_reason`,
-  the `curation` stats breakdown). Epic 19 has one small forward dependency worth
-  remembering when it's picked up: it revisits Epic 17's `_expire_stale_candidates()`
-  query in `routes/feeds.py` to also set `discard_reason='expired'` once that column
-  exists. Separately, registering `scripts/fetch_feeds.ps1` in the user's actual
-  Windows Task Scheduler is deliberately deferred to **Epic 20** (go-live), not any
-  epic before it — the user confirmed 2026-07-23 the script itself is fine as-is.
+  full scope in `docs/SPEC.md` §10. **Epics 17, 18, and 19 are now all done** (see
+  above) — next up is **Epic 20** (go-live: cold-start + Tailscale verification;
+  registering `scripts/fetch_feeds.ps1` in the user's actual Windows Task Scheduler
+  is deliberately deferred to this epic, not any epic before it — the user
+  confirmed 2026-07-23 the script itself is fine as-is).
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
@@ -594,7 +613,11 @@ later epic until the real sources are known.
   add/edit/disable a feed on `/feeds`, check the Stats screen after saving words + reading
   a few pages, change page size and confirm books re-paginate with reading position
   preserved, plus the older Epic 4-11 checklist items above) is still owed whenever the
-  user is ready.
+  user is ready. Epics 17-19 add three more items to the same pass: the retention
+  setting on `/settings`, the Queue's card/list/chip/sort/length/back-to-top UX, and
+  Epic 19's new "What gets promoted" section on `/stats` (best checked after some real
+  feed activity — promotions, expiries, manual discards — so the by-topic/by-feed bars
+  show something meaningful).
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,
