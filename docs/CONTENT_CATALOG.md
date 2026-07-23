@@ -66,9 +66,11 @@ game]" rather than trying to pre-subscribe to every possible game's guide site.
 
 ## Literature (new category — not RSS/feed-based)
 
-Books aren't a subscription source — each is a one-time acquisition (buy an ebook/epub,
-then import via the existing `import_tools/pdf_text.py` path once Epic 12 wires it in, or
-paste a chapter to try it first). Listed here as *candidates to react to*, not a feed list.
+Books aren't a subscription source — each is a one-time acquisition (buy an ebook, import
+it directly via the **EPUB** importer — `POST /api/import/epub`, the "EPUB" mode in the
+add-book modal — or the PDF importer, or paste a chapter to try it first). EPUB gives the
+cleanest text (real XHTML, no PDF layout artifacts) so prefer it when a book is available
+in that format. Listed here as *candidates to react to*, not a feed list.
 
 | Candidate | Format | Why it fits | Notes |
 |---|---|---|---|

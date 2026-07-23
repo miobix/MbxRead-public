@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from import_tools.epub_text import extract as extract_epub
 from import_tools.pdf_text import extract as extract_pdf
 from import_tools.pdf_text import parse_page_range
 from import_tools.yt_subs import fetch_subs
@@ -103,3 +104,37 @@ async def import_pdf(
         )
     except DuplicateSourceRef:
         raise HTTPException(status_code=409, detail="this PDF has already been imported")
+
+
+@router.post("/epub", status_code=201)
+async def import_epub(
+    file: UploadFile,
+    title: str = Form(""),
+    topic: str = Form(""),
+    tags: str = Form(""),
+    conn: sqlite3.Connection = Depends(db_module.get_db),
+):
+    content = await file.read()
+    try:
+        text = extract_epub(content)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": str(e)})
+    if not text.strip():
+        return JSONResponse(
+            status_code=502, content={"error": "No extractable text in this EPUB."}
+        )
+    book_title = title.strip() or Path(file.filename or "untitled.epub").stem
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    digest = hashlib.sha256(content).hexdigest()
+    try:
+        return insert_book(
+            conn,
+            title=book_title,
+            text=text,
+            source="epub",
+            topic=topic,
+            tags=tag_list,
+            source_ref=f"epub:{digest}",
+        )
+    except DuplicateSourceRef:
+        raise HTTPException(status_code=409, detail="this EPUB has already been imported")

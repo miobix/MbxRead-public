@@ -6,5 +6,6 @@ kiwipiepy==0.23.2
 pytest==9.1.1
 yt-dlp==2026.7.4
 pymupdf==1.28.0
+ebooklib==0.20
 trafilatura==2.1.0
 python-multipart==0.0.32
