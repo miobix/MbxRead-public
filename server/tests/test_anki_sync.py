@@ -51,6 +51,25 @@ def test_sync_adds_new_learning_term(client, monkeypatch):
     assert saved["anki_dirty"] is False
 
 
+def test_sync_front_includes_extra_forms(client, monkeypatch):
+    """Epic 20: the card's Korean face is `lemma / form1 / form2`."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+
+    def fake_add_note(deck, front, back):
+        add_calls.append((deck, front, back))
+        return 555
+
+    monkeypatch.setattr(anki, "add_note", fake_add_note)
+
+    _create(client, lemma="승인", translation="approval", forms=["승인서", "승인하다"])
+    resp = client.post("/api/anki/sync")
+
+    assert resp.json() == {"added": 1, "updated": 0, "failed": []}
+    assert add_calls == [("Korean", "승인 / 승인서 / 승인하다", "approval")]
+
+
 def test_sync_updates_dirty_term_without_duplicating(client, monkeypatch):
     monkeypatch.setattr(anki, "ping", lambda: None)
     monkeypatch.setattr(anki, "create_deck", lambda deck: None)

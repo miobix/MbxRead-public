@@ -69,8 +69,34 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
 
     page = client.get(f"/api/books/{book_id}/pages/1").json()
     assert page["terms"] == {
-        "입다": {"id": 1, "translation": "to wear", "status": "learning", "deck": "Korean"}
+        "입다": {
+            "id": 1,
+            "lemma": "입다",
+            "translation": "to wear",
+            "status": "learning",
+            "deck": "Korean",
+            "forms": [],
+        }
     }
+
+
+def test_page_highlights_a_terms_extra_form(client):
+    """Epic 20: a token whose lemma is one of a term's `forms` highlights as that
+    term, even though the term's own lemma never appears on the page."""
+    resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
+    book_id = resp.json()["id"]
+
+    # lemma 승인 is not in SHORT_STORY; its form 학교 is a token lemma on the page.
+    client.post(
+        "/api/terms",
+        json={"lemma": "승인", "translation": "approval", "forms": ["학교"]},
+    )
+
+    page = client.get(f"/api/books/{book_id}/pages/1").json()
+    assert "승인" not in page["terms"]
+    assert page["terms"]["학교"]["translation"] == "approval"
+    assert page["terms"]["학교"]["lemma"] == "승인"
+    assert page["terms"]["학교"]["forms"] == ["학교"]
 
 
 def test_get_nonexistent_page_returns_404(client):

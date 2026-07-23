@@ -18,6 +18,18 @@ def _render_back(translation: str, sentence: str) -> str:
     return translation
 
 
+def _render_front(conn: sqlite3.Connection, term_id: int, lemma: str) -> str:
+    """Epic 20: the card's Korean face is the lemma plus any extra forms, e.g.
+    `승인 / 승인서 / 승인하다`. No forms → just the lemma (unchanged behavior)."""
+    forms = [
+        r["form"]
+        for r in conn.execute(
+            "SELECT form FROM term_forms WHERE term_id = ? ORDER BY rowid", (term_id,)
+        )
+    ]
+    return " / ".join([lemma, *forms])
+
+
 @router.post("/sync")
 def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     try:
@@ -44,8 +56,9 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
 
     for row in new_terms:
         back = _render_back(row["translation"], row["sentence"])
+        front = _render_front(conn, row["id"], row["lemma"])
         try:
-            note_id = anki.add_note(row["deck"] or DEFAULT_DECK, row["lemma"], back)
+            note_id = anki.add_note(row["deck"] or DEFAULT_DECK, front, back)
             conn.execute(
                 "UPDATE terms SET anki_note_id = ?, anki_dirty = 0 WHERE id = ?",
                 (note_id, row["id"]),
@@ -56,8 +69,9 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
 
     for row in dirty_terms:
         back = _render_back(row["translation"], row["sentence"])
+        front = _render_front(conn, row["id"], row["lemma"])
         try:
-            anki.update_note_fields(row["anki_note_id"], row["lemma"], back)
+            anki.update_note_fields(row["anki_note_id"], front, back)
             conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = ?", (row["id"],))
             updated += 1
         except anki.AnkiError as e:

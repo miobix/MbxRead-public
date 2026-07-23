@@ -122,6 +122,14 @@ CREATE TABLE IF NOT EXISTS terms (
   source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
   source_page INTEGER                            -- Epic 16: page it was first saved from
 );
+-- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
+-- Highlights in the reader (matched alongside the lemma in get_page) and renders on the
+-- Anki card's Korean face; lemma stays the single clean dictionary form.
+CREATE TABLE IF NOT EXISTS term_forms (
+  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+  form TEXT NOT NULL,
+  PRIMARY KEY (term_id, form)
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- Epic 16: reading-activity log for /stats. One row per page ever read; the
 -- PRIMARY KEY + INSERT OR IGNORE dedup means a revisit never double-counts.
@@ -540,12 +548,14 @@ by-feed bars actually look meaningful at real-world counts, not just in tests.
   "page_no": 3, "page_count": 12,
   "content": "그는 옷을 입고 나갔다. …",
   "tokens": [ {"s": 7, "e": 9, "surface": "입고", "lemma": "입다", "pos": "VV"}, … ],
-  "terms":  { "입다": {"id": 5, "translation": "to wear", "status": "learning", "deck": "Korean"}, … }
+  "terms":  { "입다": {"id": 5, "lemma": "입다", "translation": "to wear", "status": "learning", "deck": "Korean", "forms": []}, … }
 }
 ```
 `tokens` covers every eojeol with a resolvable lemma (`s`/`e` are char offsets into
-`content`). `terms` contains only saved terms whose lemma appears in this page's
-tokens. The frontend renders spans from offsets and applies the highlight class when
+`content`). `terms` contains saved terms whose lemma **or one of its Epic-20 `forms`**
+appears in this page's tokens; keyed by the matched string (direct lemma wins over a
+form of the same string), each entry carrying `lemma` + `forms`. The frontend renders
+spans from offsets and applies the highlight class when
 `token.lemma in terms && status === 'learning'`.
 
 ## Tokenizer (`server/tokenizer.py`, Epic 1 — implemented)
@@ -678,9 +688,11 @@ Sync algorithm:
    AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
 3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` (`modelName:
-   "Basic"`, Front = lemma, Back = translation + `<br><br><i>sentence</i>` when
-   present, tags `["korean-reader"]`, `options.allowDuplicate: false`). Store returned
-   id, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
+   "Basic"`, Front = lemma **plus any Epic-20 `forms`, joined ` / `**, Back =
+   translation + `<br><br><i>sentence</i>` when present, tags `["korean-reader"]`,
+   `options.allowDuplicate: false`). Store returned id, clear dirty. On per-note error
+   (e.g. duplicate) record in `failed`, continue. (Epic 21 swaps `Basic` for a custom
+   two-way note type on new notes, keeping existing `Basic` notes' review history.)
 4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → `updateNoteFields` with the
    same field rendering; on success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not

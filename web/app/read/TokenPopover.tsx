@@ -28,8 +28,8 @@ export function TokenPopover({
   defaultDeck: string;
   translatorBackend?: string;
   onClose: () => void;
-  onSaved: (originalLemma: string, newLemma: string, term: Term) => void;
-  onDeleted: (lemma: string) => void;
+  onSaved: (term: Term) => void;
+  onDeleted: (term: TermSummary) => void;
 }) {
   const isEditing = target.existing !== null;
   const deckOptions =
@@ -37,12 +37,36 @@ export function TokenPopover({
       ? [...decks, target.existing.deck]
       : decks;
 
-  const [lemma, setLemma] = useState(target.lemma);
+  // When a saved word is tapped via one of its extra forms (e.g. 승인서), the token
+  // lemma is that form — show the term's real dictionary form (승인) instead.
+  const [lemma, setLemma] = useState(target.existing?.lemma ?? target.lemma);
   const [translation, setTranslation] = useState(target.existing?.translation ?? "");
   const [deck, setDeck] = useState(target.existing?.deck || defaultDeck);
+  const [forms, setForms] = useState<string[]>(target.existing?.forms ?? []);
+  const [formInput, setFormInput] = useState("");
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Split on whitespace / comma / slash so the user can paste "승인서, 승인하다" or
+  // the slash-separated shape they used to type into the lemma field.
+  const parseForms = (text: string) =>
+    text
+      .split(/[\s,/]+/)
+      .map((f) => f.trim())
+      .filter(Boolean);
+
+  const addForms = (text: string) => {
+    const additions = parseForms(text).filter((f) => f !== lemma.trim());
+    setForms((prev) => {
+      const next = [...prev];
+      for (const f of additions) if (!next.includes(f)) next.push(f);
+      return next;
+    });
+    setFormInput("");
+  };
+
+  const removeForm = (f: string) => setForms((prev) => prev.filter((x) => x !== f));
 
   const translateWord = async () => {
     if (!lemma.trim()) return;
@@ -77,6 +101,11 @@ export function TokenPopover({
       setError("Lemma can't be empty.");
       return;
     }
+    // Fold in any form still sitting in the input that wasn't committed to a chip.
+    const pending = parseForms(formInput).filter(
+      (f) => f !== trimmedLemma && !forms.includes(f)
+    );
+    const finalForms = [...forms, ...pending];
     setBusy("save");
     setError(null);
     try {
@@ -86,18 +115,20 @@ export function TokenPopover({
             translation: translation.trim(),
             deck,
             sentence: target.sentence,
+            forms: finalForms,
           })
         : await api.createTerm({
             lemma: trimmedLemma,
             translation: translation.trim(),
             deck,
             sentence: target.sentence,
+            forms: finalForms,
             status: "learning",
             // Provenance: record where this word was first saved (Epic 16 stats).
             source_book_id: bookId ?? undefined,
             source_page: pageNo ?? undefined,
           });
-      onSaved(target.lemma, trimmedLemma, term);
+      onSaved(term);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save.");
@@ -111,7 +142,7 @@ export function TokenPopover({
     setError(null);
     try {
       const term = await api.patchTerm(target.existing.id, { status });
-      onSaved(target.lemma, target.lemma, term);
+      onSaved(term);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update.");
@@ -125,7 +156,7 @@ export function TokenPopover({
     setError(null);
     try {
       await api.deleteTerm(target.existing.id);
-      onDeleted(target.lemma);
+      onDeleted(target.existing);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete.");
@@ -150,6 +181,41 @@ export function TokenPopover({
           placeholder="Dictionary form (lemma)"
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
+
+        <div className="flex flex-col gap-1.5">
+          {forms.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {forms.map((f) => (
+                <span
+                  key={f}
+                  className="inline-flex items-center gap-1 rounded-full bg-highlight/60 px-2 py-0.5 text-xs"
+                >
+                  {f}
+                  <button
+                    type="button"
+                    onClick={() => removeForm(f)}
+                    aria-label={`Remove ${f}`}
+                    className="text-muted hover:text-danger transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <input
+            value={formInput}
+            onChange={(e) => setFormInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "," || e.key === "/") {
+                e.preventDefault();
+                addForms(formInput);
+              }
+            }}
+            placeholder="Also highlight (e.g. 승인서, 승인하다)"
+            className="rounded-lg border border-border bg-transparent px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          />
+        </div>
 
         <div className="flex gap-2 flex-wrap">
           <button

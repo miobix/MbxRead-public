@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS terms (
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- Epic 20: extra surface forms one term also covers (aliases), e.g. 승인서/승인하다 under
+-- lemma 승인. Each form highlights in the reader (matched alongside the lemma in get_page)
+-- and renders on the Anki card's Korean face; lemma stays the single clean dictionary form.
+CREATE TABLE IF NOT EXISTS term_forms (
+  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+  form TEXT NOT NULL,
+  PRIMARY KEY (term_id, form)
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
@@ -122,7 +130,7 @@ Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at imp
   "terms":  { "입다": {"id": 5, "translation": "to wear", "status": "learning", "deck": "Korean"}, … }
 }
 ```
-`tokens` covers every eojeol with a resolvable lemma (`s`/`e` are char offsets into `content`). `terms` contains only saved terms whose lemma appears in this page's tokens. The frontend renders spans from offsets and applies the highlight class when `token.lemma in terms && status === 'learning'`.
+`tokens` covers every eojeol with a resolvable lemma (`s`/`e` are char offsets into `content`). `terms` contains saved terms whose lemma **or one of its Epic-20 `forms`** appears in this page's tokens; the map is keyed by the matched string (a direct lemma match wins over a form of the same string) and each entry carries `lemma` + `forms` (so the popover can show the parent dictionary form when a form token is tapped). The frontend renders spans from offsets and applies the highlight class when `token.lemma in terms && status === 'learning'`.
 
 ## 6. Tokenizer spec (`server/tokenizer.py`)
 
@@ -163,7 +171,7 @@ AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`
 Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
-3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` (`modelName: "Basic"`, Front = lemma, Back = translation + `<br><br><i>sentence</i>` when present, tags `["korean-reader"]`, `options.allowDuplicate: false`). Store returned id, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
+3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` (`modelName: "Basic"`, Front = lemma **plus any Epic-20 `forms`, joined ` / ` (`승인 / 승인서 / 승인하다`)**, Back = translation + `<br><br><i>sentence</i>` when present, tags `["korean-reader"]`, `options.allowDuplicate: false`). Store returned id, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue. (Epic 21 will replace `Basic` with a custom two-way note type for new notes while preserving existing `Basic` notes' history.)
 4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → `updateNoteFields` with the same field rendering; on success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not synced (existing notes left alone).
 
@@ -289,6 +297,28 @@ Planned 2026-07-23; not yet started. Depends on Epic 17 (touches the expiry `UPD
 Tests: `test_stats.py` gains curation-aggregation cases across multiple topics/feeds and all four buckets; `test_feeds.py`/`test_books.py` cover `feed_id` and `discard_reason` round-tripping at their respective write sites; `test_db.py` gains migration-idempotency cases for both new columns.
 
 **Accept:** `pytest` + `npm run build`/`lint` green. Promoting, manually discarding, and letting a candidate expire across two different feeds/topics in a test produces the expected `by_topic`/`by_feed` counts in `GET /api/stats`; `/stats` renders the new section with no new dependency.
+
+### Epic 20 — Term forms (aliases) + highlighting fix
+
+Done 2026-07-23 (plan `hey-babes-i-need-temporal-beacon`, Phase A). Fixes the bug where hand-editing a term's lemma into `승인 / 승인서` broke highlighting. Scope:
+
+1. **`term_forms(term_id, form)` table** (`CREATE TABLE IF NOT EXISTS`, `ON DELETE CASCADE`) — extra surface forms one term also covers. Normalized (not a JSON column) so page matching stays a set-membership join.
+2. **`routes/terms.py`** — `TermCreate`/`TermPatch` accept `forms: list[str]`; normalized (trim, drop blanks + the lemma itself, dedupe, keep order); `_term_dict` returns `forms`; a forms change is a dirty trigger.
+3. **`books.get_page`** — also matches token lemmas against `term_forms`, keyed by the form string (direct-lemma match wins); each map entry carries `lemma` + `forms`.
+4. **`anki_sync._render_front`** — Front = `lemma / form1 / form2` (still `Basic` model).
+5. **Frontend** — `TokenPopover` "Also highlight" chip editor (splits on space/comma/slash); `read/page.tsx` re-keys the highlight map by term id on save/delete.
+
+**Accept:** `pytest` + `npm run build`/`lint` green; a token matching a saved term's form highlights and its popover shows the parent lemma; Anki Front shows `lemma / form`.
+
+### Epic 21 — Dictionary click-to-add + krdict examples + reversed Anki card type
+
+Planned 2026-07-23 (Phase B); not started. **Hard constraint: no Claude API** (krdict + DeepL + manual only). Scope:
+
+1. **Interactive dictionary** — clicking a krdict headword adds it to `forms`; clicking a sense appends its English gloss to the translation.
+2. **krdict examples** — extend `translate_svc/krdict.py` to return example sentences per entry (⚠️ verify: the search API `<sense>` may lack examples; may need a `method=view` call on the item's `<target_code>`). Surface as clickable "collocations" (기타를 치다) to attach to the card; store on the term (JSON `examples` column, since examples are display-only). Phrase selections → translate-only popover.
+3. **Custom two-way Anki note type** — fields `Korean`/`English`/`Examples`, two card templates (KO→EN and EN→KO) that **both** keep `Examples` on the back only, so studying either direction never spoils the prompt. `server/anki.py` `ensure_model()` via AnkiConnect `createModel` (idempotent). **Preserve existing `Basic` notes' SRS history** — new terms use the new type; already-synced `Basic` notes keep the current Front/Back update path (branch by model).
+
+**Accept:** `pytest` + `npm run build`/`lint` green; clicking a dict headword/example fills forms/examples; new sync creates a two-card note with `Examples` on the back of both cards and the front of neither; existing `Basic` notes still update in place.
 
 ## 11. End-to-end verification (after Epic 8)
 

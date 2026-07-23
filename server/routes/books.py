@@ -300,10 +300,46 @@ def get_page(
         for row in rows:
             terms[row["lemma"]] = {
                 "id": row["id"],
+                "lemma": row["lemma"],
                 "translation": row["translation"],
                 "status": row["status"],
                 "deck": row["deck"],
+                "forms": [],
             }
+        # Epic 20: a term also highlights via any of its extra `forms`. Match those
+        # against the page's token lemmas too, keyed by the form string (so a token
+        # whose lemma is 승인서 lights up as the 승인 term). A direct lemma match wins
+        # if a string is both — hence the `not in terms` guard.
+        form_rows = conn.execute(
+            f"SELECT tf.form, t.id, t.lemma, t.translation, t.status, t.deck "
+            f"FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
+            f"WHERE tf.form IN ({placeholders})",
+            tuple(lemmas),
+        ).fetchall()
+        for row in form_rows:
+            if row["form"] not in terms:
+                terms[row["form"]] = {
+                    "id": row["id"],
+                    "lemma": row["lemma"],
+                    "translation": row["translation"],
+                    "status": row["status"],
+                    "deck": row["deck"],
+                    "forms": [],
+                }
+        # Attach every matched term's full forms list (so the reader popover can edit
+        # them when the token is tapped), in one grouped query over the matched ids.
+        matched_ids = {entry["id"] for entry in terms.values()}
+        if matched_ids:
+            id_ph = ", ".join("?" for _ in matched_ids)
+            forms_by_term: dict[int, list] = {}
+            for r in conn.execute(
+                f"SELECT term_id, form FROM term_forms WHERE term_id IN ({id_ph}) "
+                f"ORDER BY rowid",
+                tuple(matched_ids),
+            ):
+                forms_by_term.setdefault(r["term_id"], []).append(r["form"])
+            for entry in terms.values():
+                entry["forms"] = forms_by_term.get(entry["id"], [])
 
     return {
         "page_no": page_no,

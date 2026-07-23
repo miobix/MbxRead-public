@@ -86,9 +86,11 @@ export type TermStatus = "learning" | "known" | "ignored";
 
 export type TermSummary = {
   id: number;
+  lemma: string;
   translation: string;
   status: TermStatus;
   deck: string;
+  forms: string[];
 };
 
 export type Term = {
@@ -99,6 +101,7 @@ export type Term = {
   status: TermStatus;
   deck: string;
   sentence: string;
+  forms: string[];
   anki_note_id: number | null;
   anki_dirty: boolean;
   created: string;
@@ -267,13 +270,16 @@ export const api = {
     status?: TermStatus;
     deck?: string;
     sentence?: string;
+    forms?: string[];
     source_book_id?: number;
     source_page?: number;
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
 
   patchTerm: (
     id: number,
-    body: Partial<Pick<Term, "lemma" | "translation" | "notes" | "status" | "deck" | "sentence">>
+    body: Partial<
+      Pick<Term, "lemma" | "translation" | "notes" | "status" | "deck" | "sentence" | "forms">
+    >
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   deleteTerm: (id: number) => request<void>(`/terms/${id}`, { method: "DELETE" }),

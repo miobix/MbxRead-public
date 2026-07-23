@@ -564,14 +564,55 @@ later epic until the real sources are known.
   the already-owed pass; also worth a real look once there's been enough feed
   activity (some promotions, some expiries, some manual discards) for the by-topic/
   by-feed bars to show something meaningful, not just small test-sized counts.
-- [ ] **Epic 20 — Go-live (final stage, renumbered from Epic 17 on 2026-07-23 to make
-  room for Epics 17-19 above).** Execute Epic 8's still-pending cold-start +
-  Tailscale verification and go live day-to-day, optionally with a fuller per-page UI
-  polish pass. **Also register `scripts/fetch_feeds.ps1` in Windows Task Scheduler
-  here** (per the README section Epic 17 added) — the user confirmed 2026-07-23 the
-  script itself needs no changes, actually wiring it up on their machine is part of
-  go-live, not before. **Acceptance:** a verified cold-start `start.ps1` run reachable
-  from the phone over Tailscale, and the scheduled fetch task registered and firing.
+- [x] **Epic 20 — Term forms (aliases) + highlighting fix** — done (2026-07-23).
+  Fixes a real bug: the user hand-edited a term's **lemma** into `승인 / 승인서` to remind
+  themselves on the Anki card that the derived word 승인서 exists — which broke
+  highlighting, since matching is exact lemma-equality and `승인 / 승인서` is no tokenizer
+  lemma. Introduced a **`forms` list per term** (the aliases) that does double duty:
+  each form both highlights in the reader (tapping it opens the parent term) **and**
+  renders on the Korean face of the Anki card, while `lemma` stays the one clean
+  dictionary form. New `term_forms(term_id, form)` table (`CREATE TABLE IF NOT EXISTS`
+  with `ON DELETE CASCADE`, like `pages`/`page_reads` — not a JSON column, so
+  `books.get_page` matching stays an efficient `WHERE form IN (...)`). `routes/terms.py`:
+  `TermCreate`/`TermPatch` accept `forms: list[str]`; `_normalize_forms` (trim, drop
+  blanks + the lemma itself, dedupe keeping order); `_term_dict` returns `forms`; a forms
+  change is a dirty trigger (re-syncs the card front). `books.get_page`: second query
+  joins `term_forms` and keys the returned map by the **form** string (direct-lemma match
+  wins on collision); the map now also carries `lemma` + `forms` per entry so a tapped
+  form token shows the real dictionary form in the popover. `anki_sync._render_front`:
+  Front = `lemma / form1 / form2`. Frontend: `TokenPopover` gained a chip-style "Also
+  highlight" forms editor (splits on space/comma/slash — the shape the user was typing);
+  `read/page.tsx` re-keys the highlight map by term id on save/delete so form highlights
+  refresh without a refetch. 184 tests green (8 new: forms round-trip/normalize on
+  create+patch, forms-change dirty rule, cascade delete, `get_page` highlights a form,
+  Anki front with forms). `npm run build`/`lint` clean. Immediate cleanup for the user:
+  edit the broken term — set lemma back to `승인`, add `승인서` in "Also highlight".
+  **Not verified in a browser** (no browser tooling here) — joins the owed pass: save a
+  word with an extra form, confirm the form highlights and tapping it opens the parent
+  entry, then sync and confirm the card Front shows `lemma / form`. The `/terms`
+  management page does **not** yet edit forms (reader popover only) — a small Phase-B/
+  follow-up gap if wanted.
+- [ ] **Epic 21 — Dictionary click-to-add + krdict examples + reversed Anki card type.**
+  Phase B of the term-forms work (plan: `hey-babes-i-need-temporal-beacon`). Make
+  dictionary results interactive (click a headword → adds to `forms`; click a sense →
+  appends its English gloss to the translation); extend `translate_svc/krdict.py` to
+  return **example sentences** per entry (⚠️ verify: search API `<sense>` may lack
+  examples — may need a `method=view` call on the item's `<target_code>`), surfaced as
+  clickable "collocations" (기타를 치다) to attach to the card. Add a **custom two-way
+  Anki note type** (fields `Korean`/`English`/`Examples`; two templates, both keeping
+  `Examples` on the **back** only, so studying either direction never spoils the prompt).
+  **Preserve existing `Basic` notes' SRS history** — new terms use the new type; already-
+  synced Basic notes keep the current Front/Back path. **No Claude API anywhere** (user
+  constraint) — krdict + DeepL + manual only. Phrase selections get a translate-only
+  popover (hide dictionary/forms/examples).
+- [ ] **Epic 22 — Go-live (final stage, renumbered from Epic 17→20→22 as content epics
+  were inserted).** Execute Epic 8's still-pending cold-start + Tailscale verification
+  and go live day-to-day, optionally with a fuller per-page UI polish pass. **Also
+  register `scripts/fetch_feeds.ps1` in Windows Task Scheduler here** (per the README
+  section Epic 17 added) — the user confirmed 2026-07-23 the script itself needs no
+  changes, actually wiring it up on their machine is part of go-live, not before.
+  **Acceptance:** a verified cold-start `start.ps1` run reachable from the phone over
+  Tailscale, and the scheduled fetch task registered and firing.
 
 ## Known issues / deviations
 
@@ -597,10 +638,17 @@ later epic until the real sources are known.
   screen + UI makeover** is done (2026-07-23).
 - **2026-07-23 planning session: Epics 17-19 added, Go-live renumbered to Epic 20**,
   full scope in `docs/SPEC.md` §10. **Epics 17, 18, and 19 are now all done** (see
-  above) — next up is **Epic 20** (go-live: cold-start + Tailscale verification;
-  registering `scripts/fetch_feeds.ps1` in the user's actual Windows Task Scheduler
-  is deliberately deferred to this epic, not any epic before it — the user
-  confirmed 2026-07-23 the script itself is fine as-is).
+  above).
+- **2026-07-23 — Epic 20 (Term forms/aliases) done; go-live renumbered again to Epic
+  22.** A term-forms feature was planned (plan file `hey-babes-i-need-temporal-beacon`,
+  approved by the user) in two phases: **Epic 20** (forms/aliases + highlighting fix —
+  done this session) and **Epic 21** (dictionary click-to-add + krdict examples + a
+  custom two-way Anki note type — not started). To keep go-live last, it was renumbered
+  20→22. **Next up is Epic 21**, then **Epic 22** (go-live: cold-start + Tailscale
+  verification; registering `scripts/fetch_feeds.ps1` in the user's actual Windows Task
+  Scheduler is deliberately deferred to that epic — the user confirmed 2026-07-23 the
+  script itself is fine as-is). Hard user constraint carried into Epic 21: **no Claude
+  API** in the card-builder feature (krdict + DeepL + manual only).
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
