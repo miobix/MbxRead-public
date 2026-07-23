@@ -238,7 +238,7 @@ later epic until the real sources are known.
   URLs fetched live), not personally vetted by the user — treat YouTube channel picks and
   author picks as a shortlist to react to before Epic 12 wires anything to them. Re-think the sources later. 
   For reviews and guides, prioritize well written articles over user unstructured short comments.
-  For youtube, lets explore gaming podcasts on the next iteration.
+  For youtube, lets explore gaming podcasts, reviews and essays, and left leaning video essayinsts like Contrapoints, HBomberGuy or PhilosophyTube on the next iteration. Focus on exposition of ideas on fields i enjoy.
 - [x] **Epic 11 — DB expansion + library UX** — done (2026-07-22). `server/db.py`:
   `_ADDED_COLUMNS["books"]` grew seven columns (`topic` TEXT, `tags` JSON-encoded TEXT,
   `source_url`, `source_ref` nullable, `fetched`, `archived`, `read`) via the same
