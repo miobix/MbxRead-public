@@ -293,7 +293,7 @@ def get_page(
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
         rows = conn.execute(
-            f"SELECT id, lemma, translation, status, deck FROM terms "
+            f"SELECT id, lemma, translation, status, deck, examples FROM terms "
             f"WHERE lemma IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
@@ -305,13 +305,14 @@ def get_page(
                 "status": row["status"],
                 "deck": row["deck"],
                 "forms": [],
+                "examples": json.loads(row["examples"]),
             }
         # Epic 20: a term also highlights via any of its extra `forms`. Match those
         # against the page's token lemmas too, keyed by the form string (so a token
         # whose lemma is 승인서 lights up as the 승인 term). A direct lemma match wins
         # if a string is both — hence the `not in terms` guard.
         form_rows = conn.execute(
-            f"SELECT tf.form, t.id, t.lemma, t.translation, t.status, t.deck "
+            f"SELECT tf.form, t.id, t.lemma, t.translation, t.status, t.deck, t.examples "
             f"FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
             f"WHERE tf.form IN ({placeholders})",
             tuple(lemmas),
@@ -325,6 +326,7 @@ def get_page(
                     "status": row["status"],
                     "deck": row["deck"],
                     "forms": [],
+                    "examples": json.loads(row["examples"]),
                 }
         # Attach every matched term's full forms list (so the reader popover can edit
         # them when the token is tapped), in one grouped query over the matched ids.

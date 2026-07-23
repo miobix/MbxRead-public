@@ -96,6 +96,15 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "terms": {
         "source_book_id": "INTEGER",
         "source_page": "INTEGER",
+        # Epic 21: usage examples clicked in from krdict (collocations like 기타를 치다)
+        # plus the captured reading sentence. Display-only — never matched against page
+        # tokens — so a JSON-encoded list column, not a normalized table like term_forms.
+        # They render on the *back* of the Anki card only. `anki_model` records which
+        # AnkiConnect note type a synced term lives in: NULL/'Basic' for notes synced
+        # before Epic 21 (kept on the stock two-field model to preserve SRS history),
+        # the custom two-way model name for anything synced afterwards.
+        "examples": "TEXT NOT NULL DEFAULT '[]'",
+        "anki_model": "TEXT",
     },
     "books": {
         "coverage": "REAL",

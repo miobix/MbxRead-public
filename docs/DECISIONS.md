@@ -711,3 +711,35 @@ a term can carry extra **forms** (aliases). Three choices worth recording:
   dirty trigger so the card front re-syncs. Deferred to Epic 21 (no Claude, per the user):
   interactive dictionary click-to-add, krdict example sentences, and a custom two-way Anki
   note type with examples confined to each card's answer side.
+
+## 2026-07-23 — Epic 21: dictionary click-to-add, krdict examples, custom two-way note type
+Phase B of the term-forms plan (`hey-babes-i-need-temporal-beacon`). Hard user
+constraint carried through: **no Claude API** anywhere — krdict + DeepL + manual only.
+Four choices worth recording:
+- **krdict examples come from a second `view` call, not the search response.** The
+  `search` API's `<sense>` carries glosses but no example sentences; examples live under
+  `word_info/sense_info/example_info/example`, only returned by the `view` API keyed on
+  an item's `<target_code>`. So `krdict.lookup()` now does 1 search + up to N `view`
+  calls (N = `max_entries`, raised 3→5 so more derived headwords surface for click-to-add),
+  each `view` best-effort (returns `[]` on any failure — no key, network, bad XML — so a
+  dictionary lookup never breaks over examples). Deduped and capped at 5 per entry.
+- **Examples stored as a JSON `examples` column on `terms`, not a normalized table.**
+  Unlike `term_forms` (matched against page tokens in `get_page`, so it must be a
+  set-membership join), examples are **display-only** — they only ever render on the Anki
+  card back. A JSON list column is simpler; `routes/terms.py` folds it into the same
+  generic UPDATE + `_DIRTY_TRIGGER_FIELDS` dirty check as the plain text columns (the
+  value is compared as its stored JSON string).
+- **Custom two-way note type, existing `Basic` notes preserved not migrated.** New terms
+  sync onto `"Korean Reader 2-way"` (fields Korean/English/Examples; two templates, both
+  keeping `Examples` on the back only — the anti-spoiler guarantee, asserted in tests).
+  A new `anki_model` column records which model a synced term lives in: notes synced
+  before Epic 21 have it NULL and keep the stock Front/Back update path, so their SRS
+  scheduling history is never disturbed — the sync loop branches on `anki_model`, no
+  re-creation, no `notesInfo` round-trip needed. `ensure_model()` is create-once
+  (guarded on `modelNames`), called best-effort each sync like `createDeck`.
+- **Phrase selections get a translate-only popover.** A multi-word span has no single
+  dictionary lemma or card-worthy forms, so `read/page.tsx` flags `isPhrase` (selection
+  contains whitespace) and `TokenPopover` hides the dictionary / forms / examples UI for
+  it — matching the user's words-vs-phrases distinction. Clicking a dict headword adds it
+  to `forms`; clicking a sense appends its English gloss to the translation; clicking an
+  example chip attaches it to the card's examples.

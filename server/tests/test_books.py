@@ -76,6 +76,7 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
             "status": "learning",
             "deck": "Korean",
             "forms": [],
+            "examples": [],
         }
     }
 

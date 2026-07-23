@@ -3,6 +3,36 @@ import httpx
 
 ANKICONNECT_URL = "http://localhost:8765"
 
+# Epic 21: the custom two-way note type. Two cards (KO→EN and EN→KO) share three
+# fields; `Examples` sits on the *back* of both templates and the front of neither,
+# so studying either direction never reveals the prompt word. Existing terms synced
+# before Epic 21 stay on stock `Basic` (preserving their SRS history) — only new
+# terms use this model. Bump the name if the templates ever change incompatibly;
+# ensure_model() is a create-once no-op when a model of this name already exists.
+MODEL_NAME = "Korean Reader 2-way"
+
+_CARD_CSS = (
+    ".card{font-family:sans-serif;font-size:22px;text-align:center;color:#111;"
+    "background:#fff}"
+    ".examples{margin-top:1em;font-size:15px;color:#777;text-align:left}"
+)
+
+# Examples are wrapped in a {{#Examples}}…{{/Examples}} section so an empty field
+# renders nothing (no stray divider). Crucially they appear only after {{FrontSide}}
+# on the answer, never in either Front — the anti-spoiler guarantee.
+_BACK_EN = (
+    "{{FrontSide}}<hr id=answer>{{English}}"
+    '{{#Examples}}<div class="examples">{{Examples}}</div>{{/Examples}}'
+)
+_BACK_KO = (
+    "{{FrontSide}}<hr id=answer>{{Korean}}"
+    '{{#Examples}}<div class="examples">{{Examples}}</div>{{/Examples}}'
+)
+_CARD_TEMPLATES = [
+    {"Name": "KO→EN", "Front": "{{Korean}}", "Back": _BACK_EN},
+    {"Name": "EN→KO", "Front": "{{English}}", "Back": _BACK_KO},
+]
+
 
 class AnkiError(Exception):
     """Anki unreachable, or AnkiConnect returned an error for a request."""
@@ -48,4 +78,40 @@ def update_note_fields(note_id: int, front: str, back: str) -> None:
     _invoke(
         "updateNoteFields",
         note={"id": note_id, "fields": {"Front": front, "Back": back}},
+    )
+
+
+def ensure_model() -> None:
+    """Create the custom two-way note type once. Idempotent — guarded on modelNames,
+    so it's a cheap no-op on every sync after the first."""
+    if MODEL_NAME in (_invoke("modelNames") or []):
+        return
+    _invoke(
+        "createModel",
+        modelName=MODEL_NAME,
+        inOrderFields=["Korean", "English", "Examples"],
+        css=_CARD_CSS,
+        isCloze=False,
+        cardTemplates=_CARD_TEMPLATES,
+    )
+
+
+def add_note_model(deck: str, korean: str, english: str, examples: str) -> int:
+    note = {
+        "deckName": deck,
+        "modelName": MODEL_NAME,
+        "fields": {"Korean": korean, "English": english, "Examples": examples},
+        "tags": ["korean-reader"],
+        "options": {"allowDuplicate": False},
+    }
+    return _invoke("addNote", note=note)
+
+
+def update_note_model(note_id: int, korean: str, english: str, examples: str) -> None:
+    _invoke(
+        "updateNoteFields",
+        note={
+            "id": note_id,
+            "fields": {"Korean": korean, "English": english, "Examples": examples},
+        },
     )

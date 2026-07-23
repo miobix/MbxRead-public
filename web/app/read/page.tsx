@@ -112,9 +112,19 @@ function ReadPageContent() {
       const centerIndex = Math.max(page.content.indexOf(selectionText), 0);
       const sentence = extractSentence(page.content, centerIndex);
 
+      // A multi-word selection is a phrase — the popover shows a translate-only UI
+      // (no dictionary/forms/examples), per the words-vs-phrases distinction.
+      const isPhrase = /\s/.test(selectionText);
+
       const known = page.terms[selectionText] ?? null;
       if (known) {
-        setTarget({ surface: selectionText, lemma: selectionText, sentence, existing: known });
+        setTarget({
+          surface: selectionText,
+          lemma: selectionText,
+          sentence,
+          existing: known,
+          isPhrase,
+        });
         return;
       }
 
@@ -129,6 +139,7 @@ function ReadPageContent() {
             surface: selectionText,
             lemma: selectionText,
             sentence,
+            isPhrase,
             existing: exact
               ? {
                   id: exact.id,
@@ -137,6 +148,7 @@ function ReadPageContent() {
                   status: exact.status,
                   deck: exact.deck,
                   forms: exact.forms,
+                  examples: exact.examples,
                 }
               : null,
           });
@@ -153,6 +165,7 @@ function ReadPageContent() {
       lemma: token.lemma,
       sentence: extractSentence(page.content, token.s),
       existing: page.terms[token.lemma] ?? null,
+      isPhrase: false,
     });
   };
 
@@ -164,6 +177,7 @@ function ReadPageContent() {
       status: term.status,
       deck: term.deck,
       forms: term.forms,
+      examples: term.examples,
     };
     setPage((prev) => {
       if (!prev) return prev;

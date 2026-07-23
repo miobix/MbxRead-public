@@ -91,6 +91,7 @@ export type TermSummary = {
   status: TermStatus;
   deck: string;
   forms: string[];
+  examples: string[];
 };
 
 export type Term = {
@@ -102,6 +103,7 @@ export type Term = {
   deck: string;
   sentence: string;
   forms: string[];
+  examples: string[];
   anki_note_id: number | null;
   anki_dirty: boolean;
   created: string;
@@ -119,7 +121,9 @@ export type Page = {
 export type DictEntry = {
   word: string;
   pos: string;
+  target_code: string;
   definitions: { ko: string; en_word: string; en_def: string }[];
+  examples: string[];
 };
 
 export type TranslateResult = { translation: string; backend: string; cached: boolean };
@@ -271,6 +275,7 @@ export const api = {
     deck?: string;
     sentence?: string;
     forms?: string[];
+    examples?: string[];
     source_book_id?: number;
     source_page?: number;
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
@@ -278,7 +283,17 @@ export const api = {
   patchTerm: (
     id: number,
     body: Partial<
-      Pick<Term, "lemma" | "translation" | "notes" | "status" | "deck" | "sentence" | "forms">
+      Pick<
+        Term,
+        | "lemma"
+        | "translation"
+        | "notes"
+        | "status"
+        | "deck"
+        | "sentence"
+        | "forms"
+        | "examples"
+      >
     >
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 

@@ -592,19 +592,39 @@ later epic until the real sources are known.
   entry, then sync and confirm the card Front shows `lemma / form`. The `/terms`
   management page does **not** yet edit forms (reader popover only) — a small Phase-B/
   follow-up gap if wanted.
-- [ ] **Epic 21 — Dictionary click-to-add + krdict examples + reversed Anki card type.**
-  Phase B of the term-forms work (plan: `hey-babes-i-need-temporal-beacon`). Make
-  dictionary results interactive (click a headword → adds to `forms`; click a sense →
-  appends its English gloss to the translation); extend `translate_svc/krdict.py` to
-  return **example sentences** per entry (⚠️ verify: search API `<sense>` may lack
-  examples — may need a `method=view` call on the item's `<target_code>`), surfaced as
-  clickable "collocations" (기타를 치다) to attach to the card. Add a **custom two-way
-  Anki note type** (fields `Korean`/`English`/`Examples`; two templates, both keeping
-  `Examples` on the **back** only, so studying either direction never spoils the prompt).
-  **Preserve existing `Basic` notes' SRS history** — new terms use the new type; already-
-  synced Basic notes keep the current Front/Back path. **No Claude API anywhere** (user
-  constraint) — krdict + DeepL + manual only. Phrase selections get a translate-only
-  popover (hide dictionary/forms/examples).
+- [x] **Epic 21 — Dictionary click-to-add + krdict examples + reversed Anki card type** —
+  done (2026-07-23), Phase B of the term-forms plan (`hey-babes-i-need-temporal-beacon`),
+  as scoped in `docs/SPEC.md` §10 with no deviations. **No Claude API** (user constraint)
+  — krdict + DeepL + manual only. Backend: `translate_svc/krdict.py` `lookup()` now returns
+  `target_code` + `examples` per entry (a per-entry `view` call — the search API's `<sense>`
+  carries no examples — best-effort, deduped, capped at 5; `max_entries` raised 3→5);
+  `terms` gained a JSON `examples` column (display-only, folded into the same
+  UPDATE/dirty path as the text columns) and an `anki_model` column so sync branches
+  legacy `Basic` vs the new model. `server/anki.py`: `ensure_model()` (idempotent
+  `createModel` of `"Korean Reader 2-way"` — fields Korean/English/Examples, two
+  templates KO→EN and EN→KO with `{{Examples}}` on the **back of both, front of
+  neither**) + `add_note_model`/`update_note_model`. `routes/anki_sync.py`: new terms →
+  the two-way model (Korean = lemma+forms, English = translation, Examples = clicked-in
+  examples + reading sentence); dirty terms branch on `anki_model` so pre-Epic-21 `Basic`
+  notes keep their Front/Back path and SRS history. Frontend `TokenPopover`: interactive
+  dictionary (tap a headword → `forms`; tap a sense → append its gloss to the translation;
+  tap an example chip → card examples) + an examples editor; phrase selections
+  (`isPhrase`, whitespace in the selection) get a translate-only popover (dictionary/
+  forms/examples hidden). 198 tests green (14 new: `test_krdict.py` example
+  parsing/view-fallback/dedup-cap/no-key; `test_terms.py` examples round-trip/normalize/
+  dirty; `test_anki_sync.py` two-way add + Examples rendering, anti-spoiler template
+  assertion, `ensure_model` idempotency, new-model update, legacy-`Basic` back-compat;
+  `test_db.py` migration idempotency). `npm run build`/`lint` clean.
+  **Not verified against live Anki / in a browser** (no Anki desktop or browser tooling in
+  this environment) — joins the owed pass, and this one specifically needs a **real Anki
+  check**: sync a new term, confirm it creates a two-way note (two cards KO→EN and EN→KO)
+  with the example on the back of both and the front of neither, and confirm a term
+  synced before this epic still updates in place as a `Basic` note without losing its
+  review history. Also confirm krdict `view` examples actually come back for a real word
+  (the `view`-API shape was implemented per krdict's documented structure but not hit
+  live here, since no `KRDICT_API_KEY` is set in this environment). The `/terms`
+  management page still doesn't edit forms/examples (reader popover only) — same
+  Phase-B/follow-up gap noted in Epic 20.
 - [ ] **Epic 22 — Go-live (final stage, renumbered from Epic 17→20→22 as content epics
   were inserted).** Execute Epic 8's still-pending cold-start + Tailscale verification
   and go live day-to-day, optionally with a fuller per-page UI polish pass. **Also
@@ -639,16 +659,15 @@ later epic until the real sources are known.
 - **2026-07-23 planning session: Epics 17-19 added, Go-live renumbered to Epic 20**,
   full scope in `docs/SPEC.md` §10. **Epics 17, 18, and 19 are now all done** (see
   above).
-- **2026-07-23 — Epic 20 (Term forms/aliases) done; go-live renumbered again to Epic
-  22.** A term-forms feature was planned (plan file `hey-babes-i-need-temporal-beacon`,
-  approved by the user) in two phases: **Epic 20** (forms/aliases + highlighting fix —
-  done this session) and **Epic 21** (dictionary click-to-add + krdict examples + a
-  custom two-way Anki note type — not started). To keep go-live last, it was renumbered
-  20→22. **Next up is Epic 21**, then **Epic 22** (go-live: cold-start + Tailscale
-  verification; registering `scripts/fetch_feeds.ps1` in the user's actual Windows Task
-  Scheduler is deliberately deferred to that epic — the user confirmed 2026-07-23 the
-  script itself is fine as-is). Hard user constraint carried into Epic 21: **no Claude
-  API** in the card-builder feature (krdict + DeepL + manual only).
+- **2026-07-23 — Epics 20 and 21 (Term forms + card builder) both done.** The two-phase
+  term-forms plan (`hey-babes-i-need-temporal-beacon`, approved by the user) is complete:
+  **Epic 20** (forms/aliases + highlighting fix) and **Epic 21** (dictionary click-to-add
+  + krdict examples + a custom two-way Anki note type) both shipped. Hard user constraint
+  honored in Epic 21: **no Claude API** in the card-builder (krdict + DeepL + manual only).
+  **Next up is Epic 22** (go-live: verified cold-start `start.ps1` reachable from the phone
+  over Tailscale, plus registering `scripts/fetch_feeds.ps1` in the user's actual Windows
+  Task Scheduler — the user confirmed 2026-07-23 the script itself is fine as-is). Epic 22
+  is the final planned epic.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
@@ -665,7 +684,12 @@ later epic until the real sources are known.
   setting on `/settings`, the Queue's card/list/chip/sort/length/back-to-top UX, and
   Epic 19's new "What gets promoted" section on `/stats` (best checked after some real
   feed activity — promotions, expiries, manual discards — so the by-topic/by-feed bars
-  show something meaningful).
+  show something meaningful). **Epics 20-21** add the reader popover's forms editor +
+  interactive dictionary (tap headword/sense/example), the examples editor, the
+  translate-only phrase popover, and — needing a **live Anki desktop**, not just a
+  browser — the two-way card check: sync a new term and confirm two cards (KO→EN, EN→KO)
+  with the example on the back of both and the front of neither, and that a term synced
+  before Epic 21 still updates as a `Basic` note without losing SRS history.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

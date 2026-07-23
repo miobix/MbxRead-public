@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS terms (
   sentence TEXT NOT NULL DEFAULT '',             -- example sentence captured at save time
   anki_note_id INTEGER,                          -- NULL until first sync
   anki_dirty INTEGER NOT NULL DEFAULT 0,         -- 1 = edited since last sync
+  examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence (card back only)
+  anki_model TEXT,                               -- Epic 21: NULL/'Basic' = legacy note; else custom two-way model name
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -171,8 +173,8 @@ AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`
 Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
-3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` (`modelName: "Basic"`, Front = lemma **plus any Epic-20 `forms`, joined ` / ` (`승인 / 승인서 / 승인하다`)**, Back = translation + `<br><br><i>sentence</i>` when present, tags `["korean-reader"]`, `options.allowDuplicate: false`). Store returned id, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue. (Epic 21 will replace `Basic` with a custom two-way note type for new notes while preserving existing `Basic` notes' history.)
-4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → `updateNoteFields` with the same field rendering; on success clear `anki_dirty`.
+3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields `Korean` = lemma **plus any Epic-20 `forms`, joined ` / ` (`승인 / 승인서 / 승인하다`)**, `English` = translation, `Examples` = clicked-in krdict examples + the captured sentence joined by `<br>`; two templates, both with `{{Examples}}` on the back only). Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
+4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples`; a legacy `Basic` note (`anki_model` NULL, synced before Epic 21) → the old Front/Back path, preserving its SRS history. On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not synced (existing notes left alone).
 
 Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new, update-dirty, per-note failure isolation, Anki-down 503.
@@ -312,7 +314,7 @@ Done 2026-07-23 (plan `hey-babes-i-need-temporal-beacon`, Phase A). Fixes the bu
 
 ### Epic 21 — Dictionary click-to-add + krdict examples + reversed Anki card type
 
-Planned 2026-07-23 (Phase B); not started. **Hard constraint: no Claude API** (krdict + DeepL + manual only). Scope:
+Done 2026-07-23 (plan `hey-babes-i-need-temporal-beacon`, Phase B), as scoped below with no deviations. **Hard constraint honored: no Claude API** (krdict + DeepL + manual only). Scope:
 
 1. **Interactive dictionary** — clicking a krdict headword adds it to `forms`; clicking a sense appends its English gloss to the translation.
 2. **krdict examples** — extend `translate_svc/krdict.py` to return example sentences per entry (⚠️ verify: the search API `<sense>` may lack examples; may need a `method=view` call on the item's `<target_code>`). Surface as clickable "collocations" (기타를 치다) to attach to the card; store on the term (JSON `examples` column, since examples are display-only). Phrase selections → translate-only popover.
