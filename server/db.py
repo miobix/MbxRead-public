@@ -153,6 +153,10 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # lifecycle gate like status.
         "feed_id": "INTEGER",
         "discard_reason": "TEXT",
+        # 2026-07-24: "most recently opened" sort for the Library. Stamped every
+        # time a page is actually viewed (routes/books.py's get_page), not on
+        # create/patch, so it reflects reading activity rather than list churn.
+        "last_opened": "TIMESTAMP",
     },
     "term_forms": {
         # Epic 22: was this form clicked in from the dictionary, or typed by hand via

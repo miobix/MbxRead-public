@@ -165,7 +165,7 @@ def test_list_books_shape(client):
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
             "status", "general_coverage", "general_level",
             "word_count", "duration_seconds",
-            "feed_id", "discard_reason",
+            "feed_id", "discard_reason", "last_opened",
         }
         assert book["status"] == "library"
 
@@ -300,6 +300,27 @@ def test_promote_and_discard_via_patch(client):
     assert client.get("/api/books").json() == []
 
 
+def test_manual_discard_purges_text_for_article_and_yt_only(client):
+    """User's storage concern (2026-07-24): discarding a queued article/yt candidate
+    should reclaim its page text, but paste/pdf/epub/txt content is kept
+    indefinitely even if discarded."""
+    article_id = client.post(
+        "/api/books",
+        json={"title": "A", "text": SHORT_STORY, "source": "article", "status": "candidate"},
+    ).json()["id"]
+    paste_id = client.post(
+        "/api/books",
+        json={"title": "B", "text": SHORT_STORY, "source": "paste", "status": "candidate"},
+    ).json()["id"]
+
+    client.patch(f"/api/books/{article_id}", json={"status": "discarded"})
+    client.patch(f"/api/books/{paste_id}", json={"status": "discarded"})
+
+    discarded = {b["id"]: b for b in client.get("/api/books?status=discarded").json()}
+    assert discarded[article_id]["page_count"] == 0
+    assert discarded[paste_id]["page_count"] > 0
+
+
 def test_discarded_book_still_blocks_reimport(client):
     resp = client.post(
         "/api/books", json={"title": "A", "text": SHORT_STORY, "source_ref": "article:x"}
@@ -318,3 +339,64 @@ def test_score_book_caches_general_difficulty(client):
     scored = client.post(f"/api/books/{book_id}/score").json()
     assert scored["general_coverage"] is not None
     assert scored["general_level"] in {"easy", "medium", "hard"}
+
+
+# --- 2026-07-24: sort + pagination (Library/Queue volume), last_opened ---
+
+
+def test_get_page_stamps_last_opened(client):
+    book_id = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
+    assert client.get("/api/books").json()[0]["last_opened"] is None
+
+    client.get(f"/api/books/{book_id}/pages/1")
+
+    assert client.get("/api/books").json()[0]["last_opened"] is not None
+
+
+def test_list_books_sort_opened_puts_most_recently_viewed_first(client):
+    a = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
+    b = client.post("/api/books", json={"title": "B", "text": SHORT_STORY}).json()["id"]
+    # open A first, then B — B should now sort first ("most recently opened")
+    client.get(f"/api/books/{a}/pages/1")
+    client.get(f"/api/books/{b}/pages/1")
+
+    titles = [bk["title"] for bk in client.get("/api/books?sort=opened").json()]
+    assert titles == ["B", "A"]
+
+
+def test_list_books_sort_opened_never_opened_sinks_after_opened(client):
+    a = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
+    client.post("/api/books", json={"title": "B", "text": SHORT_STORY})
+    client.get(f"/api/books/{a}/pages/1")
+
+    titles = [bk["title"] for bk in client.get("/api/books?sort=opened").json()]
+    assert titles == ["A", "B"]
+
+
+def test_list_books_sort_easiest_orders_by_new_per_page(client, db_path):
+    easy_id = client.post("/api/books", json={"title": "Easy", "text": SHORT_STORY}).json()["id"]
+    hard_id = client.post("/api/books", json={"title": "Hard", "text": SHORT_STORY}).json()["id"]
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE books SET new_per_page = 1.0 WHERE id = ?", (easy_id,))
+    conn.execute("UPDATE books SET new_per_page = 9.0 WHERE id = ?", (hard_id,))
+    conn.commit()
+    conn.close()
+
+    titles = [bk["title"] for bk in client.get("/api/books?sort=easiest").json()]
+    assert titles == ["Easy", "Hard"]
+
+
+def test_list_books_limit_and_offset_paginate(client):
+    for i in range(5):
+        client.post("/api/books", json={"title": f"Book {i}", "text": SHORT_STORY})
+
+    page1 = client.get("/api/books?sort=recent&limit=2&offset=0").json()
+    page2 = client.get("/api/books?sort=recent&limit=2&offset=2").json()
+    assert [b["title"] for b in page1] == ["Book 4", "Book 3"]
+    assert [b["title"] for b in page2] == ["Book 2", "Book 1"]
+
+
+def test_list_books_omitting_limit_returns_everything(client):
+    for i in range(3):
+        client.post("/api/books", json={"title": f"Book {i}", "text": SHORT_STORY})
+    assert len(client.get("/api/books").json()) == 3

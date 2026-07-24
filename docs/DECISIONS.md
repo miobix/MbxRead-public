@@ -802,3 +802,27 @@ exactly as it did before this epic. Also folded into this epic: the user's assum
 Anki field itself needed renaming from "Examples" to "Notes" turned out to be a false alarm
 (checked against a live Anki install) — the field really is called "Examples," so `server/
 anki.py`/`ensure_model()` needed no changes at all, only what gets rendered into it.
+
+## 2026-07-24 — Queue text purge is source-gated, not status-gated
+Auto-expiry (Epic 17) and manual Discard both flip `books.status` to `'discarded'` for any
+source — but the new text-reclaiming purge only runs `DELETE FROM pages` when
+`source IN ('article', 'yt')`. In practice every Queue candidate is already one of those two
+(the feed fetcher is the only thing that ever creates `status='candidate'` rows, and it only
+ever uses those two sources), so the gate is currently redundant with the status check alone.
+It's kept explicit anyway as a hard guarantee: if a paste/pdf/epub/txt book is ever manually
+discarded through the same `PATCH .../status=discarded` path, its text must never be deleted —
+the user was explicit that those sources are kept indefinitely regardless of status. Gating on
+source directly (rather than reasoning "candidates are always article/yt so it's fine") means
+that guarantee holds even if a future change ever lets other sources reach `candidate`.
+
+## 2026-07-24 — `color-scheme` over per-component dark classes for native form controls
+A native `<select>`'s open dropdown list is drawn by the browser/OS, not by author CSS in most
+engines — setting `background-color`/`color` (or Tailwind's `bg-transparent`) on the closed
+`<select>` box has no effect on that popup. The app's dark theme is pure `prefers-color-scheme`
+media-query-driven (no `dark:` utility classes, no JS toggle), so the popup was defaulting to
+light chrome regardless of the page's dark palette — unreadable white-background/light-text.
+Fix is the CSS-standard one: `color-scheme: light` / `color-scheme: dark` on `:root`, mirroring
+the same `prefers-color-scheme` branch the rest of the palette already uses, which tells the
+browser which native widget rendering to use. Chosen over hunting down and restyling every
+`<select>` call site individually — it's one global rule, can't miss a spot, and is the
+documented fix for exactly this class of bug.

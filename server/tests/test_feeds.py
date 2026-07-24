@@ -392,6 +392,64 @@ def test_fetch_feeds_does_not_expire_candidates_within_the_window(client, db_pat
     assert len(client.get("/api/books?status=candidate").json()) == 1
 
 
+def _add_page(db_path, book_id: int, text: str = "some text") -> None:
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO pages (book_id, page_no, content) VALUES (?, 1, ?)", (book_id, text)
+    )
+    conn.commit()
+    conn.close()
+
+
+def _book_id(db_path, title: str) -> int:
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("SELECT id FROM books WHERE title = ?", (title,)).fetchone()
+    conn.close()
+    return row[0]
+
+
+def _page_count(db_path, book_id: int) -> int:
+    conn = sqlite3.connect(db_path)
+    (count,) = conn.execute("SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)).fetchone()
+    conn.close()
+    return count
+
+
+def test_expiry_purges_article_and_youtube_text(client, db_path):
+    """The user's storage concern (2026-07-24): an unpromoted queue item shouldn't
+    keep its full text forever just because it aged out. Auto-expiry now deletes
+    `pages` for the two sources the Queue ever holds (article/yt) — the `books`
+    row itself (title/source_ref/stats) stays so dedup and curation stats hold."""
+    _seed_candidate(db_path, "Old article", days_old=8)
+    book_id = _book_id(db_path, "Old article")
+    _add_page(db_path, book_id)
+
+    client.post("/api/feeds/fetch", params={"feed_id": 999999})
+
+    assert _page_count(db_path, book_id) == 0
+    # the book row itself is kept as a tombstone (dedup / stats), just emptied of text
+    assert client.get("/api/books?status=discarded").json()[0]["title"] == "Old article"
+
+
+def test_expiry_keeps_text_for_non_article_yt_sources(client, db_path):
+    """Defensive: only article/yt ever reach the Queue in practice, but the purge
+    is source-gated regardless — paste/pdf/epub/txt content is never touched by
+    auto-expiry, per the user's explicit call to keep those indefinitely."""
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO books (title, source, status, created) "
+        "VALUES ('Old paste', 'paste', 'candidate', datetime('now', '-8 days'))"
+    )
+    conn.commit()
+    conn.close()
+    book_id = _book_id(db_path, "Old paste")
+    _add_page(db_path, book_id)
+
+    client.post("/api/feeds/fetch", params={"feed_id": 999999})
+
+    assert _page_count(db_path, book_id) == 1
+
+
 def test_fetch_feeds_stamps_last_fetch_attempt(client):
     assert client.get("/api/settings").json()["last_fetch_attempt"] is None
     client.post("/api/feeds/fetch", params={"feed_id": 999999})

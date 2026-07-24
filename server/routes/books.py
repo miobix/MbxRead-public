@@ -76,6 +76,7 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "duration_seconds": row["duration_seconds"],
         "feed_id": row["feed_id"],
         "discard_reason": row["discard_reason"],
+        "last_opened": row["last_opened"],
     }
 
 
@@ -88,6 +89,27 @@ def _get_book_or_404(conn: sqlite3.Connection, book_id: int) -> dict:
 
 class DuplicateSourceRef(Exception):
     """Raised when source_ref collides with an already-imported book."""
+
+
+def _purge_queue_text(conn: sqlite3.Connection, book_ids: list[int]) -> None:
+    """Deletes `pages` rows for the given books, restricted to source in
+    ('article', 'yt') — the only two sources the Queue ever holds (the feed
+    fetcher's candidates). paste/pdf/epub/txt content is kept indefinitely even
+    if such a book is ever discarded — the user's explicit call (2026-07-24) was
+    to reclaim storage from unpromoted feed content, never from anything
+    manually imported. Called from both discard sites: routes/feeds.py's
+    auto-expiry and patch_book's manual discard below. The `books` row itself is
+    never touched here — title/source_ref/topic/stats stay put so dedup and the
+    Epic 19 curation stats breakdown are unaffected."""
+    if not book_ids:
+        return
+    placeholders = ", ".join("?" for _ in book_ids)
+    conn.execute(
+        f"DELETE FROM pages WHERE book_id IN ("
+        f"SELECT id FROM books WHERE id IN ({placeholders}) "
+        f"AND source IN ('article', 'yt'))",
+        book_ids,
+    )
 
 
 def insert_book(
@@ -168,12 +190,35 @@ def _score_and_cache(
     return _book_dict(conn, book_id)
 
 
+# 2026-07-24: server-side sort, so pagination (LIMIT/OFFSET) is actually correct —
+# sorting only the current page client-side would silently reorder rows as you
+# page through. "recent" (id ascending) is the pre-existing default, unchanged, so
+# omitting `sort` entirely (every caller before this change) shifts nothing.
+_SORT_CLAUSES = {
+    "recent": "id DESC",
+    # never-opened books (NULL) sort after anything with a real timestamp, falling
+    # back to most-recently-added within that group.
+    "opened": "(last_opened IS NULL) ASC, last_opened DESC, id DESC",
+    "easiest": "(new_per_page IS NULL) ASC, new_per_page ASC",
+    # mirrors web/lib/length.ts's estimatedMinutes heuristic (250 wpm for text,
+    # real yt-dlp duration for video) so "Shortest first" stays correct across
+    # pages instead of only within whatever page happened to be fetched.
+    "shortest": (
+        "COALESCE(CASE WHEN source = 'yt' THEN duration_seconds / 60.0 "
+        "ELSE word_count / 250.0 END, 999999999) ASC"
+    ),
+}
+
+
 @router.get("")
 def list_books(
     topic: str | None = None,
     archived: bool | None = None,
     source: str | None = None,
     status: BookStatus | None = None,
+    sort: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
     # Epic 15: defaults to "library" when omitted, so candidates/discarded books
@@ -193,7 +238,11 @@ def list_books(
         params.append(source)
     query += " AND status = ?"
     params.append(status or "library")
-    query += " ORDER BY id"
+    query += f" ORDER BY {_SORT_CLAUSES.get(sort, 'id')}"
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.append(limit)
+        params.append(offset)
     rows = conn.execute(query, params).fetchall()
     return [_book_dict(conn, row["id"]) for row in rows]
 
@@ -250,6 +299,9 @@ def patch_book(
             (*fields.values(), book_id),
         )
         conn.commit()
+    if fields.get("status") == "discarded":
+        _purge_queue_text(conn, [book_id])
+        conn.commit()
     return _book_dict(conn, book_id)
 
 
@@ -276,6 +328,12 @@ def get_page(
     book_id: int, page_no: int, conn: sqlite3.Connection = Depends(db_module.get_db)
 ):
     _get_book_or_404(conn, book_id)
+    # 2026-07-24: stamps every time a page is actually viewed — drives the
+    # Library's "most recently opened" default sort. Deliberately on the
+    # page-content fetch (the one call the reader makes to actually display a
+    # page), not on create/patch, so it reflects real reading activity.
+    conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))
+    conn.commit()
     page_count = conn.execute(
         "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
     ).fetchone()[0]

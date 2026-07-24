@@ -731,15 +731,96 @@ later epic until the real sources are known.
   Back chips inline after a `→`, divided by a hairline — same information, but
   which word owns which definitions is now positional instead of inferred. `npm run
   build`/`lint` clean; no backend changes, so the existing 218 tests are untouched.
-- [ ] **Epic 23 — Go-live (final stage, renumbered from Epic 17→20→22→23 as content
-  epics were inserted).** Execute Epic 8's still-pending cold-start + Tailscale
-  verification and go live day-to-day, optionally with a fuller per-page UI polish
-  pass. **Also register `scripts/fetch_feeds.ps1` in Windows Task Scheduler here**
-  (per the README section Epic 17 added) — the user confirmed 2026-07-23 the script
-  itself needs no changes, actually wiring it up on their machine is part of go-live,
-  not before.
-  **Acceptance:** a verified cold-start `start.ps1` run reachable from the phone over
-  Tailscale, and the scheduled fetch task registered and firing.
+- **Storage/UI pre-go-live pass (2026-07-24, same day, not a numbered epic) —
+  queue text auto-purge, rebrand, dark-mode select fix, palette contrast,
+  Library/Queue pagination + sort defaults.** User raised storage/maintenance
+  questions before Epic 23 (DB is one plain SQLite file, `pages.content` holds raw
+  text with no compression/duplication — tokens are computed on read, never
+  stored; confirmed via a live count against their real `reader.db`: 200 books /
+  1.14M chars / 3.7MB, nowhere near a real constraint at "20 more books" scale).
+  Concrete follow-ups from that conversation:
+  **(1) Queue text auto-purge.** Epic 17's `candidate_retention_days` already
+  auto-*rejected* stale candidates (`status='discarded'`) but never reclaimed their
+  text — the `pages` rows lived forever. New `books._purge_queue_text()` deletes a
+  book's `pages` rows, gated to `source IN ('article', 'yt')` — the only two
+  sources the Queue ever holds — so paste/pdf/epub/txt content is kept
+  indefinitely even if such a book is ever discarded, per the user's explicit
+  call. Wired into both discard sites: `routes/feeds.py._expire_stale_candidates`
+  (auto-expiry) and `routes/books.py.patch_book` (manual Discard). The `books` row
+  itself is never touched — title/source_ref/topic/stats stay, so dedup and the
+  Epic 19 curation stats breakdown are unaffected; only `page_count` goes to 0.
+  **(2) Rebrand.** "Korean Reader" → "MbxAndria" (browser tab title in
+  `layout.tsx`, landing-page `<h1>` in `page.tsx`) — the old name read as tacky.
+  **(3) Minor UI.** Queue's candidate-count badge next to the nav link (`page.tsx`)
+  removed as unnecessary; `+ Add` button changed from `rounded-full` (pill) to
+  `rounded-md`, same accent color.
+  **(4) Dark-mode `<select>` contrast bug (real bug, not cosmetic).** Native
+  dropdown popups were rendering with the browser's default light chrome
+  regardless of the page's dark palette (`bg-transparent` selects have no real
+  background for the browser to reuse, and nothing told it which native scheme to
+  render) — white popup background + light `--color-ink` text = unreadable. Fixed
+  with `color-scheme: light`/`dark` on `:root` (the standard fix for exactly this;
+  browsers then use their own dark-native form-control rendering) plus a
+  belt-and-suspenders `select, option { background-color: var(--color-surface);
+  color: var(--color-ink); }` base rule in `globals.css`.
+  **(5) Palette contrast pass** ("seems really dull," open-ended ask): bumped
+  paper/surface separation in both themes (light: surface now pure white against
+  a slightly deeper paper; dark: surface lightened, border brightened) and
+  deepened the accent hue a touch — the previous values were close enough to
+  read as flat. `--color-manual` follows `--color-accent` as before (same hue by
+  design, Epic 22).
+  **(6) Library/Queue pagination + new default sorts.** `GET /api/books` gained
+  `sort` (`recent`/`opened`/`easiest`/`shortest`, all resolved server-side via
+  `_SORT_CLAUSES` so ordering stays correct across pages — sorting only the
+  fetched page client-side would silently reorder as you page through) and
+  `limit`/`offset` (both optional; omitting `limit` returns everything exactly as
+  before, so no existing caller/test needed to change). New `books.last_opened`
+  column (additive, nullable), stamped in `get_page` every time a page is
+  actually viewed — never on create/patch — driving the new `opened` sort.
+  Frontend: both `/` and `/queue` fetch `PAGE_SIZE + 1` (30) rows at a time and
+  slice, so "is there more" needs no separate count endpoint; a "Load more"
+  button appends the next batch. Library's default sort is now **"Recently
+  opened"** (was "Recent"/id-order); Queue's default **"Newest fetched"** already
+  matched "most recently added" and needed no behavior change, just the move to
+  server-side sorting for pagination correctness. `shortest` (Queue-only) mirrors
+  `web/lib/length.ts`'s 250-wpm/real-yt-duration heuristic in SQL so it also
+  stays correct across pages.
+  233 tests green (12 new: `test_feeds.py` expiry-purges-article/yt-text +
+  keeps-non-article/yt-text; `test_books.py` manual-discard-purge,
+  last_opened-stamping, sort=opened (two cases), sort=easiest, limit/offset
+  pagination, omitted-limit-returns-everything; `test_list_books_shape` updated
+  for the new `last_opened` key). `npm run build`/`lint` clean.
+  **Not verified in a browser** (no browser tooling in this environment) — joins
+  the owed pass: confirm the dark-mode select fix actually reads correctly on a
+  phone/browser in dark mode, confirm Load More on both pages, and confirm the
+  new palette doesn't look worse in practice than it reads in code.
+- [x] **Epic 23 — Go-live (final stage, renumbered from Epic 17→20→22→23 as content
+  epics were inserted)** — done (2026-07-24), no code changes, pure ops/verification
+  (Epic 8's still-pending cold-start + Tailscale check, finally executed for real
+  instead of just reasoned through). **Cold start:** killed the stray dev-session
+  uvicorn process and ran `start.ps1` fresh — it correctly detected `web/out` was
+  already current (skipped the rebuild), booted uvicorn on `0.0.0.0:8002`, and
+  served both `/api/health` and the new pagination/sort endpoint correctly.
+  **Tailscale:** installed via `winget install Tailscale.Tailscale`; turned out to
+  already be signed in as the user's account from a prior setup (no interactive
+  `tailscale up` needed) at `<machine>.<tailnet>.ts.net`. User installed the
+  phone app, signed into the same account, and **confirmed loading the app over
+  `http://<machine>.<tailnet>.ts.net:8002` from their phone works** — the
+  literal acceptance criterion, verified live, not assumed. **Task Scheduler:**
+  registered `korean-reader fetch feeds` (daily 6:00 AM, runs on battery too, per
+  the README's existing recipe) via `Register-ScheduledTask`, then triggered it
+  once manually rather than waiting until the next morning — real run against the
+  live feed roster: 15 feeds checked, 118 new candidates created, 0 expired, one
+  YouTube channel (김성회의 G식백과) hit a transient Atom-feed fetch error, correctly
+  isolated from the other 14 (per Epic 15's per-feed isolation design) —
+  `LastTaskResult` came back `0` (success) and `NextRunTime` is queued for
+  2026-07-25 06:00. **Known follow-up, not a blocker:** that one YouTube feed's
+  fetch error is worth a manual retry later to see if it clears — no code changed
+  today touches feed fetching, so it reads as transient (network/rate-limit), not
+  a regression.
+  **Acceptance (fully met):** cold-start `start.ps1` run, reachable from the phone
+  over Tailscale (confirmed live by the user), and the scheduled fetch task
+  registered and firing (confirmed via a real manual run, not just registration).
 
 ## Known issues / deviations
 
@@ -775,10 +856,15 @@ later epic until the real sources are known.
   user request driven by dissatisfaction with how the popover shaped the Anki card —
   full write-up above. Not part of the original planned epic list; logged into
   `docs/SPEC.md` §10 retroactively per the executor convention.
-  **Next up is Epic 23** (go-live: verified cold-start `start.ps1` reachable from the
-  phone over Tailscale, plus registering `scripts/fetch_feeds.ps1` in the user's
-  actual Windows Task Scheduler — the user confirmed 2026-07-23 the script itself is
-  fine as-is). Epic 23 is the final planned epic.
+- **2026-07-24 — Epic 23 (go-live) done — all planned epics complete.** Cold start,
+  Tailscale phone access, and the Task Scheduler fetch job were all verified live
+  (not just reasoned through) — full write-up in the Epic 23 entry above. The app
+  is now in day-to-day use over Tailscale. Same day, a pre-go-live storage/UI pass
+  (see the entry above Epic 23) covered queue text auto-purge, a rebrand to
+  "MbxAndria," a real dark-mode `<select>` contrast bug fix, a palette contrast
+  bump, and Library/Queue pagination + new default sorts. **Every epic in
+  `docs/SPEC.md` §10's list is now done** — future work is user-driven ad hoc
+  requests and polish, not a fixed backlog.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
