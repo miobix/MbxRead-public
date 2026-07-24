@@ -105,7 +105,7 @@ def test_score_endpoint_shape(client):
 def test_score_endpoint_reflects_known_terms(client):
     # Unlike STORY, RARE_STORY isn't all grade-A, so saving one of its non-A lemmas
     # has room to move coverage up from a non-maxed cold-start baseline.
-    lemma = "형이상학"  # not in the bundled list at all -> not assumed familiar
+    lemma = "형이상학적"  # not in the bundled list at all -> not assumed familiar
     before = client.post("/api/score", json={"text": RARE_STORY}).json()["coverage"]
     client.post("/api/terms", json={"lemma": lemma, "translation": "x", "status": "known"})
     after = client.post("/api/score", json={"text": RARE_STORY}).json()["coverage"]
@@ -239,7 +239,7 @@ def test_general_difficulty_is_independent_of_personal_known_set(client):
     # Saving a personal term moves `coverage` but must never move `general_coverage`
     # (it's computed purely from vocab_levels, no `known` set at all).
     before = client.post("/api/score", json={"text": RARE_STORY}).json()
-    client.post("/api/terms", json={"lemma": "형이상학", "translation": "x", "status": "known"})
+    client.post("/api/terms", json={"lemma": "형이상학적", "translation": "x", "status": "known"})
     after = client.post("/api/score", json={"text": RARE_STORY}).json()
     assert after["coverage"] > before["coverage"]
     assert after["general_coverage"] == before["general_coverage"]

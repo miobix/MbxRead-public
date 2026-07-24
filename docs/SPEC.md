@@ -156,14 +156,14 @@ Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at imp
 
 Use `kiwipiepy.Kiwi()` (module-level singleton — model load is slow). `kiwi.tokenize(text)` returns morphemes with `form`, `tag`, `start`, `len`.
 
-Algorithm — group morphemes into **eojeols** (runs of non-whitespace in the original text), then pick the eojeol's *primary* morpheme:
+Algorithm — group morphemes into **eojeols** (runs of non-whitespace in the original text). First **strip leading & trailing symbol morphemes** (`SF SP SS SSO SSC SE SO SW`) from the eojeol so a word wrapped in `〈…〉`, `"…"`, `(…)`, or trailed by `!`/`?` still resolves and its offset span covers just the word (`〈자연계의` → token `자연계의`); a leading symbol must never swallow the eojeol into no-token. Internal symbols (mid-word `?` in `이야기?라고`) are left in place. Then pick the eojeol's *primary* morpheme from the stripped core:
 
 1. **하다-derivations first:** noun (`NNG/NNP/XR`) immediately followed by `XSV`/`XSA` → lemma = noun-form + `하다` (공부했어요 → 공부하다), pos = `VV`/`VA`.
 2. Else first morpheme tagged `VV`, `VA`, or `VX` → lemma = form + `다` (입고 → 입다, 갔다 → 가다, 예뻐요 → 예쁘다).
-3. Else first morpheme tagged `NNG NNP NNB NR NP MAG MAJ IC` → lemma = form (학교에 → 학교, 사람들이 → 사람).
+3. Else first morpheme tagged `NNG NNP NNB NR NP MAG MAJ IC` → lemma = form. A **noun** head (`NNG NNP NNB NR NP`) also absorbs any immediately-following derivational suffixes (`XSN`) into one compound lemma (자연계의 → 자연계, 가능성 → 가능성), **except the plural `들`** which stays dropped (학교에 → 학교, 사람들이 → 사람).
 4. Else (eojeol is only particles/endings/symbols/numbers) → emit no token for it.
 
-Return `list[Token]` with `surface` (full eojeol text), `s`, `e`, `lemma`, `pos` (tag of chosen morpheme). Wrong guesses are acceptable — the UI lets the user edit the lemma before saving.
+Return `list[Token]` with `surface`, `s`, `e` (the stripped-core span, so `text[s:e] == surface`), `lemma`, `pos` (tag of chosen morpheme). Wrong guesses are acceptable — the UI lets the user edit the lemma before saving.
 
 **Table-driven tests (Epic 1):** 입고→입다, 입었어요→입다, 했어요→하다, 공부했어요→공부하다, 학교에→학교, 갔다→가다, 예뻐요→예쁘다, 사람들이→사람, 학생이에요→학생, plus: offsets reconstruct surfaces exactly (`text[s:e] == surface`), multi-sentence text, text with latin/digits/punctuation mixed in.
 
