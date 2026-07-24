@@ -16,11 +16,49 @@ CONJUGATION_CASES = [
 ]
 
 
+# A word wrapped in brackets/quotes (or trailed by punctuation) must still yield a
+# token — a leading symbol morpheme used to swallow the whole eojeol, so clicking it
+# opened nothing and a saved term never highlighted. The stripped surface covers just
+# the word, not the surrounding punctuation.
+LEADING_SYMBOL_CASES = [
+    ("〈자연계의", "자연계", "자연계의"),
+    ("<자연계의", "자연계", "자연계의"),
+    ('"학교에', "학교", "학교에"),
+    ("(사람들이)", "사람", "사람들이"),
+    ("…진짜", "진짜", "진짜"),
+    ("좋았다!", "좋다", "좋았다"),
+]
+
+# Noun-derivational suffixes (XSN) glue onto the head noun as one compound lemma,
+# except the plural 들 which stays dropped (사람들이 -> 사람).
+COMPOUND_NOUN_CASES = [
+    ("자연계의", "자연계"),
+    ("가능성", "가능성"),
+    ("사람들이", "사람"),
+]
+
+
 @pytest.mark.parametrize("text,expected_lemma", CONJUGATION_CASES)
 def test_conjugation_lemma(text, expected_lemma):
     tokens = tokenize(text)
     lemmas = [t.lemma for t in tokens]
     assert expected_lemma in lemmas, f"{text!r} -> {lemmas}, expected {expected_lemma!r}"
+
+
+@pytest.mark.parametrize("text,expected_lemma", COMPOUND_NOUN_CASES)
+def test_compound_noun_lemma(text, expected_lemma):
+    lemmas = [t.lemma for t in tokenize(text)]
+    assert lemmas == [expected_lemma], f"{text!r} -> {lemmas}, expected [{expected_lemma!r}]"
+
+
+@pytest.mark.parametrize("text,expected_lemma,expected_surface", LEADING_SYMBOL_CASES)
+def test_leading_symbol_yields_token(text, expected_lemma, expected_surface):
+    tokens = tokenize(text)
+    assert len(tokens) == 1, f"{text!r} -> {[t.surface for t in tokens]}"
+    tok = tokens[0]
+    assert tok.lemma == expected_lemma, f"{text!r} -> {tok.lemma!r}"
+    assert tok.surface == expected_surface, f"{text!r} -> {tok.surface!r}"
+    assert text[tok.s : tok.e] == tok.surface
 
 
 @pytest.mark.parametrize("text,_", CONJUGATION_CASES)

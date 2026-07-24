@@ -826,3 +826,24 @@ the same `prefers-color-scheme` branch the rest of the palette already uses, whi
 browser which native widget rendering to use. Chosen over hunting down and restyling every
 `<select>` call site individually — it's one global rule, can't miss a spot, and is the
 documented fix for exactly this class of bug.
+
+## 2026-07-24 — Tokenizer: strip edge symbols + merge XSN compound-noun suffixes
+Two parsing fixes prompted by 어린 왕자 p2 (`〈자연계의 진짜 이야기〉…`):
+1. **Leading/trailing symbol morphemes are stripped per eojeol.** A word led by a
+   bracket/quote (`〈자연계의`) previously had the symbol as its *first* morpheme, which
+   matched no word rule → the whole eojeol produced no token → no clickable span and no
+   highlight (the reported "clicking does nothing, saved term won't highlight" bug). The
+   token's offset span now covers just the word, so highlights no longer include the
+   surrounding punctuation. Internal symbols (mid-word `?` in `이야기?라고`) are untouched.
+2. **Noun heads absorb trailing derivational suffixes (XSN) into one compound lemma**
+   (`자연계의 → 자연계`, `가능성 → 가능성`, `형이상학적 → 형이상학적`) — *except* the plural
+   `들`, which stays dropped so `사람들이 → 사람` (SPEC §6, difficulty scoring). Before this,
+   kiwi's split (`자연`+`계`) meant a hand-saved compound like `자연계` never auto-highlighted.
+   Trade-off accepted with the user: `coverage`/`general_coverage` shift slightly on the next
+   re-score, and a term previously saved as a bare head noun may stop auto-highlighting its
+   compound occurrences (recoverable via the term's forms/aliases). Separately-saved terms
+   stay independent — saving `자연` highlights `자연`, not `자연계`, and vice versa.
+
+Also corrected the one page's stored text where extraction mis-scanned the closing CJK
+bracket `〉` (U+3009) as `?` — data, not a parser issue; reimport would reproduce it (EPUB
+dedup hashes the same bytes) and would cost the book's reading progress + page-read history.
