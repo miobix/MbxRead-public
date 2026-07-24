@@ -1,6 +1,6 @@
 # Content catalog — Epic 10
 
-Answers `docs/NEXT_STAGE_OPTIONS.md`'s open questions and ranks real sources, per its own
+Answers `docs/archive/NEXT_STAGE_OPTIONS.md`'s open questions and ranks real sources, per its own
 rule: **build the interest list before the automation.** This doc is the input Epic 12
 (import wiring) and Epic 14 (daily fetch job) iterate over — it is not itself code.
 
