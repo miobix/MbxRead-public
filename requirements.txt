@@ -9,3 +9,5 @@ pymupdf==1.28.0
 ebooklib==0.20
 trafilatura==2.1.0
 python-multipart==0.0.32
+pystray==0.19.5
+pillow==12.3.0
