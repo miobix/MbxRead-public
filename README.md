@@ -10,9 +10,23 @@ This replaces the earlier Lute-based setup — Lute is fully retired.
 
 ## Daily use
 
-Double-click `start.ps1`. It rebuilds `web/` if the frontend source is newer than the
-last build, launches the server on **:8002**, and opens your browser at
-`http://localhost:8002`. Keep Anki open if you want to sync terms.
+**Runs in the background automatically** — `scripts/tray_app.py` starts at every
+Windows logon (via a shortcut in the Startup folder, `shell:startup`) and shows a
+tray icon: click it to open the app, or right-click for **Restart server** / **Quit**.
+No console window, ever — that's the point, but it means if something breaks you
+won't see a traceback on screen. Check `scripts/server.log` instead (uvicorn's
+stdout/stderr — startup messages, access logs, and any unhandled-exception
+traceback on a 500 all land there, appended across restarts).
+
+`start.ps1` still exists for **development**: double-click it and it rebuilds
+`web/` if the frontend source is newer than the last build, then launches the
+server in a visible console window (so you *do* see tracebacks live) and opens
+your browser at `http://localhost:8002`. Use this after you change frontend code;
+the tray app assumes `web/out` is already built and doesn't rebuild it. If both
+happen to be running at once, whichever bound port 8002 first wins — quit the
+tray icon (or kill the old console) before starting the other.
+
+Keep Anki open if you want to sync terms.
 
 Reading flow: open a book → tap an unknown word (or drag-select a phrase) → Translate
 and/or look it up in the dictionary → edit the translation freely → pick a deck → Save.
@@ -85,8 +99,9 @@ schedule, register `scripts/fetch_feeds.ps1` as a Windows Task Scheduler action:
 2. **General**: name it e.g. `korean-reader fetch feeds`.
 3. **Triggers** → **New…**: Daily, pick a time (e.g. 6:00 AM), recur every 1 day.
 4. **Actions** → **New…**: Program/script `powershell.exe`; arguments:
-   `-ExecutionPolicy Bypass -File "C:\path\to\korean-reader\scripts\fetch_feeds.ps1"`
-   (adjust the path to where you cloned this repo).
+   `-WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path\to\korean-reader\scripts\fetch_feeds.ps1"`
+   (adjust the path to where you cloned this repo). `-WindowStyle Hidden` is what
+   stops a console window from flashing up when the task fires.
 5. **Conditions**: uncheck "Start the task only if the computer is on AC power" if this
    machine should still fetch on battery.
 
@@ -117,7 +132,8 @@ translate_svc/          DeepL/Claude translation + cache + krdict, imported as a
 import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
 scripts/fetch_feeds.ps1 Task Scheduler action for automated feed fetching (see above)
-start.ps1               rebuilds web/ if stale, launches the server, opens the browser
+scripts/tray_app.py     daily-use launcher: server + tray icon, starts at logon, no console
+start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
 ANKI.md                 Anki sync setup and daily-use guide
 .env                    your API keys (copy from .env.example)
 reader.db               your books/pages/terms — never committed

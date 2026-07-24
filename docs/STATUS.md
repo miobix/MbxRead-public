@@ -865,6 +865,27 @@ later epic until the real sources are known.
   bump, and Library/Queue pagination + new default sorts. **Every epic in
   `docs/SPEC.md` §10's list is now done** — future work is user-driven ad hoc
   requests and polish, not a fixed backlog.
+- **Background tray launcher (2026-07-24, same day, not a numbered epic).** User
+  wanted the server running in the background/tray rather than a manual
+  `start.ps1` double-click each time. New `scripts/tray_app.py`: launches uvicorn
+  as a hidden subprocess and shows a tray icon (Open / Restart server / Quit);
+  registered to auto-start at every Windows logon via a shortcut in the Startup
+  folder (`shell:startup`) — **not** Task Scheduler, which refused an `AtLogOn`-
+  trigger registration with Access Denied in this environment even non-elevated
+  (the existing Daily-trigger fetch task registered fine; logon triggers
+  specifically hit a permissions wall both via `Register-ScheduledTask` and raw
+  `schtasks.exe`). Since there's no console with a tray-only launcher, uvicorn's
+  stdout/stderr now go to `scripts/server.log` (gitignored, like
+  `fetch_feeds.log`) instead of being discarded — the only way to see a crash
+  traceback without a visible window. `start.ps1` is now explicitly the *dev*
+  launcher (visible console, rebuilds `web/` if stale); the tray app is the
+  *daily* launcher and assumes `web/out` is already current. Also fixed in the
+  same pass: the Task Scheduler fetch job (Epic 23) was flashing a console window
+  on every run — added `-WindowStyle Hidden` to its action, both the live task
+  and the README's registration steps. New deps `pystray`==0.19.5/`pillow`==12.3.0.
+  Verified live: killed the manually-started dev server, launched via the tray
+  app, confirmed `/api/health` responds and `scripts/server.log` actually
+  captures uvicorn's startup + access log lines.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to

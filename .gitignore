@@ -9,3 +9,4 @@ web/.next/
 web/out/
 .idea/
 scripts/fetch_feeds.log
+scripts/server.log
