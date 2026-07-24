@@ -2,16 +2,26 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Book, type FeedFetchResult } from "@/lib/api";
+import { api, type Book, type BookSort, type FeedFetchResult } from "@/lib/api";
 import { SourceChip } from "@/lib/chips";
-import { estimatedMinutes, formatLength } from "@/lib/length";
+import { formatLength } from "@/lib/length";
 import { GeneralScoreLine, ScoreLine } from "@/lib/score-display";
 import { SOURCES, TOPICS } from "@/lib/topics";
 
 type ViewMode = "cards" | "list";
 type SortBy = "newest" | "easiest" | "shortest";
 
+// UI labels stay as they were; "newest" maps to the API's "recent" (created-order)
+// sort so pagination sorts correctly server-side instead of only within a page.
+const SORT_TO_API: Record<SortBy, BookSort> = {
+  newest: "recent",
+  easiest: "easiest",
+  shortest: "shortest",
+};
+
 const VIEW_MODE_KEY = "queueViewMode";
+// See web/app/page.tsx's PAGE_SIZE comment — same "fetch one extra row" pattern.
+const PAGE_SIZE = 30;
 
 function formatTimestamp(ts: string | null): string {
   if (!ts) return "never";
@@ -22,6 +32,8 @@ function formatTimestamp(ts: string | null): string {
 
 export default function QueuePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
@@ -46,12 +58,39 @@ export default function QueuePage() {
         status: "candidate",
         topic: topicFilter || undefined,
         source: sourceFilter || undefined,
+        sort: SORT_TO_API[sortBy],
+        limit: PAGE_SIZE + 1,
+        offset: 0,
       })
-      .then(setBooks)
+      .then((result) => {
+        setHasMore(result.length > PAGE_SIZE);
+        setBooks(result.slice(0, PAGE_SIZE));
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load the queue."));
   };
 
-  useEffect(refresh, [topicFilter, sourceFilter]);
+  useEffect(refresh, [topicFilter, sourceFilter, sortBy]);
+
+  const loadMore = async () => {
+    if (!books) return;
+    setLoadingMore(true);
+    try {
+      const result = await api.listBooks({
+        status: "candidate",
+        topic: topicFilter || undefined,
+        source: sourceFilter || undefined,
+        sort: SORT_TO_API[sortBy],
+        limit: PAGE_SIZE + 1,
+        offset: books.length,
+      });
+      setHasMore(result.length > PAGE_SIZE);
+      setBooks((prev) => [...(prev ?? []), ...result.slice(0, PAGE_SIZE)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -121,21 +160,6 @@ export default function QueuePage() {
       setBusyId(null);
     }
   };
-
-  // "Newest fetched" keeps the API's id order reversed (mirrors "/"'s "recent"
-  // sort). "Easiest first" mirrors "/"'s "Easiest unread" comparator exactly —
-  // new_per_page ascending, unscored sinks to the bottom. "Shortest first" uses
-  // a single derived minutes-to-consume number so text and video compare.
-  const displayed = books ? [...books] : books;
-  if (displayed) {
-    if (sortBy === "easiest") {
-      displayed.sort((a, b) => (a.new_per_page ?? Infinity) - (b.new_per_page ?? Infinity));
-    } else if (sortBy === "shortest") {
-      displayed.sort((a, b) => estimatedMinutes(a) - estimatedMinutes(b));
-    } else {
-      displayed.sort((a, b) => b.id - a.id);
-    }
-  }
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
@@ -274,7 +298,7 @@ export default function QueuePage() {
             : "flex flex-col gap-3"
         }
       >
-        {displayed?.map((book) => {
+        {books?.map((book) => {
           const length = formatLength(book);
           return (
             <li
@@ -338,6 +362,16 @@ export default function QueuePage() {
           );
         })}
       </ul>
+
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="rounded-lg border border-border py-2 text-sm text-muted hover:text-ink hover:bg-paper transition-colors disabled:opacity-50"
+        >
+          {loadingMore ? "Loading…" : "Load more"}
+        </button>
+      )}
 
       {showBackToTop && (
         <button

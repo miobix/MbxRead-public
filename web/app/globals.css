@@ -3,14 +3,20 @@
 /* Warm "paper" reading palette. Values are plain CSS custom properties, so the
    dark-mode block below can override them in place — every utility built from
    these (bg-, text-, border-, ...) tracks the swap automatically, no dark:
-   variants needed at the call site. */
+   variants needed at the call site.
+   2026-07-24: bumped paper/surface separation and border strength (the flat,
+   near-identical values here were the "dull" look reported) and told the browser
+   which native palette to use via `color-scheme` — without it, a native <select>'s
+   open dropdown list renders with the browser's default (light) chrome no matter
+   what colors the page uses, which is what made every select unreadable
+   (white popup background, light `--color-ink` text) under the dark branch below. */
 @theme {
-  --color-paper: #faf6f0;
-  --color-surface: #fffdfa;
+  --color-paper: #f3ecdf;
+  --color-surface: #ffffff;
   --color-ink: #2b2420;
   --color-muted: #8a7d6f;
-  --color-border: #e6dbcb;
-  --color-accent: #b5572a;
+  --color-border: #ddcdb2;
+  --color-accent: #a8481f;
   --color-accent-ink: #fff8f0;
   --color-highlight: #f6d67a;
   --color-danger: #b3261e;
@@ -27,18 +33,24 @@
   --color-dict-ink: #fff8f0;
   --color-translate: #2e7d4f;
   --color-translate-ink: #fff8f0;
-  --color-manual: #b5572a;
+  --color-manual: #a8481f;
   --color-manual-ink: #fff8f0;
+}
+
+:root {
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-paper: #1b1712;
-    --color-surface: #241f18;
+    color-scheme: dark;
+
+    --color-paper: #17130f;
+    --color-surface: #2b241a;
     --color-ink: #f1e9dd;
-    --color-muted: #a8998a;
-    --color-border: #3a3226;
-    --color-accent: #e3874f;
+    --color-muted: #b0a190;
+    --color-border: #4d422f;
+    --color-accent: #e88f56;
     --color-accent-ink: #1b1712;
     --color-highlight: #6b5323;
     --color-danger: #e2665c;
@@ -51,11 +63,20 @@
     --color-dict-ink: #0d1b2a;
     --color-translate: #4caf72;
     --color-translate-ink: #0d1b0f;
-    --color-manual: #e3874f;
+    --color-manual: #e88f56;
     --color-manual-ink: #1b1712;
   }
 }
 
 ::selection {
   background: var(--color-highlight);
+}
+
+/* Baseline for every <select>/<option> — belt-and-suspenders alongside
+   `color-scheme` above, since a couple of browsers do honor the element's own
+   resolved colors for the popup list. */
+select,
+option {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
 }

@@ -40,7 +40,7 @@ from ..feeds import (
 from import_tools.yt_subs import NoSubtitlesError, fetch_subs
 
 from . import settings as settings_route
-from .books import DuplicateSourceRef, _score_and_cache, insert_book
+from .books import DuplicateSourceRef, _purge_queue_text, _score_and_cache, insert_book
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
@@ -263,8 +263,23 @@ def _expire_stale_candidates(conn: sqlite3.Connection) -> int:
     a manual discard — rather than a new status, per the user's confirmed choice.
     Runs on every call (scheduled, manual whole-roster, or a single-feed retry):
     it's a single indexed UPDATE, cheap and idempotent, so there's no reason to
-    special-case any trigger path."""
+    special-case any trigger path.
+
+    Also purges the expired candidates' `pages` text (article/yt are the only two
+    sources the feed fetcher ever creates as 'candidate' — see
+    books._purge_queue_text) so an unpromoted queue item stops costing storage
+    once it ages out; the `books` row itself is kept (title/source_ref/topic/
+    stats) so dedup and the curation stats breakdown are unaffected."""
     retention_days = settings_route.get_candidate_retention_days(conn)
+    stale_ids = [
+        row["id"]
+        for row in conn.execute(
+            "SELECT id FROM books WHERE status = 'candidate' "
+            "AND created <= datetime('now', ?)",
+            (f"-{retention_days} days",),
+        )
+    ]
+    _purge_queue_text(conn, stale_ids)
     cur = conn.execute(
         "UPDATE books SET status = 'discarded', discard_reason = 'expired' "
         "WHERE status = 'candidate' AND created <= datetime('now', ?)",

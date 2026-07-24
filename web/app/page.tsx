@@ -2,40 +2,66 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Book, type ScoreResult } from "@/lib/api";
+import { api, type Book, type BookSort, type ScoreResult } from "@/lib/api";
 import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
 import { SOURCES, TOPICS } from "@/lib/topics";
 
-type Sort = "recent" | "easiest";
+// 2026-07-24: fetch one extra row beyond the page size to detect "there's more"
+// without a separate count endpoint — a plain array response stays backward
+// compatible with every existing caller that omits limit/offset entirely.
+const PAGE_SIZE = 30;
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [sort, setSort] = useState<Sort>("recent");
+  const [sort, setSort] = useState<BookSort>("opened");
   const [scoring, setScoring] = useState<number | null>(null);
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const [candidateCount, setCandidateCount] = useState<number | null>(null);
 
   const refresh = () => {
     api
-      .listBooks({ topic: topicFilter || undefined, source: sourceFilter || undefined, archived: showArchived })
-      .then(setBooks)
+      .listBooks({
+        topic: topicFilter || undefined,
+        source: sourceFilter || undefined,
+        archived: showArchived,
+        sort,
+        limit: PAGE_SIZE + 1,
+        offset: 0,
+      })
+      .then((result) => {
+        setHasMore(result.length > PAGE_SIZE);
+        setBooks(result.slice(0, PAGE_SIZE));
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load your library."));
   };
 
-  useEffect(refresh, [topicFilter, sourceFilter, showArchived]);
+  useEffect(refresh, [topicFilter, sourceFilter, showArchived, sort]);
 
-  useEffect(() => {
-    api
-      .listBooks({ status: "candidate" })
-      .then((b) => setCandidateCount(b.length))
-      .catch(() => {
-        // best-effort — the Queue badge just stays hidden on failure
+  const loadMore = async () => {
+    if (!books) return;
+    setLoadingMore(true);
+    try {
+      const result = await api.listBooks({
+        topic: topicFilter || undefined,
+        source: sourceFilter || undefined,
+        archived: showArchived,
+        sort,
+        limit: PAGE_SIZE + 1,
+        offset: books.length,
       });
-  }, []);
+      setHasMore(result.length > PAGE_SIZE);
+      setBooks((prev) => [...(prev ?? []), ...result.slice(0, PAGE_SIZE)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const score = async (id: number) => {
     setScoring(id);
@@ -60,33 +86,13 @@ export default function HomePage() {
     }
   };
 
-  // "Easiest unread" sorts by new-words-per-page ascending; unscored books sink
-  // to the bottom (unknown difficulty). "recent" keeps the API's id order reversed.
-  const displayed = books ? [...books] : books;
-  if (displayed) {
-    if (sort === "easiest") {
-      displayed.sort((a, b) => {
-        const av = a.new_per_page ?? Infinity;
-        const bv = b.new_per_page ?? Infinity;
-        return av - bv;
-      });
-    } else {
-      displayed.sort((a, b) => b.id - a.id);
-    }
-  }
-
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold font-serif">Korean Reader</h1>
+        <h1 className="text-2xl font-semibold font-serif">MbxAndria</h1>
         <div className="flex items-center gap-3">
           <Link href="/queue" className="text-sm text-muted hover:text-ink transition-colors">
             Queue
-            {!!candidateCount && (
-              <span className="ml-1 rounded-full bg-accent text-accent-ink text-xs px-1.5 py-0.5">
-                {candidateCount}
-              </span>
-            )}
           </Link>
           <Link href="/stats" className="text-sm text-muted hover:text-ink transition-colors">
             Stats
@@ -102,7 +108,7 @@ export default function HomePage() {
           </Link>
           <button
             onClick={() => setModalOpen(true)}
-            className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
+            className="rounded-md bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
             + Add
           </button>
@@ -158,10 +164,17 @@ export default function HomePage() {
         <div className="flex items-center gap-2 mb-3 text-sm">
           <span className="text-muted">Sort:</span>
           <button
+            onClick={() => setSort("opened")}
+            className={sort === "opened" ? "text-ink font-medium" : "text-muted hover:text-ink"}
+          >
+            Recently opened
+          </button>
+          <span className="text-border">·</span>
+          <button
             onClick={() => setSort("recent")}
             className={sort === "recent" ? "text-ink font-medium" : "text-muted hover:text-ink"}
           >
-            Recent
+            Recently added
           </button>
           <span className="text-border">·</span>
           <button
@@ -174,7 +187,7 @@ export default function HomePage() {
       )}
 
       <ul className="flex flex-col gap-3">
-        {displayed?.map((book) => (
+        {books?.map((book) => (
           <li
             key={book.id}
             className="rounded-xl border border-border bg-surface p-4 shadow-sm"
@@ -242,6 +255,16 @@ export default function HomePage() {
           </li>
         ))}
       </ul>
+
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="mt-4 w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-ink hover:bg-paper transition-colors disabled:opacity-50"
+        >
+          {loadingMore ? "Loading…" : "Load more"}
+        </button>
+      )}
 
       {modalOpen && (
         <AddBookModal

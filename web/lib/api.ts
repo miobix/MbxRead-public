@@ -24,7 +24,10 @@ export type Book = {
   duration_seconds: number | null;
   feed_id: number | null;
   discard_reason: "user" | "expired" | null;
+  last_opened: string | null;
 };
+
+export type BookSort = "recent" | "opened" | "easiest" | "shortest";
 
 export type ScoreResult = {
   coverage: number | null;
@@ -257,12 +260,18 @@ export const api = {
     archived?: boolean;
     source?: string;
     status?: BookStatus;
+    sort?: BookSort;
+    limit?: number;
+    offset?: number;
   }) => {
     const sp = new URLSearchParams();
     if (params?.topic) sp.set("topic", params.topic);
     if (params?.archived !== undefined) sp.set("archived", String(params.archived));
     if (params?.source) sp.set("source", params.source);
     if (params?.status) sp.set("status", params.status);
+    if (params?.sort) sp.set("sort", params.sort);
+    if (params?.limit !== undefined) sp.set("limit", String(params.limit));
+    if (params?.offset !== undefined) sp.set("offset", String(params.offset));
     const qs = sp.toString();
     return request<Book[]>(`/books${qs ? `?${qs}` : ""}`);
   },
