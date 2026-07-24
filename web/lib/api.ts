@@ -84,14 +84,32 @@ export type Token = {
 
 export type TermStatus = "learning" | "known" | "ignored";
 
+// Epic 22: a Front chip. 'dict' = clicked in from a dictionary headword, 'manual' =
+// typed via the "Add entry" form. The lemma itself isn't in this list — it's always
+// entry 0, carried by `Term.lemma`/`TermSummary.lemma`.
+export type FormEntry = { text: string; kind: "dict" | "manual" };
+
+// Epic 22: a Back chip. `group` is '' for the lemma's own group, or a FormEntry's
+// `text` for a form's group. `korean_def` (kind "dict" only) is the krdict Korean
+// definition (+ any glued-on example) — feeds the Anki Examples field, never shown
+// on Back itself.
+export type BackItem = {
+  group: string;
+  kind: "dict" | "translate" | "manual";
+  text: string;
+  korean_def: string;
+};
+
 export type TermSummary = {
   id: number;
   lemma: string;
   translation: string;
+  notes: string;
   status: TermStatus;
   deck: string;
-  forms: string[];
+  forms: FormEntry[];
   examples: string[];
+  back_items: BackItem[];
 };
 
 export type Term = {
@@ -102,8 +120,9 @@ export type Term = {
   status: TermStatus;
   deck: string;
   sentence: string;
-  forms: string[];
+  forms: FormEntry[];
   examples: string[];
+  back_items: BackItem[];
   anki_note_id: number | null;
   anki_dirty: boolean;
   created: string;
@@ -275,8 +294,10 @@ export const api = {
     status?: TermStatus;
     deck?: string;
     sentence?: string;
-    forms?: string[];
+    notes?: string;
+    forms?: FormEntry[];
     examples?: string[];
+    back_items?: BackItem[];
     source_book_id?: number;
     source_page?: number;
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
@@ -294,6 +315,7 @@ export const api = {
         | "sentence"
         | "forms"
         | "examples"
+        | "back_items"
       >
     >
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

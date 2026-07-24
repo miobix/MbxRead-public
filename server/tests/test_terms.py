@@ -7,6 +7,14 @@ def _create(client, **overrides):
     return client.post("/api/terms", json=body)
 
 
+def _forms(*texts, kind="manual"):
+    return [{"text": t, "kind": kind} for t in texts]
+
+
+def _back(group, kind, text, korean_def=""):
+    return {"group": group, "kind": kind, "text": text, "korean_def": korean_def}
+
+
 def test_create_term_defaults(client):
     resp = _create(client)
     assert resp.status_code == 201
@@ -132,25 +140,37 @@ def test_patch_missing_term_404(client):
 
 
 def test_create_term_round_trips_forms(client):
-    body = _create(client, lemma="승인", forms=["승인서", "승인하다"]).json()
-    assert body["forms"] == ["승인서", "승인하다"]
-    assert client.get("/api/terms").json()[0]["forms"] == ["승인서", "승인하다"]
+    body = _create(client, lemma="승인", forms=_forms("승인서", "승인하다")).json()
+    assert body["forms"] == _forms("승인서", "승인하다")
+    assert client.get("/api/terms").json()[0]["forms"] == _forms("승인서", "승인하다")
 
 
 def test_create_term_normalizes_forms(client):
     # blanks dropped, the lemma itself dropped, duplicates collapsed, order kept.
     body = _create(
-        client, lemma="승인", forms=[" 승인서 ", "승인", "승인하다", "승인서", ""]
+        client, lemma="승인", forms=_forms(" 승인서 ", "승인", "승인하다", "승인서", "")
     ).json()
-    assert body["forms"] == ["승인서", "승인하다"]
+    assert body["forms"] == _forms("승인서", "승인하다")
+
+
+def test_create_term_forms_keep_their_kind(client):
+    body = _create(
+        client,
+        lemma="승인",
+        forms=[{"text": "승인서", "kind": "dict"}, {"text": "승인권", "kind": "manual"}],
+    ).json()
+    assert body["forms"] == [
+        {"text": "승인서", "kind": "dict"},
+        {"text": "승인권", "kind": "manual"},
+    ]
 
 
 def test_patch_rewrites_forms(client):
-    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+    term_id = _create(client, lemma="승인", forms=_forms("승인서")).json()["id"]
     body = client.patch(
-        f"/api/terms/{term_id}", json={"forms": ["승인하다", "승인권"]}
+        f"/api/terms/{term_id}", json={"forms": _forms("승인하다", "승인권")}
     ).json()
-    assert body["forms"] == ["승인하다", "승인권"]
+    assert body["forms"] == _forms("승인하다", "승인권")
 
 
 def test_patch_forms_after_sync_marks_dirty(client, db_path):
@@ -161,30 +181,100 @@ def test_patch_forms_after_sync_marks_dirty(client, db_path):
     conn.commit()
     conn.close()
 
-    resp = client.patch(f"/api/terms/{term_id}", json={"forms": ["승인서"]})
+    resp = client.patch(f"/api/terms/{term_id}", json={"forms": _forms("승인서")})
     assert resp.status_code == 200
     assert resp.json()["anki_dirty"] is True
 
 
 def test_patch_same_forms_after_sync_does_not_mark_dirty(client, db_path):
-    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+    term_id = _create(client, lemma="승인", forms=_forms("승인서")).json()["id"]
 
     conn = sqlite3.connect(db_path)
     conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
     conn.commit()
     conn.close()
 
-    resp = client.patch(f"/api/terms/{term_id}", json={"forms": ["승인서"]})
+    resp = client.patch(f"/api/terms/{term_id}", json={"forms": _forms("승인서")})
     assert resp.json()["anki_dirty"] is False
 
 
 def test_delete_term_cascades_forms(client, db_path):
-    term_id = _create(client, lemma="승인", forms=["승인서"]).json()["id"]
+    term_id = _create(client, lemma="승인", forms=_forms("승인서")).json()["id"]
     assert client.delete(f"/api/terms/{term_id}").status_code == 204
 
     conn = sqlite3.connect(db_path)
     remaining = conn.execute(
         "SELECT COUNT(*) FROM term_forms WHERE term_id = ?", (term_id,)
+    ).fetchone()[0]
+    conn.close()
+    assert remaining == 0
+
+
+def test_create_term_round_trips_back_items(client):
+    body = _create(
+        client,
+        lemma="승인",
+        back_items=[_back("", "dict", "approval", "허가함"), _back("", "translate", "approve")],
+    ).json()
+    assert body["back_items"] == [
+        _back("", "dict", "approval", "허가함"),
+        _back("", "translate", "approve"),
+    ]
+    # Epic 22: translation is derived from back_items, join order preserved.
+    assert body["translation"] == "approval; approve"
+
+
+def test_create_term_without_back_items_keeps_translation_as_given(client):
+    body = _create(client, lemma="승인", translation="hand-typed").json()
+    assert body["back_items"] == []
+    assert body["translation"] == "hand-typed"
+
+
+def test_patch_back_items_rewrites_and_marks_dirty(client, db_path):
+    term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
+        "id"
+    ]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(
+        f"/api/terms/{term_id}",
+        json={"back_items": [_back("", "dict", "approval", "허가함")]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["back_items"] == [_back("", "dict", "approval", "허가함")]
+    assert body["anki_dirty"] is True
+
+
+def test_patch_same_back_items_after_sync_does_not_mark_dirty(client, db_path):
+    term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
+        "id"
+    ]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(
+        f"/api/terms/{term_id}", json={"back_items": [_back("", "dict", "approval")]}
+    )
+    assert resp.json()["anki_dirty"] is False
+
+
+def test_delete_term_cascades_back_items(client, db_path):
+    term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
+        "id"
+    ]
+    assert client.delete(f"/api/terms/{term_id}").status_code == 204
+
+    conn = sqlite3.connect(db_path)
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM term_back_items WHERE term_id = ?", (term_id,)
     ).fetchone()[0]
     conn.close()
     assert remaining == 0

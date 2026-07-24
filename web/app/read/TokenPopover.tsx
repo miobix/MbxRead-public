@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { api, type DictEntry, type Term, type TermStatus, type TermSummary } from "@/lib/api";
+import {
+  api,
+  type BackItem,
+  type DictEntry,
+  type FormEntry,
+  type Term,
+  type TermStatus,
+  type TermSummary,
+} from "@/lib/api";
 
 export type PopoverTarget = {
   surface: string;
@@ -11,6 +19,13 @@ export type PopoverTarget = {
   // Multi-word phrase selection → translate-only UI (no dictionary/forms/examples).
   isPhrase: boolean;
 };
+
+// Epic 22: dictionary-derived chips run strong→pale across this "blue family" in
+// the order they're added this session (front forms + back senses, combined).
+const DICT_SHADES = ["bg-dict-1", "bg-dict-2", "bg-dict-3", "bg-dict-4"];
+const dictShade = (i: number) => DICT_SHADES[Math.min(i, DICT_SHADES.length - 1)];
+
+const LEMMA_GROUP = "";
 
 export function TokenPopover({
   target,
@@ -34,8 +49,9 @@ export function TokenPopover({
   onDeleted: (term: TermSummary) => void;
 }) {
   const isEditing = target.existing !== null;
-  // Phrases are translate-only: the dictionary, forms, and examples affordances all
-  // hide, since a multi-word span has no single dictionary lemma or card-worthy forms.
+  // Phrases are translate-only: dictionary, forms, and the manual front-entry
+  // affordance all hide, since a multi-word span has no single dictionary lemma or
+  // card-worthy forms.
   const isPhrase = target.isPhrase;
   const deckOptions =
     target.existing?.deck && !decks.includes(target.existing.deck)
@@ -45,53 +61,87 @@ export function TokenPopover({
   // When a saved word is tapped via one of its extra forms (e.g. 승인서), the token
   // lemma is that form — show the term's real dictionary form (승인) instead.
   const [lemma, setLemma] = useState(target.existing?.lemma ?? target.lemma);
-  const [translation, setTranslation] = useState(target.existing?.translation ?? "");
   const [deck, setDeck] = useState(target.existing?.deck || defaultDeck);
-  const [forms, setForms] = useState<string[]>(target.existing?.forms ?? []);
-  const [formInput, setFormInput] = useState("");
-  const [examples, setExamples] = useState<string[]>(target.existing?.examples ?? []);
+  const [forms, setForms] = useState<FormEntry[]>(target.existing?.forms ?? []);
+  const [backItems, setBackItems] = useState<BackItem[]>(target.existing?.back_items ?? []);
+  const [notes, setNotes] = useState(target.existing?.notes ?? "");
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
+  const [manualFront, setManualFront] = useState("");
+  const [manualBack, setManualBack] = useState("");
+  const [manualError, setManualError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Split on whitespace / comma / slash so the user can paste "승인서, 승인하다" or
-  // the slash-separated shape they used to type into the lemma field.
-  const parseForms = (text: string) =>
-    text
-      .split(/[\s,/]+/)
-      .map((f) => f.trim())
-      .filter(Boolean);
+  // A term never touched by this card builder (no back_items) shows its old flat
+  // translation read-only instead of chips — no migration forced (Epic 22).
+  const legacyTranslation =
+    (target.existing?.back_items.length ?? 0) === 0 ? target.existing?.translation || "" : "";
 
-  const addForms = (text: string) => {
-    const additions = parseForms(text).filter((f) => f !== lemma.trim());
-    setForms((prev) => {
-      const next = [...prev];
-      for (const f of additions) if (!next.includes(f)) next.push(f);
-      return next;
+  const groupKeyFor = (text: string) => (text === lemma.trim() ? LEMMA_GROUP : text);
+
+  const removeForm = (index: number) => {
+    const removed = forms[index];
+    setForms((prev) => prev.filter((_, i) => i !== index));
+    setBackItems((prev) => prev.filter((b) => b.group !== removed.text));
+  };
+
+  const removeBackItem = (index: number) =>
+    setBackItems((prev) => prev.filter((_, i) => i !== index));
+
+  const addDictSense = (
+    group: string,
+    def: { ko: string; en_word: string; en_def: string },
+    example: string | undefined
+  ) => {
+    const text = def.en_word || def.en_def;
+    if (!text) return;
+    const koreanDef = def.ko + (example ?? "");
+    setBackItems((prev) => {
+      if (prev.some((b) => b.group === group && b.kind === "dict" && b.text === text)) {
+        return prev;
+      }
+      return [...prev, { group, kind: "dict", text, korean_def: koreanDef }];
     });
-    setFormInput("");
   };
 
-  const removeForm = (f: string) => setForms((prev) => prev.filter((x) => x !== f));
-
-  const addExample = (ex: string) => {
-    const value = ex.trim();
-    if (!value) return;
-    setExamples((prev) => (prev.includes(value) ? prev : [...prev, value]));
+  const addDictHeadword = (entry: DictEntry) => {
+    const text = entry.word.trim();
+    if (!text) return;
+    const group = groupKeyFor(text);
+    if (group !== LEMMA_GROUP && !forms.some((f) => f.text === group)) {
+      setForms((prev) => [...prev, { text: group, kind: "dict" }]);
+    }
+    if (entry.definitions[0]) addDictSense(group, entry.definitions[0], entry.examples[0]);
   };
 
-  const removeExample = (ex: string) =>
-    setExamples((prev) => prev.filter((x) => x !== ex));
+  const addManualEntry = () => {
+    const front = manualFront.trim();
+    if (!front) return;
+    if (front === lemma.trim() || forms.some((f) => f.text === front)) {
+      setManualError(`"${front}" is already used.`);
+      return;
+    }
+    setForms((prev) => [...prev, { text: front, kind: "manual" }]);
+    const back = manualBack.trim();
+    if (back) {
+      setBackItems((prev) => [
+        ...prev,
+        { group: front, kind: "manual", text: back, korean_def: "" },
+      ]);
+    }
+    setManualFront("");
+    setManualBack("");
+    setManualError(null);
+  };
 
-  // Clicking a dictionary sense appends its English gloss to the translation.
-  const appendGloss = (gloss: string) => {
-    const value = gloss.trim();
+  const addPhraseBackText = (text: string) => {
+    const value = text.trim();
     if (!value) return;
-    setTranslation((prev) => {
-      const t = prev.trim();
-      if (!t) return value;
-      if (t.split(/;\s*/).includes(value)) return prev; // already there
-      return `${t}; ${value}`;
+    setBackItems((prev) => {
+      if (prev.some((b) => b.group === LEMMA_GROUP && b.kind === "manual" && b.text === value)) {
+        return prev;
+      }
+      return [...prev, { group: LEMMA_GROUP, kind: "manual", text: value, korean_def: "" }];
     });
   };
 
@@ -101,7 +151,12 @@ export function TokenPopover({
     setError(null);
     try {
       const { translation: result } = await api.translate(lemma.trim(), translatorBackend);
-      setTranslation(result);
+      setBackItems((prev) => {
+        if (prev.some((b) => b.group === LEMMA_GROUP && b.kind === "translate" && b.text === result)) {
+          return prev;
+        }
+        return [...prev, { group: LEMMA_GROUP, kind: "translate", text: result, korean_def: "" }];
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Translation failed.");
     } finally {
@@ -128,30 +183,30 @@ export function TokenPopover({
       setError("Lemma can't be empty.");
       return;
     }
-    // Fold in any form still sitting in the input that wasn't committed to a chip.
-    const pending = parseForms(formInput).filter(
-      (f) => f !== trimmedLemma && !forms.includes(f)
-    );
-    const finalForms = [...forms, ...pending];
     setBusy("save");
     setError(null);
+    // Only send back_items when there's actually structured content — an empty
+    // array would otherwise blank out a legacy term's flat translation on any
+    // save (e.g. just changing the deck) via the server's derived-mirror rule.
+    const backItemsPayload = backItems.length > 0 ? backItems : undefined;
     try {
       const term = target.existing
         ? await api.patchTerm(target.existing.id, {
             lemma: trimmedLemma,
-            translation: translation.trim(),
             deck,
             sentence: target.sentence,
-            forms: finalForms,
-            examples,
+            notes,
+            forms,
+            back_items: backItemsPayload,
           })
         : await api.createTerm({
             lemma: trimmedLemma,
-            translation: translation.trim(),
+            translation: "",
             deck,
             sentence: target.sentence,
-            forms: finalForms,
-            examples,
+            notes,
+            forms,
+            back_items: backItemsPayload,
             status: "learning",
             // Provenance: record where this word was first saved (Epic 16 stats).
             source_book_id: bookId ?? undefined,
@@ -193,6 +248,24 @@ export function TokenPopover({
     }
   };
 
+  // Front stack: the lemma's own group first, then each extra form — mirrors the
+  // Anki renderer's _front_entries exactly, so the preview is a true WYSIWYG.
+  const frontEntries = [{ text: lemma.trim() || lemma, kind: "lemma" as const }, ...forms];
+
+  // Running shade index for dictionary-derived chips, front forms then back items.
+  let dictCounter = 0;
+  const formShade = forms.map((f) => (f.kind === "dict" ? dictShade(dictCounter++) : ""));
+  const backShade = backItems.map((b) => (b.kind === "dict" ? dictShade(dictCounter++) : ""));
+
+  const chipClass = (kind: "lemma" | "dict" | "translate" | "manual", shade: string) => {
+    if (kind === "lemma" || kind === "manual") return "bg-manual text-manual-ink";
+    if (kind === "translate") return "bg-translate text-translate-ink";
+    return `${shade || "bg-dict-1"} text-dict-ink`;
+  };
+
+  const backItemsFor = (group: string) => backItems.filter((b) => b.group === group);
+  const backIndexOf = (item: BackItem) => backItems.indexOf(item);
+
   return (
     <div
       className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
@@ -211,48 +284,11 @@ export function TokenPopover({
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
 
-        {!isPhrase && (
-          <div className="flex flex-col gap-1.5">
-            {forms.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {forms.map((f) => (
-                  <span
-                    key={f}
-                    className="inline-flex items-center gap-1 rounded-full bg-highlight/60 px-2 py-0.5 text-xs"
-                  >
-                    {f}
-                    <button
-                      type="button"
-                      onClick={() => removeForm(f)}
-                      aria-label={`Remove ${f}`}
-                      className="text-muted hover:text-danger transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <input
-              value={formInput}
-              onChange={(e) => setFormInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === "," || e.key === "/") {
-                  e.preventDefault();
-                  addForms(formInput);
-                }
-              }}
-              placeholder="Also highlight (e.g. 승인서, 승인하다)"
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-            />
-          </div>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-3 flex-wrap justify-center">
           <button
             onClick={translateWord}
             disabled={busy !== null}
-            className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-base rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
           >
             {busy === "translate" ? "Translating…" : "Translate"}
           </button>
@@ -260,7 +296,7 @@ export function TokenPopover({
             <button
               onClick={lookupDictionary}
               disabled={busy !== null}
-              className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 text-base rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
             >
               {busy === "dict" ? "Looking up…" : "Dictionary"}
             </button>
@@ -269,6 +305,68 @@ export function TokenPopover({
 
         {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
 
+        {/* Front/Back preview — a true WYSIWYG of what syncs to Anki. */}
+        <div className="grid grid-cols-2 gap-2 border-t border-b border-border py-2 text-xs">
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted">Front</span>
+            {frontEntries.map((entry, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-1">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+                    entry.kind === "lemma" ? "lemma" : entry.kind,
+                    i === 0 ? "" : formShade[i - 1]
+                  )}`}
+                >
+                  {entry.text}
+                  {i > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => removeForm(i - 1)}
+                      aria-label={`Remove ${entry.text}`}
+                      className="opacity-80 hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted">Back</span>
+            {legacyTranslation && (
+              <span className="rounded-full bg-highlight/60 px-2 py-0.5 text-muted italic">
+                (legacy) {legacyTranslation}
+              </span>
+            )}
+            {frontEntries.map((entry, i) => {
+              const group = i === 0 ? LEMMA_GROUP : entry.text;
+              return backItemsFor(group).map((item) => {
+                const bi = backIndexOf(item);
+                return (
+                  <span
+                    key={bi}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+                      item.kind,
+                      backShade[bi]
+                    )}`}
+                  >
+                    {item.text}
+                    <button
+                      type="button"
+                      onClick={() => removeBackItem(bi)}
+                      aria-label={`Remove ${item.text}`}
+                      className="opacity-80 hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              });
+            })}
+          </div>
+        </div>
+
         {!isPhrase && dictEntries && (
           <div className="flex flex-col gap-2 max-h-52 overflow-y-auto border-t border-border pt-2">
             {dictEntries.length === 0 && (
@@ -276,13 +374,11 @@ export function TokenPopover({
             )}
             {dictEntries.map((entry, i) => (
               <div key={i} className="text-xs">
-                {/* Tap a headword to add it as a highlighted form; tap a sense to
-                    append its gloss; tap an example to attach it to the card. */}
                 <button
                   type="button"
-                  onClick={() => addForms(entry.word)}
+                  onClick={() => addDictHeadword(entry)}
                   className="font-medium text-accent hover:underline"
-                  title="Add as a highlighted form"
+                  title="Add as a highlighted form + first definition"
                 >
                   {entry.word}
                 </button>{" "}
@@ -292,9 +388,11 @@ export function TokenPopover({
                     <li key={j}>
                       <button
                         type="button"
-                        onClick={() => appendGloss(d.en_word)}
+                        onClick={() =>
+                          addDictSense(groupKeyFor(entry.word.trim()), d, entry.examples[0])
+                        }
                         className="text-left text-muted hover:text-ink transition-colors"
-                        title="Append this gloss to the translation"
+                        title="Add this definition to Back"
                       >
                         <b>{d.en_word}</b>
                         {d.en_def ? ` — ${d.en_def}` : ""}
@@ -302,54 +400,93 @@ export function TokenPopover({
                     </li>
                   ))}
                 </ul>
-                {entry.examples.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {entry.examples.map((ex, k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => addExample(ex)}
-                        className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-ink transition-colors"
-                        title="Attach this example to the card"
-                      >
-                        + {ex}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
         )}
 
-        {!isPhrase && examples.length > 0 && (
-          <div className="flex flex-col gap-1 border-t border-border pt-2">
-            <span className="text-[11px] uppercase tracking-wide text-muted">
-              Examples (card back)
-            </span>
-            {examples.map((ex) => (
-              <div key={ex} className="flex items-start gap-1 text-xs">
+        {/* Examples — the literal content of the Anki "Examples" field. */}
+        <div className="flex flex-col gap-1 border-t border-border pt-2">
+          <span className="text-[11px] uppercase tracking-wide text-muted">Examples</span>
+          {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
+          {backItems
+            .map((item, i) => ({ item, i }))
+            .filter(({ item }) => item.kind === "dict" && item.korean_def)
+            .map(({ item, i }) => (
+              <div key={i} className="flex items-start gap-1 text-xs">
                 <button
                   type="button"
-                  onClick={() => removeExample(ex)}
-                  aria-label={`Remove example`}
+                  onClick={() => removeBackItem(i)}
+                  aria-label="Remove definition"
                   className="text-muted hover:text-danger transition-colors"
                 >
                   ×
                 </button>
-                <span>{ex}</span>
+                <span>{item.korean_def}</span>
               </div>
             ))}
-          </div>
-        )}
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes…"
+            rows={2}
+            className="mt-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          />
+        </div>
 
-        <textarea
-          value={translation}
-          onChange={(e) => setTranslation(e.target.value)}
-          placeholder="Translation / notes…"
-          rows={4}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        />
+        {/* Add entry — hand-typed content that never came from Translate/Dictionary.
+            Always its own independent group (front), never merged into the lemma. */}
+        <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+          <span className="text-[11px] uppercase tracking-wide text-muted">Add entry</span>
+          {isPhrase ? (
+            <div className="flex gap-1.5">
+              <input
+                value={manualBack}
+                onChange={(e) => setManualBack(e.target.value)}
+                placeholder="Add a translation"
+                className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  addPhraseBackText(manualBack);
+                  setManualBack("");
+                }}
+                className="px-3 py-1.5 text-xs rounded-full border border-border hover:border-accent transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-1.5">
+                <input
+                  value={manualFront}
+                  onChange={(e) => {
+                    setManualFront(e.target.value);
+                    setManualError(null);
+                  }}
+                  placeholder="Front"
+                  className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                />
+                <input
+                  value={manualBack}
+                  onChange={(e) => setManualBack(e.target.value)}
+                  placeholder="Back"
+                  className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={addManualEntry}
+                  className="px-3 py-1.5 text-xs rounded-full border border-border hover:border-accent transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {manualError && <p className="text-danger text-xs">{manualError}</p>}
+            </>
+          )}
+        </div>
 
         <select
           value={deck}

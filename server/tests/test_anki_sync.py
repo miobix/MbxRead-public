@@ -61,9 +61,11 @@ def test_sync_adds_new_learning_term(client, monkeypatch):
     assert saved["anki_dirty"] is False
 
 
-def test_sync_korean_face_includes_extra_forms_and_examples(client, monkeypatch):
-    """Epic 20/21: Korean = `lemma / form1 / form2`; Examples = clicked-in examples
-    plus the reading sentence, one per line."""
+def test_sync_korean_face_stacks_extra_forms_legacy_back(client, monkeypatch):
+    """Epic 20: forms still render on the Korean face. Epic 22: with 2+ front
+    entries the stack is numbered — but with no back_items at all (never touched
+    by the structured card builder), English/Examples still render exactly as
+    they did before this epic (flat translation, the old `examples` column)."""
     monkeypatch.setattr(anki, "ping", lambda: None)
     _mock_model(monkeypatch)
     monkeypatch.setattr(anki, "create_deck", lambda deck: None)
@@ -79,7 +81,7 @@ def test_sync_korean_face_includes_extra_forms_and_examples(client, monkeypatch)
         client,
         lemma="승인",
         translation="approval",
-        forms=["승인서", "승인하다"],
+        forms=[{"text": "승인서", "kind": "manual"}, {"text": "승인하다", "kind": "manual"}],
         examples=["승인을 받다", "승인이 나다"],
         sentence="승인을 기다린다.",
     )
@@ -89,9 +91,125 @@ def test_sync_korean_face_includes_extra_forms_and_examples(client, monkeypatch)
     assert add_calls == [
         (
             "Korean",
-            "승인 / 승인서 / 승인하다",
+            "1. 승인<br>2. 승인서<br>3. 승인하다",
             "approval",
             "승인을 받다<br>승인이 나다<br>승인을 기다린다.",
+        )
+    ]
+
+
+def test_sync_single_dict_sense_has_no_label(client, monkeypatch):
+    """Epic 22: one front entry (just the lemma) with exactly one back item is
+    still the simple, unlabeled case — the common one-word-one-meaning card."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+    monkeypatch.setattr(
+        anki, "add_note_model", lambda deck, k, e, x: (add_calls.append((deck, k, e, x)), 1)[1]
+    )
+
+    _create(
+        client,
+        lemma="입다",
+        sentence="옷을 입다.",
+        back_items=[{"group": "", "kind": "dict", "text": "to wear", "korean_def": "옷을 몸에 걸치다"}],
+    )
+    client.post("/api/anki/sync")
+
+    assert add_calls == [("Korean", "입다", "to wear", "옷을 입다.<br>옷을 몸에 걸치다")]
+
+
+def test_sync_multi_sense_labels_back_and_examples(client, monkeypatch):
+    """Epic 22: a single front entry with 2+ back items letters them a/b (no
+    front number needed — there's only one front entry), and the same labels
+    appear in Examples next to each sense's Korean definition."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+    monkeypatch.setattr(
+        anki, "add_note_model", lambda deck, k, e, x: (add_calls.append((deck, k, e, x)), 1)[1]
+    )
+
+    _create(
+        client,
+        lemma="타다",
+        back_items=[
+            {"group": "", "kind": "dict", "text": "to ride", "korean_def": "탈것에 몸을 얹다"},
+            {"group": "", "kind": "dict", "text": "to burn", "korean_def": "불이 붙다"},
+        ],
+    )
+    client.post("/api/anki/sync")
+
+    assert add_calls == [
+        (
+            "Korean",
+            "타다",
+            "a. to ride<br>b. to burn",
+            "a. 탈것에 몸을 얹다<br>b. 불이 붙다",
+        )
+    ]
+
+
+def test_sync_multi_form_labels_correlate_front_and_back(client, monkeypatch):
+    """Epic 22: with 2+ front entries, a front entry with a single back item gets
+    a bare number, one with several gets number+letter — proving which word each
+    Back/Examples line came from."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+    monkeypatch.setattr(
+        anki, "add_note_model", lambda deck, k, e, x: (add_calls.append((deck, k, e, x)), 1)[1]
+    )
+
+    _create(
+        client,
+        lemma="승인",
+        forms=[{"text": "승인서", "kind": "dict"}],
+        back_items=[
+            {"group": "", "kind": "dict", "text": "approval", "korean_def": "허가함"},
+            {"group": "", "kind": "translate", "text": "authorization"},
+            {"group": "승인서", "kind": "dict", "text": "approval document"},
+        ],
+    )
+    client.post("/api/anki/sync")
+
+    assert add_calls == [
+        (
+            "Korean",
+            "1. 승인<br>2. 승인서",
+            "1a. approval<br>1b. authorization<br>2. approval document",
+            "1a. 허가함",
+        )
+    ]
+
+
+def test_sync_notes_free_text_appended_after_definitions(client, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+    monkeypatch.setattr(
+        anki, "add_note_model", lambda deck, k, e, x: (add_calls.append((deck, k, e, x)), 1)[1]
+    )
+
+    _create(
+        client,
+        lemma="입다",
+        sentence="옷을 입다.",
+        notes="freely typed context",
+        back_items=[{"group": "", "kind": "dict", "text": "to wear", "korean_def": "옷을 몸에 걸치다"}],
+    )
+    client.post("/api/anki/sync")
+
+    assert add_calls == [
+        (
+            "Korean",
+            "입다",
+            "to wear",
+            "옷을 입다.<br>옷을 몸에 걸치다<br><br>freely typed context",
         )
     ]
 

@@ -650,12 +650,66 @@ later epic until the real sources are known.
   chars-per-row to taste); confirm `/`'s new source link opens the right URL without
   triggering the reader-page navigation underneath it; confirm `/queue`'s new topic/source
   filters actually narrow the candidate list.
-- [ ] **Epic 22 — Go-live (final stage, renumbered from Epic 17→20→22 as content epics
-  were inserted).** Execute Epic 8's still-pending cold-start + Tailscale verification
-  and go live day-to-day, optionally with a fuller per-page UI polish pass. **Also
-  register `scripts/fetch_feeds.ps1` in Windows Task Scheduler here** (per the README
-  section Epic 17 added) — the user confirmed 2026-07-23 the script itself needs no
-  changes, actually wiring it up on their machine is part of go-live, not before.
+- [x] **Epic 22 — Structured Front/Back/Examples card builder** — done (2026-07-24),
+  ad hoc user request (not planned ahead of time in `docs/SPEC.md`'s original epic
+  list, written up retroactively there per the executor convention). The user was
+  unhappy with how the popover shaped what actually lands on the Anki card: the
+  translation textarea was disorganized (Translate overwrote it, Dictionary appended
+  to it, unpredictably), krdict's Korean-language definitions were fetched but never
+  shown, and nothing distinguished dictionary-derived content from hand-typed content.
+  Full design discussion (chip model, numbering scheme, color provenance, what "Notes"
+  in Anki actually referred to — a false alarm, the field really is called "Examples")
+  worked out in conversation before any code; see `docs/DECISIONS.md` for the two
+  structural calls (`group_key` as a stable id, the `examples` column superseded not
+  dropped). Backend: `term_forms` gains `kind` (`'dict'`|`'manual'`, additive); new
+  `term_back_items(id, term_id, group_key, kind, text, korean_def)` table — one row
+  per Back chip, `group_key` `''` = the lemma's group or a form's text. `routes/
+  terms.py`: `forms` becomes `[{text, kind}]`, new `back_items: [{group, kind, text,
+  korean_def}]`, `translation` derived from `back_items` when non-empty (join order =
+  group order), `back_items`-changed is a new dirty trigger. `routes/books.py`'s
+  `get_page` prefill (which the reader's tap-to-edit popover actually reads, not
+  `/api/terms`) gained `notes` (previously missing entirely) and `back_items`, reusing
+  `terms.py`'s own read helpers instead of a third copy of the query. `routes/
+  anki_sync.py` rewritten: Front is a numbered stack when 2+ entries (unchanged bare
+  lemma otherwise); Back/Examples render from `term_back_items` when any exist — one
+  line per item, lettered (`1a.`/`1b.`) when its front entry has 2+ items — labels
+  shared between Back and Examples so they always correlate; a term with **zero**
+  `term_back_items` (never touched by this system) renders Back/Examples exactly as
+  before this epic (flat `translation`, the old `examples` column) — the "legacy
+  stays as it is" guarantee extended to Anki, not just the popover. `server/anki.py`/
+  `ensure_model()` untouched — confirmed with the user this was unnecessary. 218 tests
+  green (12 new: `test_db.py` migration idempotency for both schema changes;
+  `test_terms.py` forms-with-kind + back_items round-trip/dirty/derived-translation;
+  `test_anki_sync.py` rewritten stacked/numbered assertions + new multi-form/
+  multi-sense/legacy-fallback/notes-appended cases; `test_books.py` updated for the
+  richer page-payload shape). `npm run build`/`lint` clean. Frontend: `TokenPopover`
+  rewritten — removed the free-text "Also highlight" input; bigger centered
+  Translate/Dictionary buttons; a live read-only Front/Back chip preview (lemma +
+  manual entries orange, dictionary chips a blue family paling as more are added,
+  Translate results green), each deletable (deleting a Front form cascades to its
+  Back items); dictionary headword clicks add/attach a Front chip + first sense +
+  Korean definition, every sense independently clickable for more Back items; an
+  "Examples" preview (that exact label, matching the real Anki field) with auto
+  lines + a free-typed `notes` textarea; a manual "Add entry" form (Front + Back
+  text) that's always its own independent group, guarded by a duplicate-text check;
+  a legacy term (no `back_items` yet) shows its old flat translation read-only,
+  labeled "(legacy)" — no forced migration. New `--color-dict-1..4`/`--color-
+  translate`/`--color-manual` tokens in `globals.css`'s `@theme` block (light+dark).
+  **Not verified against live Anki / in a browser** (no Anki desktop or browser
+  tooling in this environment) — joins the owed pass, and this one specifically needs
+  a real Anki check: save a word with 2+ dictionary senses and confirm the popover's
+  numbered/lettered chips match what actually lands on the synced card (Front stack,
+  lettered Back, matching labels in Examples); add a manual entry and confirm it's
+  independent (its own group, orange, not merged into the lemma); open a
+  pre-existing (this session's test) term and confirm it still displays and syncs
+  exactly as before, read-only, until touched by the new system.
+- [ ] **Epic 23 — Go-live (final stage, renumbered from Epic 17→20→22→23 as content
+  epics were inserted).** Execute Epic 8's still-pending cold-start + Tailscale
+  verification and go live day-to-day, optionally with a fuller per-page UI polish
+  pass. **Also register `scripts/fetch_feeds.ps1` in Windows Task Scheduler here**
+  (per the README section Epic 17 added) — the user confirmed 2026-07-23 the script
+  itself needs no changes, actually wiring it up on their machine is part of go-live,
+  not before.
   **Acceptance:** a verified cold-start `start.ps1` run reachable from the phone over
   Tailscale, and the scheduled fetch task registered and firing.
 
@@ -689,10 +743,14 @@ later epic until the real sources are known.
   **Epic 20** (forms/aliases + highlighting fix) and **Epic 21** (dictionary click-to-add
   + krdict examples + a custom two-way Anki note type) both shipped. Hard user constraint
   honored in Epic 21: **no Claude API** in the card-builder (krdict + DeepL + manual only).
-  **Next up is Epic 22** (go-live: verified cold-start `start.ps1` reachable from the phone
-  over Tailscale, plus registering `scripts/fetch_feeds.ps1` in the user's actual Windows
-  Task Scheduler — the user confirmed 2026-07-23 the script itself is fine as-is). Epic 22
-  is the final planned epic.
+- **2026-07-24 — Epic 22 (structured Front/Back/Examples card builder) done.** Ad hoc
+  user request driven by dissatisfaction with how the popover shaped the Anki card —
+  full write-up above. Not part of the original planned epic list; logged into
+  `docs/SPEC.md` §10 retroactively per the executor convention.
+  **Next up is Epic 23** (go-live: verified cold-start `start.ps1` reachable from the
+  phone over Tailscale, plus registering `scripts/fetch_feeds.ps1` in the user's
+  actual Windows Task Scheduler — the user confirmed 2026-07-23 the script itself is
+  fine as-is). Epic 23 is the final planned epic.
 - **The user deferred the browser/touch pass over Epics 4-12 until after Epic 13**
   specifically to see Epic 13's cold-start scoring results first (2026-07-22); Epic 15
   added two more unverified surfaces (the `/queue` page, the source-type filter) to
@@ -714,7 +772,11 @@ later epic until the real sources are known.
   translate-only phrase popover, and — needing a **live Anki desktop**, not just a
   browser — the two-way card check: sync a new term and confirm two cards (KO→EN, EN→KO)
   with the example on the back of both and the front of neither, and that a term synced
-  before Epic 21 still updates as a `Basic` note without losing SRS history.
+  before Epic 21 still updates as a `Basic` note without losing SRS history. **Epic 22**
+  adds the rewritten popover's chip preview (front/back colors and delete/cascade
+  behavior), the manual "Add entry" form, the legacy-term read-only display, and —
+  again needing a live Anki desktop — confirming a multi-sense word's numbered/lettered
+  Front/Back/Examples actually match the popover's preview once synced.
 - **Epic 8's live cold-start + Tailscale verification is still pending** — the
   user asked for docs/launcher only, not to go live yet. Before relying on this
   day-to-day: close everything, double-click `start.ps1` from a cold start,

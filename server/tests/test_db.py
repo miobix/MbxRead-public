@@ -51,6 +51,28 @@ def test_terms_migration_adds_epic21_columns_idempotently(tmp_path):
         assert cols.count(name) == 1
 
 
+def test_term_forms_migration_adds_kind_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(term_forms)")]
+    conn.close()
+    assert cols.count("kind") == 1
+
+
+def test_term_back_items_table_created_idempotently(tmp_path):
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    db.init_db(db_path)  # must not raise — CREATE TABLE IF NOT EXISTS
+
+    conn = sqlite3.connect(db_path)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(term_back_items)")}
+    conn.close()
+    assert cols == {"id", "term_id", "group_key", "kind", "text", "korean_def"}
+
+
 def test_init_db_is_idempotent(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)
