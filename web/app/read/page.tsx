@@ -145,10 +145,12 @@ function ReadPageContent() {
                   id: exact.id,
                   lemma: exact.lemma,
                   translation: exact.translation,
+                  notes: exact.notes,
                   status: exact.status,
                   deck: exact.deck,
                   forms: exact.forms,
                   examples: exact.examples,
+                  back_items: exact.back_items,
                 }
               : null,
           });
@@ -174,10 +176,12 @@ function ReadPageContent() {
       id: term.id,
       lemma: term.lemma,
       translation: term.translation,
+      notes: term.notes,
       status: term.status,
       deck: term.deck,
       forms: term.forms,
       examples: term.examples,
+      back_items: term.back_items,
     };
     setPage((prev) => {
       if (!prev) return prev;
@@ -190,7 +194,7 @@ function ReadPageContent() {
         if (nextTerms[key].id === term.id) delete nextTerms[key];
       }
       nextTerms[term.lemma] = summary;
-      for (const f of term.forms) if (!(f in nextTerms)) nextTerms[f] = summary;
+      for (const f of term.forms) if (!(f.text in nextTerms)) nextTerms[f.text] = summary;
       return { ...prev, terms: nextTerms };
     });
   };

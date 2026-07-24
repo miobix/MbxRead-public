@@ -15,6 +15,20 @@
   --color-highlight: #f6d67a;
   --color-danger: #b3261e;
   --color-danger-soft: #e7c6bd;
+
+  /* Epic 22: popover chip provenance colors. Dictionary-derived chips (front forms
+     + back definitions) run strong→pale across the "blue family" in add order;
+     Translate results are green; hand-typed ("Add entry") chips are orange, sharing
+     the warm accent hue rather than inventing a new one. */
+  --color-dict-1: #1d5fae;
+  --color-dict-2: #2f6dbd;
+  --color-dict-3: #4f83c9;
+  --color-dict-4: #7699d1;
+  --color-dict-ink: #fff8f0;
+  --color-translate: #2e7d4f;
+  --color-translate-ink: #fff8f0;
+  --color-manual: #b5572a;
+  --color-manual-ink: #fff8f0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +43,16 @@
     --color-highlight: #6b5323;
     --color-danger: #e2665c;
     --color-danger-soft: #5c3a35;
+
+    --color-dict-1: #5b9bd5;
+    --color-dict-2: #6ea3d8;
+    --color-dict-3: #85b0dc;
+    --color-dict-4: #9ec0e2;
+    --color-dict-ink: #0d1b2a;
+    --color-translate: #4caf72;
+    --color-translate-ink: #0d1b0f;
+    --color-manual: #e3874f;
+    --color-manual-ink: #1b1712;
   }
 }
 

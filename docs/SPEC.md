@@ -93,10 +93,28 @@ CREATE TABLE IF NOT EXISTS terms (
 -- Epic 20: extra surface forms one term also covers (aliases), e.g. 승인서/승인하다 under
 -- lemma 승인. Each form highlights in the reader (matched alongside the lemma in get_page)
 -- and renders on the Anki card's Korean face; lemma stays the single clean dictionary form.
+-- Epic 22: `kind` ('dict'|'manual', additive, default 'manual') records whether a form
+-- was clicked in from the dictionary or hand-typed via "Add entry" — drives popover
+-- chip color; matching against page tokens doesn't care about it.
 CREATE TABLE IF NOT EXISTS term_forms (
   term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
   form TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'manual',
   PRIMARY KEY (term_id, form)
+);
+-- Epic 22: the popover's structured Front/Back card builder. One row per Back chip;
+-- `group_key` is '' for the lemma's own group or a term_forms.form value for a form's
+-- group — a stable id, not a live join on lemma text, so editing the lemma never
+-- orphans its back items. `korean_def` (kind='dict' only) is the krdict Korean
+-- definition with any krdict example glued directly onto the end (no separator) —
+-- feeds the Anki `Examples` field, never matched against page tokens.
+CREATE TABLE IF NOT EXISTS term_back_items (
+  id INTEGER PRIMARY KEY,
+  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('dict','translate','manual')),
+  text TEXT NOT NULL,
+  korean_def TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
@@ -115,8 +133,8 @@ Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at imp
 | DELETE `/api/books/{id}` | – | 204 |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?}` | created term (409 if lemma exists) |
-| PATCH `/api/terms/{id}` | any editable fields | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence` changed and `anki_note_id` is set; bumps `updated` |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], back_items?: [{group,kind,text,korean_def}]}` | created term (409 if lemma exists); `translation` is derived from `back_items` when non-empty (Epic 22) |
+| PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` |
 | DELETE `/api/terms/{id}` | – | 204 |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list |
@@ -173,8 +191,8 @@ AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`
 Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
-3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields `Korean` = lemma **plus any Epic-20 `forms`, joined ` / ` (`승인 / 승인서 / 승인하다`)**, `English` = translation, `Examples` = clicked-in krdict examples + the captured sentence joined by `<br>`; two templates, both with `{{Examples}}` on the back only). Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
-4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples`; a legacy `Basic` note (`anki_model` NULL, synced before Epic 21) → the old Front/Back path, preserving its SRS history. On success clear `anki_dirty`.
+3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields still named `Korean`/`English`/`Examples` — unchanged since Epic 21). Content (Epic 22): `Korean` = the lemma alone if it has no extra forms (unchanged simple case), else a numbered stack (`1. 승인<br>2. 승인서`); `English`/`Examples` render from `term_back_items` when the term has any — one line per back item, lettered (`1a.`/`1b.`) when its front entry has 2+ items, bare number/no label otherwise, with `Examples` also carrying the reading sentence first and the free-typed `notes` last. A term with **zero** `term_back_items` (never touched by the Epic 22 popover) renders `English`/`Examples` exactly as before Epic 22 — flat `translation`, the old `examples` JSON column + sentence — untouched legacy behavior. Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
+4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples` (same Epic 22 rendering as above); a legacy `Basic` note (`anki_model` NULL, synced before Epic 21) → the old Front/Back path (Front also gains Epic 22's numbering when it has forms), preserving its SRS history. On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not synced (existing notes left alone).
 
 Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new, update-dirty, per-note failure isolation, Anki-down 503.
@@ -322,6 +340,19 @@ Done 2026-07-23 (plan `hey-babes-i-need-temporal-beacon`, Phase B), as scoped be
 3. **Custom two-way Anki note type** — fields `Korean`/`English`/`Examples`, two card templates (KO→EN and EN→KO) that **both** keep `Examples` on the back only, so studying either direction never spoils the prompt. `server/anki.py` `ensure_model()` via AnkiConnect `createModel` (idempotent). **Preserve existing `Basic` notes' SRS history** — new terms use the new type; already-synced `Basic` notes keep the current Front/Back update path (branch by model).
 
 **Accept:** `pytest` + `npm run build`/`lint` green; clicking a dict headword/example fills forms/examples; new sync creates a two-card note with `Examples` on the back of both cards and the front of neither; existing `Basic` notes still update in place.
+
+### Epic 22 — Structured Front/Back/Examples card builder
+
+Done 2026-07-24. The user found the popover's translation textarea disorganized (Translate overwrote it, Dictionary appended to it, unpredictably) and wanted the popover to show, live, exactly what the Anki card's Front/Back/Examples will look like — colored chips grouped by which word-form they came from — with the card itself rendering Front/Back as numbered/lettered stacks instead of one joined line. Scope:
+
+1. **`term_forms` gains `kind`** (`'dict'`|`'manual'`, additive, default `'manual'`) — was a form clicked in from the dictionary or hand-typed via "Add entry"?
+2. **New `term_back_items(id, term_id, group_key, kind, text, korean_def)` table** — one row per Back chip. `group_key` is `''` for the lemma's own group or a `term_forms.form` value for a form's group — a stable id, not a live join on lemma text, so editing the lemma never orphans its back items. `kind` is `'dict'`|`'translate'`|`'manual'`; `korean_def` (dict only) is krdict's Korean definition with any example glued directly onto the end (no separator) — feeds the Anki `Examples` field, never matched against page tokens.
+3. **`routes/terms.py`** — `forms` becomes `list[{text, kind}]`; new `back_items: list[{group, kind, text, korean_def}]`. When `back_items` is sent, `translation` is derived from it (`"; ".join(text)`, join order = group order) purely so `/terms`' list/search/inline-edit still shows something for new-style terms — omitted `back_items` (e.g. `/terms`' own flat PATCH) leaves `translation` exactly as given. `back_items`-changed is a new dirty trigger.
+4. **`books.get_page`** — the reader's tap-to-edit prefill gains `notes` + `back_items` (previously missing `notes` entirely, and `forms` as bare strings) — reuses `terms.py`'s own `_forms_for`/`_back_items_for` rather than a third copy of the query.
+5. **`routes/anki_sync.py` rendering** — Front: one entry (just the lemma, the common case) renders bare, unchanged; 2+ entries (lemma + forms) render as a numbered stack (`1. word<br>2. word`). Back/Examples: a term with **zero** `term_back_items` rows (never touched by this system) renders exactly as before this epic — flat `translation`, the old `examples` JSON column — the "legacy stays untouched" guarantee, extended to Anki, not just the popover. Otherwise: Back is one line per back item, lettered (`1a.`/`1b.`) when its front entry has 2+ items, a bare number/no label otherwise; Examples is the reading sentence, then each dict-sourced item's Korean definition labeled to match Back, then the free-typed `notes` appended last. `anki.py`/`ensure_model()` **unchanged** — the model's third field really is called "Examples" (confirmed with the user), not "Notes"; only the content built for it changed.
+6. **Frontend `TokenPopover`** — removed the free-text "Also highlight" input (forms now come from dictionary clicks or the manual-add form only); bigger centered Translate/Dictionary buttons; a live read-only Front/Back chip preview (lemma + manual entries orange, dictionary-derived chips a blue family paling as more are added this session, Translate results green); an Examples preview (auto sentence + per-sense Korean-definition lines, each deletable, plus a free-typed textarea); a manual "Add entry" form (Front text + Back text) that always creates its own independent group, guarded by a duplicate-text check against the lemma and existing chips. A term with no `back_items` yet shows its old flat translation read-only ("(legacy)") — no forced migration.
+
+**Accept:** `pytest` + `npm run build`/`lint` green; a word with 2+ dictionary senses shows numbered/lettered chips in the popover matching what syncs to Anki; a manual entry is independent and orange; a pre-existing (legacy) term still displays and syncs exactly as before.
 
 ## 11. End-to-end verification (after Epic 8)
 

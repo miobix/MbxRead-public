@@ -51,6 +51,20 @@ CREATE TABLE IF NOT EXISTS term_forms (
   form TEXT NOT NULL,
   PRIMARY KEY (term_id, form)
 );
+-- Epic 22: the popover's structured Front/Back card builder. One row per Back chip;
+-- `group_key` is '' for the lemma's own group or a term_forms.form value for a form's
+-- group — a stable id, not a live join on lemma text, so editing the lemma never
+-- orphans its back items. `korean_def` (kind='dict' only) is the krdict Korean
+-- definition, with any krdict example glued directly onto its end (no separator) —
+-- feeds the Anki `Examples` field, never matched against page tokens.
+CREATE TABLE IF NOT EXISTS term_back_items (
+  id INTEGER PRIMARY KEY,
+  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('dict','translate','manual')),
+  text TEXT NOT NULL,
+  korean_def TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- Epic 16: reading-activity log for the stats screen. One row per page ever read
 -- (PRIMARY KEY dedup + INSERT OR IGNORE on write) so revisiting a page — e.g. to
@@ -139,6 +153,14 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # lifecycle gate like status.
         "feed_id": "INTEGER",
         "discard_reason": "TEXT",
+    },
+    "term_forms": {
+        # Epic 22: was this form clicked in from the dictionary, or typed by hand via
+        # the "Add entry" form? Existing rows default to 'manual' — they were all
+        # typed into the old free-text "Also highlight" input, which is exactly what
+        # they are. Drives chip color/behavior in the popover; matching against page
+        # tokens (books.get_page) doesn't care about it.
+        "kind": "TEXT NOT NULL DEFAULT 'manual'",
     },
 }
 

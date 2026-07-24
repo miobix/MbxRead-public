@@ -13,8 +13,21 @@ router = APIRouter(prefix="/api/terms", tags=["terms"])
 Status = Literal["learning", "known", "ignored"]
 # A change to any of these re-syncs the Anki card. `examples` (Epic 21) is a real
 # JSON column but the value is compared as its stored JSON string, so it fits the
-# same generic dirty check as the plain text columns.
+# same generic dirty check as the plain text columns. `translation` also changes
+# whenever `back_items` (Epic 22) does — see the derived-mirror note on patch_term.
 _DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples"}
+
+
+class FormIn(BaseModel):
+    text: str
+    kind: Literal["dict", "manual"] = "manual"
+
+
+class BackItemIn(BaseModel):
+    group: str = ""  # '' = the lemma's group; else must match a form's text
+    kind: Literal["dict", "translate", "manual"]
+    text: str
+    korean_def: str = ""
 
 
 class TermCreate(BaseModel):
@@ -25,10 +38,13 @@ class TermCreate(BaseModel):
     deck: str = ""
     sentence: str = ""
     # Epic 20: extra surface forms this term also covers (승인서/승인하다 under 승인).
-    forms: list[str] = []
+    # Epic 22: each now carries `kind` (dict-clicked vs hand-typed) for the popover.
+    forms: list[FormIn] = []
     # Epic 21: usage examples (krdict collocations + the reading sentence) shown on
     # the back of the Anki card. Display-only, never matched against page tokens.
     examples: list[str] = []
+    # Epic 22: the structured card builder's Back chips, grouped by `group`.
+    back_items: list[BackItemIn] = []
     # Epic 16: which book/page this term was first saved from (reader passes both).
     # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
     source_book_id: int | None = None
@@ -42,18 +58,21 @@ class TermPatch(BaseModel):
     status: Status | None = None
     deck: str | None = None
     sentence: str | None = None
-    forms: list[str] | None = None
+    forms: list[FormIn] | None = None
     examples: list[str] | None = None
+    back_items: list[BackItemIn] | None = None
 
 
-def _normalize_forms(forms: list[str], lemma: str) -> list[str]:
-    """Trim, drop blanks and the lemma itself, and dedupe while keeping order."""
-    seen: dict[str, None] = {}
-    for raw in forms:
-        form = raw.strip()
-        if form and form != lemma:
-            seen.setdefault(form, None)
-    return list(seen)
+def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
+    """Trim, drop blanks and the lemma itself, and dedupe by text (keeping the
+    first-seen `kind`) while keeping order."""
+    seen: dict[str, str] = {}
+    for f in forms:
+        text = (f.get("text") or "").strip()
+        kind = f.get("kind") or "manual"
+        if text and text != lemma:
+            seen.setdefault(text, kind)
+    return [{"text": text, "kind": kind} for text, kind in seen.items()]
 
 
 def _normalize_examples(examples: list[str]) -> list[str]:
@@ -66,20 +85,65 @@ def _normalize_examples(examples: list[str]) -> list[str]:
     return list(seen)
 
 
-def _forms_for(conn: sqlite3.Connection, term_id: int) -> list[str]:
+def _normalize_back_items(items: list[dict]) -> list[dict]:
+    """Trim, drop blank-text items, and dedupe exact (group, kind, text) repeats
+    while keeping order."""
+    seen: set[tuple[str, str, str]] = set()
+    out: list[dict] = []
+    for it in items:
+        group = (it.get("group") or "").strip()
+        kind = it.get("kind")
+        text = (it.get("text") or "").strip()
+        korean_def = (it.get("korean_def") or "").strip()
+        if not text:
+            continue
+        key = (group, kind, text)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"group": group, "kind": kind, "text": text, "korean_def": korean_def})
+    return out
+
+
+def _forms_for(conn: sqlite3.Connection, term_id: int) -> list[dict]:
     return [
-        r["form"]
+        {"text": r["form"], "kind": r["kind"]}
         for r in conn.execute(
-            "SELECT form FROM term_forms WHERE term_id = ? ORDER BY rowid", (term_id,)
+            "SELECT form, kind FROM term_forms WHERE term_id = ? ORDER BY rowid", (term_id,)
         )
     ]
 
 
-def _set_forms(conn: sqlite3.Connection, term_id: int, forms: list[str]) -> None:
+def _set_forms(conn: sqlite3.Connection, term_id: int, forms: list[dict]) -> None:
     conn.execute("DELETE FROM term_forms WHERE term_id = ?", (term_id,))
     conn.executemany(
-        "INSERT INTO term_forms (term_id, form) VALUES (?, ?)",
-        [(term_id, f) for f in forms],
+        "INSERT INTO term_forms (term_id, form, kind) VALUES (?, ?, ?)",
+        [(term_id, f["text"], f["kind"]) for f in forms],
+    )
+
+
+def _back_items_for(conn: sqlite3.Connection, term_id: int) -> list[dict]:
+    return [
+        {
+            "group": r["group_key"],
+            "kind": r["kind"],
+            "text": r["text"],
+            "korean_def": r["korean_def"],
+        }
+        for r in conn.execute(
+            "SELECT group_key, kind, text, korean_def FROM term_back_items "
+            "WHERE term_id = ? ORDER BY id",
+            (term_id,),
+        )
+    ]
+
+
+def _set_back_items(conn: sqlite3.Connection, term_id: int, items: list[dict]) -> None:
+    conn.execute("DELETE FROM term_back_items WHERE term_id = ?", (term_id,))
+    conn.executemany(
+        "INSERT INTO term_back_items (term_id, group_key, kind, text, korean_def) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [(term_id, it["group"], it["kind"], it["text"], it["korean_def"]) for it in items],
     )
 
 
@@ -94,6 +158,7 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "sentence": row["sentence"],
         "forms": _forms_for(conn, row["id"]),
         "examples": json.loads(row["examples"]),
+        "back_items": _back_items_for(conn, row["id"]),
         "anki_note_id": row["anki_note_id"],
         "anki_dirty": bool(row["anki_dirty"]),
         "created": row["created"],
@@ -137,13 +202,20 @@ def list_terms(
 
 @router.post("", status_code=201)
 def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
+    back_items = _normalize_back_items([it.model_dump() for it in body.back_items])
+    # Epic 22: when the popover's card builder was used, `translation` is derived
+    # from the Back chips (join order = group order), not typed directly — purely so
+    # /terms' list/search/inline-edit still shows something sensible. An empty
+    # back_items list (e.g. a direct API call, or /terms-style flat creation) leaves
+    # `translation` exactly as given, unchanged from today's behavior.
+    translation = "; ".join(it["text"] for it in back_items) if back_items else body.translation
     try:
         cur = conn.execute(
             "INSERT INTO terms (lemma, translation, notes, status, deck, sentence, "
             "examples, source_book_id, source_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 body.lemma,
-                body.translation,
+                translation,
                 body.notes,
                 body.status,
                 body.deck,
@@ -155,7 +227,12 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
         )
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="a term with this lemma already exists")
-    _set_forms(conn, cur.lastrowid, _normalize_forms(body.forms, body.lemma))
+    _set_forms(
+        conn,
+        cur.lastrowid,
+        _normalize_forms([f.model_dump() for f in body.forms], body.lemma),
+    )
+    _set_back_items(conn, cur.lastrowid, back_items)
     conn.commit()
     return _term_dict(conn, _get_term_or_404(conn, cur.lastrowid))
 
@@ -176,13 +253,25 @@ def patch_term(
         else None
     )
 
+    # `back_items` is not a terms column either — same treatment. Epic 22: whenever
+    # the popover sends a (complete, replace-all) back_items array, `translation` is
+    # re-derived from it, overriding anything separately sent — see create_term.
+    back_items_provided = "back_items" in fields
+    new_back_items = (
+        _normalize_back_items(fields.pop("back_items") or []) if back_items_provided else None
+    )
+    if back_items_provided:
+        fields["translation"] = (
+            "; ".join(it["text"] for it in new_back_items) if new_back_items else ""
+        )
+
     # `examples` IS a column (JSON), but the value arrives as a list — normalize and
     # re-encode it back into `fields` so the generic UPDATE + dirty check below both
     # handle it (it's in _DIRTY_TRIGGER_FIELDS; the DB stores its JSON string).
     if "examples" in fields:
         fields["examples"] = json.dumps(_normalize_examples(fields["examples"] or []))
 
-    if not fields and not forms_provided:
+    if not fields and not forms_provided and not back_items_provided:
         return _term_dict(conn, row)
 
     if "lemma" in fields and fields["lemma"] != row["lemma"]:
@@ -193,9 +282,13 @@ def patch_term(
             raise HTTPException(status_code=409, detail="a term with this lemma already exists")
 
     forms_changed = forms_provided and new_forms != _forms_for(conn, term_id)
+    back_items_changed = (
+        back_items_provided and new_back_items != _back_items_for(conn, term_id)
+    )
     becomes_dirty = row["anki_note_id"] is not None and (
         any(key in _DIRTY_TRIGGER_FIELDS and value != row[key] for key, value in fields.items())
         or forms_changed
+        or back_items_changed
     )
 
     set_parts = [f"{key} = ?" for key in fields]
@@ -209,6 +302,8 @@ def patch_term(
     )
     if forms_provided:
         _set_forms(conn, term_id, new_forms)
+    if back_items_provided:
+        _set_back_items(conn, term_id, new_back_items)
     conn.commit()
     return _term_dict(conn, _get_term_or_404(conn, term_id))
 

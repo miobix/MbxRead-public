@@ -777,3 +777,28 @@ at the same char count, since char count says nothing about line-wrap behavior.
   since nesting an `<a>` inside a Next `Link`'s anchor is invalid HTML; and topic/source filter
   `<select>`s on `/queue` matching `/`'s existing ones (the API already accepted `?topic=`/
   `?source=` on `GET /api/books`, just wasn't wired into the Queue page's UI).
+
+## 2026-07-24 — Epic 22: `term_back_items.group_key` is a stable id, not a live lemma join
+The popover's Front/Back card builder needs to know which "group" (the lemma, or a specific
+extra form) each Back chip belongs to. The tempting shortcut — join on the term's current
+`lemma` text — breaks the moment the lemma is hand-corrected (a routine action: SPEC's whole
+premise is that the tokenizer's lemma guess is sometimes wrong and the user has final say). If
+the lemma's own back items were keyed by its literal text, editing the lemma would silently
+orphan them. Instead `group_key` is `''` for the lemma's own group, a fixed sentinel
+independent of whatever the lemma field currently says, and a `term_forms.form` string for
+every other group (forms themselves are add/delete-only, never renamed in place, so keying by
+their text is safe). This mirrors the same reasoning Epic 20 already applied to `term_forms`
+matching by string rather than by a live foreign key into a mutable field.
+
+## 2026-07-24 — Epic 22: the old `examples` column is superseded, not dropped
+The structured card builder's `term_back_items.korean_def` (plus the reading `sentence` and
+free-typed `notes`) now supplies everything that goes into the Anki `Examples` field for any
+term that uses it — the old flat `examples` JSON column (Epic 21's krdict-collocation list) has
+no role in that path. It's left in the schema untouched rather than dropped, per the project's
+additive-only migration convention (`_ADDED_COLUMNS`, no destructive `ALTER TABLE`), and it
+still matters for genuinely legacy terms: `routes/anki_sync.py` renders from it whenever a term
+has zero `term_back_items` rows, so a term nobody has opened in the new popover keeps syncing
+exactly as it did before this epic. Also folded into this epic: the user's assumption that the
+Anki field itself needed renaming from "Examples" to "Notes" turned out to be a false alarm
+(checked against a live Anki install) — the field really is called "Examples," so `server/
+anki.py`/`ensure_model()` needed no changes at all, only what gets rendered into it.

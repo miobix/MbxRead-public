@@ -16,6 +16,7 @@ from ..difficulty import (
 from ..paging import split_pages_by_rows
 from ..tokenizer import tokenize
 from .settings import get_chars_per_row, get_page_rows
+from .terms import _back_items_for, _forms_for
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -293,7 +294,7 @@ def get_page(
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
         rows = conn.execute(
-            f"SELECT id, lemma, translation, status, deck, examples FROM terms "
+            f"SELECT id, lemma, translation, notes, status, deck, examples FROM terms "
             f"WHERE lemma IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
@@ -302,18 +303,20 @@ def get_page(
                 "id": row["id"],
                 "lemma": row["lemma"],
                 "translation": row["translation"],
+                "notes": row["notes"],
                 "status": row["status"],
                 "deck": row["deck"],
                 "forms": [],
                 "examples": json.loads(row["examples"]),
+                "back_items": [],
             }
         # Epic 20: a term also highlights via any of its extra `forms`. Match those
         # against the page's token lemmas too, keyed by the form string (so a token
         # whose lemma is 승인서 lights up as the 승인 term). A direct lemma match wins
         # if a string is both — hence the `not in terms` guard.
         form_rows = conn.execute(
-            f"SELECT tf.form, t.id, t.lemma, t.translation, t.status, t.deck, t.examples "
-            f"FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
+            f"SELECT tf.form, t.id, t.lemma, t.translation, t.notes, t.status, t.deck, "
+            f"t.examples FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
             f"WHERE tf.form IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
@@ -323,25 +326,24 @@ def get_page(
                     "id": row["id"],
                     "lemma": row["lemma"],
                     "translation": row["translation"],
+                    "notes": row["notes"],
                     "status": row["status"],
                     "deck": row["deck"],
                     "forms": [],
                     "examples": json.loads(row["examples"]),
+                    "back_items": [],
                 }
-        # Attach every matched term's full forms list (so the reader popover can edit
-        # them when the token is tapped), in one grouped query over the matched ids.
+        # Attach every matched term's full forms + back_items (so the reader popover
+        # can rebuild the exact same Front/Back/Examples chip state when the token is
+        # tapped) — reuses terms.py's own read helpers rather than a third copy of the
+        # same query (Epic 22).
         matched_ids = {entry["id"] for entry in terms.values()}
         if matched_ids:
-            id_ph = ", ".join("?" for _ in matched_ids)
-            forms_by_term: dict[int, list] = {}
-            for r in conn.execute(
-                f"SELECT term_id, form FROM term_forms WHERE term_id IN ({id_ph}) "
-                f"ORDER BY rowid",
-                tuple(matched_ids),
-            ):
-                forms_by_term.setdefault(r["term_id"], []).append(r["form"])
+            forms_by_term = {tid: _forms_for(conn, tid) for tid in matched_ids}
+            back_items_by_term = {tid: _back_items_for(conn, tid) for tid in matched_ids}
             for entry in terms.values():
                 entry["forms"] = forms_by_term.get(entry["id"], [])
+                entry["back_items"] = back_items_by_term.get(entry["id"], [])
 
     return {
         "page_no": page_no,

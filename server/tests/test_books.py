@@ -74,10 +74,12 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
             "id": 1,
             "lemma": "입다",
             "translation": "to wear",
+            "notes": "",
             "status": "learning",
             "deck": "Korean",
             "forms": [],
             "examples": [],
+            "back_items": [],
         }
     }
 
@@ -91,14 +93,18 @@ def test_page_highlights_a_terms_extra_form(client):
     # lemma 승인 is not in SHORT_STORY; its form 학교 is a token lemma on the page.
     client.post(
         "/api/terms",
-        json={"lemma": "승인", "translation": "approval", "forms": ["학교"]},
+        json={
+            "lemma": "승인",
+            "translation": "approval",
+            "forms": [{"text": "학교", "kind": "manual"}],
+        },
     )
 
     page = client.get(f"/api/books/{book_id}/pages/1").json()
     assert "승인" not in page["terms"]
     assert page["terms"]["학교"]["translation"] == "approval"
     assert page["terms"]["학교"]["lemma"] == "승인"
-    assert page["terms"]["학교"]["forms"] == ["학교"]
+    assert page["terms"]["학교"]["forms"] == [{"text": "학교", "kind": "manual"}]
 
 
 def test_get_nonexistent_page_returns_404(client):
