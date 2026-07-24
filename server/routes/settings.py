@@ -6,14 +6,20 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from .. import db as db_module
-from ..paging import split_pages
+from ..paging import DEFAULT_CHARS_PER_ROW, DEFAULT_MAX_ROWS, split_pages_by_rows
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# Epic 16: page_size — how many characters a reader page holds. Default 650 is
-# roughly one phone screen at the reader's text-lg/leading-loose, so a page mostly
-# fits without scrolling. Tunable; changing it re-paginates the whole library.
-DEFAULT_PAGE_SIZE = 650
+# page_rows/chars_per_row — how many *visual rows* a reader page holds, replacing
+# Epic 16's char-count page_size (2026-07-24 ad hoc change, not a numbered epic: a
+# char budget looks wildly different on screen depending on how newline-dense the
+# text is — subtitle/dialogue-heavy text with lots of short lines ballooned past
+# what fits on screen at the same char count as dense prose). chars_per_row is a
+# wrap-width estimate the user tunes to their own device from /settings; see
+# paging.estimate_rows. Tunable; changing either re-paginates the whole library.
+DEFAULT_PAGE_ROWS = DEFAULT_MAX_ROWS
+# DEFAULT_CHARS_PER_ROW is re-exported (imported above) for callers/tests that want
+# the settings-layer default without reaching into server.paging directly.
 
 # Epic 17: how many days an unpromoted/undiscarded candidate sits in the Queue
 # before the fetch job auto-discards it (see _expire_stale_candidates in
@@ -24,7 +30,8 @@ DEFAULTS = {
     "decks": ["Korean"],
     "default_deck": "Korean",
     "translator_backend": "deepl",
-    "page_size": DEFAULT_PAGE_SIZE,
+    "page_rows": DEFAULT_PAGE_ROWS,
+    "chars_per_row": DEFAULT_CHARS_PER_ROW,
     "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
     # Epic 17: system-managed, not user-editable — see SettingsPut below. Stamped by
     # POST /api/feeds/fetch (scheduled or manual) via stamp_last_fetch_attempt().
@@ -36,7 +43,8 @@ class SettingsPut(BaseModel):
     decks: list[str] | None = None
     default_deck: str | None = None
     translator_backend: str | None = None
-    page_size: int | None = Field(default=None, ge=100, le=5000)
+    page_rows: int | None = Field(default=None, ge=3, le=200)
+    chars_per_row: int | None = Field(default=None, ge=10, le=120)
     candidate_retention_days: int | None = Field(default=None, ge=1, le=90)
     # last_fetch_attempt is deliberately NOT a field here — it's stamped internally
     # by the fetch job, never by the user, so a PUT body can't overwrite it (an
@@ -49,8 +57,12 @@ def _read(conn: sqlite3.Connection) -> dict:
     return {**DEFAULTS, **stored}
 
 
-def get_page_size(conn: sqlite3.Connection) -> int:
-    return _read(conn)["page_size"]
+def get_page_rows(conn: sqlite3.Connection) -> int:
+    return _read(conn)["page_rows"]
+
+
+def get_chars_per_row(conn: sqlite3.Connection) -> int:
+    return _read(conn)["chars_per_row"]
 
 
 def get_candidate_retention_days(conn: sqlite3.Connection) -> int:
@@ -71,10 +83,10 @@ def stamp_last_fetch_attempt(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def repaginate_all(conn: sqlite3.Connection, new_size: int) -> None:
-    """Re-split every non-discarded book's stored pages to `new_size`, preserving
-    each book's reading position by character offset. A book's page boundaries move,
-    so its page_reads rows (keyed by page_no) no longer map — they're cleared, which
+def repaginate_all(conn: sqlite3.Connection, new_rows: int, new_chars_per_row: int) -> None:
+    """Re-split every non-discarded book's stored pages to `new_rows`/`new_chars_per_row`,
+    preserving each book's reading position by character offset. A book's page boundaries
+    move, so its page_reads rows (keyed by page_no) no longer map — they're cleared, which
     resets that book's pages-read count. Acceptable: re-pagination is a deliberate,
     occasional action (see docs/DECISIONS.md)."""
     book_ids = [
@@ -90,15 +102,15 @@ def repaginate_all(conn: sqlite3.Connection, new_size: int) -> None:
         ]
         if not old_pages:
             continue
-        # Joining the stored slices is lossless — split_pages produces contiguous
-        # slices that cover the whole text with no separators added.
+        # Joining the stored slices is lossless — split_pages_by_rows produces
+        # contiguous slices that cover the whole text with no separators added.
         text = "".join(old_pages)
         current = conn.execute(
             "SELECT current_page FROM books WHERE id = ?", (book_id,)
         ).fetchone()["current_page"]
         offset = sum(len(p) for p in old_pages[: max(current - 1, 0)])
 
-        new_pages = split_pages(text, new_size)
+        new_pages = split_pages_by_rows(text, new_rows, new_chars_per_row)
         new_current, acc = len(new_pages), 0
         for i, p in enumerate(new_pages):
             if offset < acc + len(p):
@@ -134,6 +146,7 @@ def put_settings(body: SettingsPut, conn: sqlite3.Connection = Depends(db_module
             (key, json.dumps(value)),
         )
     conn.commit()
-    if "page_size" in fields and fields["page_size"] != old["page_size"]:
-        repaginate_all(conn, fields["page_size"])
+    merged = _read(conn)
+    if (merged["page_rows"], merged["chars_per_row"]) != (old["page_rows"], old["chars_per_row"]):
+        repaginate_all(conn, merged["page_rows"], merged["chars_per_row"])
     return _read(conn)

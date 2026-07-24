@@ -189,7 +189,7 @@ per-`url_or_channel_id` rather than a blanket `COUNT(*)` guard, since (unlike
 across future curation sessions; a hand-added row must survive re-seeding the two
 built-in feeds after an upgrade, and re-running `init_db` must never duplicate those two.
 
-### Page splitting (`server/paging.py`, Epic 2 — implemented)
+### Page splitting (`server/paging.py`, Epic 2 — implemented; row-based reader split 2026-07-24)
 
 `split_pages(text, max_chars=1500)`: candidate break points are every position right
 after a run of `. ? ! …` (optionally followed by a closing quote/bracket) or right
@@ -198,7 +198,24 @@ the furthest break point that still fits within `max_chars` of the current posit
 if none fits (a single sentence longer than `max_chars`), takes the next break point
 past the limit rather than ever cutting mid-sentence — so an oversized page is
 possible but a split mid-sentence is not. `split_pages("")` returns `[""]` so every
-book has at least one (possibly empty) page.
+book has at least one (possibly empty) page. `difficulty.score_text`/`score_general_difficulty`
+still call this with its 1500-char default, as a fixed page-size-independent reference
+(see the Epic 16 DECISIONS.md entry).
+
+`split_pages_by_rows(text, max_rows=22, chars_per_row=32)` (2026-07-24, ad hoc, not a
+numbered epic — see DECISIONS.md): what the reader actually uses now, via
+`routes/books.insert_book` and `routes/settings.repaginate_all`. Same break-point set and
+"never split mid-sentence" contract as `split_pages`, but the budget is `estimate_rows(s,
+chars_per_row)` — every `\n` forces a row, and each line between newlines wraps every
+`chars_per_row` characters — instead of a raw char count. This replaced the char budget
+because newline-dense text (subtitles, dialogue) and single-paragraph prose looked wildly
+different on screen at the same char count; row estimation makes them comparable.
+`chars_per_row` is a settings-editable wrap-width estimate the user tunes to their own
+device. Implementation note: unlike the char-based `split_pages`, which rescans the full
+breakpoint list per page, `split_pages_by_rows` walks the sorted breakpoint list with a
+single forward cursor (`bisect` to seed it, then advanced page by page) so total work stays
+linear in the number of breakpoints across the whole call — relevant for repaginating a
+very long (1000+ page) book on a settings change.
 
 ## API contract (all under `/api`, JSON)
 
@@ -218,8 +235,8 @@ book has at least one (possibly empty) page.
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call) — **implemented (Epic 3, examples Epic 21)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_size, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
-| PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_size` re-paginates the library — **implemented (Epic 7, `page_size` Epic 16, `candidate_retention_days` Epic 17)** |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_rows, chars_per_row, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7; `page_size` Epic 16, replaced by `page_rows`/`chars_per_row` 2026-07-24; `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
+| PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_rows` or `chars_per_row` re-paginates the library — **implemented (Epic 7; `page_size` Epic 16, replaced by `page_rows`/`chars_per_row` 2026-07-24; `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |

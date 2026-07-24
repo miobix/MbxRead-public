@@ -4,11 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type Book, type ScoreResult } from "@/lib/api";
 import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
-import { TOPICS } from "@/lib/topics";
+import { SOURCES, TOPICS } from "@/lib/topics";
 
 type Sort = "recent" | "easiest";
-
-const SOURCES = ["paste", "txt", "yt", "pdf", "epub", "article"] as const;
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
@@ -206,6 +204,17 @@ export default function HomePage() {
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <ScoreLine book={book} />
               <GeneralScoreLine book={book} />
+              {book.source_url && (
+                <a
+                  href={book.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted hover:text-accent transition-colors"
+                  title="Open source"
+                >
+                  ↗ source
+                </a>
+              )}
               <button
                 onClick={() => score(book.id)}
                 disabled={scoring === book.id}

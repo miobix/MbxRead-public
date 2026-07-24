@@ -138,7 +138,8 @@ export type Settings = {
   decks: string[];
   default_deck: string;
   translator_backend: "deepl" | "claude";
-  page_size: number;
+  page_rows: number;
+  chars_per_row: number;
   candidate_retention_days: number;
   // System-managed (stamped by POST /api/feeds/fetch) — read-only in the UI, see
   // SettingsPut on the backend, which deliberately has no field for this.

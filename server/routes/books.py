@@ -13,9 +13,9 @@ from ..difficulty import (
     score_general_difficulty,
     score_text,
 )
-from ..paging import split_pages
+from ..paging import split_pages_by_rows
 from ..tokenizer import tokenize
-from .settings import get_page_size
+from .settings import get_chars_per_row, get_page_rows
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -124,7 +124,7 @@ def insert_book(
     except sqlite3.IntegrityError:
         raise DuplicateSourceRef(source_ref)
     book_id = cur.lastrowid
-    pages = split_pages(text, get_page_size(conn))
+    pages = split_pages_by_rows(text, get_page_rows(conn), get_chars_per_row(conn))
     conn.executemany(
         "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
         [(book_id, i + 1, page) for i, page in enumerate(pages)],

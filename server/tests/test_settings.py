@@ -1,4 +1,8 @@
-from server.routes.settings import DEFAULT_CANDIDATE_RETENTION_DAYS, DEFAULT_PAGE_SIZE
+from server.routes.settings import (
+    DEFAULT_CANDIDATE_RETENTION_DAYS,
+    DEFAULT_CHARS_PER_ROW,
+    DEFAULT_PAGE_ROWS,
+)
 
 
 def test_get_settings_defaults(client):
@@ -8,7 +12,8 @@ def test_get_settings_defaults(client):
         "decks": ["Korean"],
         "default_deck": "Korean",
         "translator_backend": "deepl",
-        "page_size": DEFAULT_PAGE_SIZE,
+        "page_rows": DEFAULT_PAGE_ROWS,
+        "chars_per_row": DEFAULT_CHARS_PER_ROW,
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
         "last_fetch_attempt": None,
     }
@@ -24,7 +29,8 @@ def test_put_settings_persists_and_returns_full_dict(client):
         "decks": ["Korean", "Slang"],
         "default_deck": "Slang",
         "translator_backend": "deepl",
-        "page_size": DEFAULT_PAGE_SIZE,
+        "page_rows": DEFAULT_PAGE_ROWS,
+        "chars_per_row": DEFAULT_CHARS_PER_ROW,
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
         "last_fetch_attempt": None,
     }
@@ -34,7 +40,8 @@ def test_put_settings_persists_and_returns_full_dict(client):
         "decks": ["Korean", "Slang"],
         "default_deck": "Slang",
         "translator_backend": "deepl",
-        "page_size": DEFAULT_PAGE_SIZE,
+        "page_rows": DEFAULT_PAGE_ROWS,
+        "chars_per_row": DEFAULT_CHARS_PER_ROW,
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
         "last_fetch_attempt": None,
     }
@@ -48,7 +55,8 @@ def test_put_settings_partial_update_leaves_other_keys(client):
         "decks": ["Korean", "Slang"],
         "default_deck": "Korean",
         "translator_backend": "claude",
-        "page_size": DEFAULT_PAGE_SIZE,
+        "page_rows": DEFAULT_PAGE_ROWS,
+        "chars_per_row": DEFAULT_CHARS_PER_ROW,
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
         "last_fetch_attempt": None,
     }
@@ -81,22 +89,27 @@ def test_put_settings_overwrites_existing_key(client):
     assert resp.json()["default_deck"] == "Korean"
 
 
-def test_put_settings_rejects_too_small_page_size(client):
-    resp = client.put("/api/settings", json={"page_size": 10})
+def test_put_settings_rejects_too_small_page_rows(client):
+    resp = client.put("/api/settings", json={"page_rows": 1})
+    assert resp.status_code == 422
+
+
+def test_put_settings_rejects_too_small_chars_per_row(client):
+    resp = client.put("/api/settings", json={"chars_per_row": 1})
     assert resp.status_code == 422
 
 
 LONG_STORY = "문장입니다. " * 300
 
 
-def test_changing_page_size_repaginates_and_preserves_position(client):
+def test_changing_page_rows_repaginates_and_preserves_position(client):
     book_id = client.post("/api/books", json={"title": "Long", "text": LONG_STORY}).json()["id"]
     small = client.get(f"/api/books/{book_id}").json()["page_count"]
 
-    # Move to the middle, then grow the page size — fewer, larger pages.
+    # Move to the middle, then grow the page rows budget — fewer, larger pages.
     mid = small // 2
     client.patch(f"/api/books/{book_id}", json={"current_page": mid})
-    client.put("/api/settings", json={"page_size": 3000})
+    client.put("/api/settings", json={"page_rows": 100})
 
     book = client.get(f"/api/books/{book_id}").json()
     assert book["page_count"] < small  # bigger pages -> fewer of them
@@ -111,21 +124,41 @@ def test_changing_page_size_repaginates_and_preserves_position(client):
     assert rejoined == LONG_STORY
 
 
-def test_changing_page_size_clears_page_reads(client):
+def test_changing_chars_per_row_repaginates(client):
+    book_id = client.post("/api/books", json={"title": "Long", "text": LONG_STORY}).json()["id"]
+    small = client.get(f"/api/books/{book_id}").json()["page_count"]
+
+    # A much wider chars_per_row estimate fits more text per row -> fewer pages
+    # at the same row budget, even though page_rows itself didn't change.
+    client.put("/api/settings", json={"chars_per_row": 100})
+
+    book = client.get(f"/api/books/{book_id}").json()
+    assert book["page_count"] < small
+    rejoined = "".join(
+        client.get(f"/api/books/{book_id}/pages/{n}").json()["content"]
+        for n in range(1, book["page_count"] + 1)
+    )
+    assert rejoined == LONG_STORY
+
+
+def test_changing_page_rows_clears_page_reads(client):
     book_id = client.post("/api/books", json={"title": "Long", "text": LONG_STORY}).json()["id"]
     client.post("/api/reads", json={"book_id": book_id, "page_no": 1})
     assert client.get("/api/stats").json()["totals"]["pages_week"] == 1
 
-    client.put("/api/settings", json={"page_size": 3000})
+    client.put("/api/settings", json={"page_rows": 100})
     # Re-pagination moved page boundaries, so the old read mark is dropped.
     assert client.get("/api/stats").json()["totals"]["pages_week"] == 0
 
 
-def test_same_page_size_does_not_repaginate(client):
+def test_same_page_rows_does_not_repaginate(client):
     book_id = client.post("/api/books", json={"title": "Long", "text": LONG_STORY}).json()["id"]
     client.post("/api/reads", json={"book_id": book_id, "page_no": 1})
-    # Re-PUTting the same page_size is a no-op — page_reads survive.
-    from server.routes.settings import DEFAULT_PAGE_SIZE
+    # Re-PUTting the same page_rows/chars_per_row is a no-op — page_reads survive.
+    from server.routes.settings import DEFAULT_CHARS_PER_ROW, DEFAULT_PAGE_ROWS
 
-    client.put("/api/settings", json={"page_size": DEFAULT_PAGE_SIZE})
+    client.put(
+        "/api/settings",
+        json={"page_rows": DEFAULT_PAGE_ROWS, "chars_per_row": DEFAULT_CHARS_PER_ROW},
+    )
     assert client.get("/api/stats").json()["totals"]["pages_week"] == 1

@@ -625,6 +625,31 @@ later epic until the real sources are known.
   live here, since no `KRDICT_API_KEY` is set in this environment). The `/terms`
   management page still doesn't edit forms/examples (reader popover only) — same
   Phase-B/follow-up gap noted in Epic 20.
+- **Row-based reader pagination + Library source link + Queue filters (2026-07-24, not a
+  numbered epic — three small user requests done between Epic 21 and Epic 22).**
+  `server/paging.py` gained `estimate_rows`/`split_pages_by_rows` alongside the existing
+  char-based `split_pages` (kept untouched — `difficulty.py` still pins its 1500-char
+  reference to it, so scores don't drift with reader page size). `settings.page_size`
+  replaced by `page_rows` (default 22) + `chars_per_row` (default 32, user-tunable to their
+  own device); `routes/books.insert_book` and `routes/settings.repaginate_all` both switched
+  to the row-based splitter. `split_pages_by_rows` walks the breakpoint list with a single
+  forward cursor across the whole call (not a per-page rescan like `split_pages`) —
+  addresses the user's stated concern about repagination lag on a very long (1000+ page)
+  book when the page-size setting changes. 206 tests green (8 new: 6 in `test_paging.py` for
+  `estimate_rows`/`split_pages_by_rows`, 2 in `test_settings.py` for `chars_per_row`; existing
+  `test_settings.py`/`test_books.py` cases updated for the renamed setting). `npm run build`/`lint`
+  clean. Frontend: `/settings`'s page-size control is now rows-per-page presets + a
+  chars-per-row numeric input; `/` (Library) gained the `↗` source link Queue already had
+  (placed in the row's action strip, not nested inside the row's own `<Link>` — nesting an
+  `<a>` inside a Next `Link` anchor is invalid HTML); `/queue` gained the topic/source
+  `<select>` filters `/` already had (the API already supported `?topic=`/`?source=` on
+  `GET /api/books`, just wasn't wired into the Queue UI). See DECISIONS.md.
+  **Not verified in a browser** (no browser tooling in this environment) — joins the owed
+  pass: open `/settings`, try the rows-per-page presets and chars-per-row input, confirm a
+  book re-paginates and the row estimate roughly matches what's on screen (then tune
+  chars-per-row to taste); confirm `/`'s new source link opens the right URL without
+  triggering the reader-page navigation underneath it; confirm `/queue`'s new topic/source
+  filters actually narrow the candidate list.
 - [ ] **Epic 22 — Go-live (final stage, renumbered from Epic 17→20→22 as content epics
   were inserted).** Execute Epic 8's still-pending cold-start + Tailscale verification
   and go live day-to-day, optionally with a fuller per-page UI polish pass. **Also
