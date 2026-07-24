@@ -703,6 +703,34 @@ later epic until the real sources are known.
   independent (its own group, orange, not merged into the lemma); open a
   pre-existing (this session's test) term and confirm it still displays and syncs
   exactly as before, read-only, until touched by the new system.
+- **Epic 22 follow-up (2026-07-24, same day, not a numbered epic) — error-message
+  fix, `/terms` editing parity, popover decluttering.** User feedback from actually
+  trying the new popover: (1) `web/lib/api.ts`'s `handleResponse` was passing a
+  FastAPI 422 validation error's `detail` (an array of `{loc, msg, ...}` objects)
+  straight into `new Error(...)`, which JS stringifies as
+  `"[object Object],[object Object],..."` — fixed to extract `loc`/`msg` per item
+  and join them into an actual readable message (the specific save that triggered
+  this turned out to be an unrelated stale-server issue — the user hadn't restarted
+  `uvicorn` after the Epic 22 backend changes — but the garbled error display was a
+  real, independent bug regardless). (2) **Closes the `/terms` editing gap** noted
+  in Epics 20/21's write-ups ("management page does not yet edit forms/examples,
+  reader popover only"): `web/app/terms/page.tsx`'s flat `TermEditRow` (lemma/
+  translation/notes textareas + a status `<select>`) is gone, replaced by opening
+  the same `TokenPopover` used in the reader (built from the row's `Term` — decks/
+  default deck/translator backend from the already-fetched `Settings`, `bookId`/
+  `pageNo` both `null` since they're only read on the create path and every `/terms`
+  edit is necessarily an existing term). `TokenPopover` gained a "Mark learning"
+  button alongside "Mark known"/"Ignore" (each now hidden when it matches the
+  term's *current* status instead of always showing both) — needed since `/terms`'
+  old status `<select>` could freely move a term back to `learning`, a transition
+  the reader-only popover never previously needed. (3) **Decluttering**, per direct
+  user request after trying it: the reading sentence no longer renders twice (was
+  shown once under Translate/Dictionary *and* again atop Examples — now only the
+  first); the Front/Back preview changed from two independent columns (which desync
+  visually the moment group sizes differ) to one row per Front entry with its own
+  Back chips inline after a `→`, divided by a hairline — same information, but
+  which word owns which definitions is now positional instead of inferred. `npm run
+  build`/`lint` clean; no backend changes, so the existing 218 tests are untouched.
 - [ ] **Epic 23 — Go-live (final stage, renumbered from Epic 17→20→22→23 as content
   epics were inserted).** Execute Epic 8's still-pending cold-start + Tailscale
   verification and go live day-to-day, optionally with a fuller per-page UI polish

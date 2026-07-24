@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type AnkiSyncResult, type Settings, type Term, type TermStatus } from "@/lib/api";
+import { TokenPopover } from "../read/TokenPopover";
 
 const STATUSES: TermStatus[] = ["learning", "known", "ignored"];
 
@@ -15,7 +16,11 @@ export default function TermsPage() {
   const [deck, setDeck] = useState("");
   const [q, setQ] = useState("");
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  // Epic 22 follow-up: editing reuses the reader's full card-builder popover
+  // (dictionary/translate/forms/back_items/examples) instead of the old flat
+  // lemma/translation/notes textareas — that gap predated this epic (Epic 20/21
+  // never touched /terms either) and the user asked for parity.
+  const [editingTerm, setEditingTerm] = useState<Term | null>(null);
 
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<AnkiSyncResult | null>(null);
@@ -60,12 +65,10 @@ export default function TermsPage() {
 
   const handleSaved = (term: Term) => {
     setTerms((prev) => prev?.map((t) => (t.id === term.id ? term : t)) ?? prev);
-    setEditingId(null);
   };
 
   const handleDeleted = (id: number) => {
     setTerms((prev) => prev?.filter((t) => t.id !== id) ?? prev);
-    setEditingId(null);
   };
 
   return (
@@ -152,179 +155,57 @@ export default function TermsPage() {
       {terms?.length === 0 && <p className="text-muted">No terms match.</p>}
 
       <ul className="flex flex-col gap-2">
-        {terms?.map((term) =>
-          editingId === term.id ? (
-            <TermEditRow
-              key={term.id}
-              term={term}
-              decks={settings?.decks ?? []}
-              onCancel={() => setEditingId(null)}
-              onSaved={handleSaved}
-              onDeleted={handleDeleted}
-            />
-          ) : (
-            <li
-              key={term.id}
-              onClick={() => setEditingId(term.id)}
-              className="rounded-xl border border-border bg-surface shadow-sm p-3 text-sm cursor-pointer hover:border-accent transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{term.lemma}</span>
-                <span className="text-xs text-muted">
-                  {term.status}
-                  {term.deck && ` · ${term.deck}`}
-                </span>
-              </div>
-              {term.translation && (
-                <div className="text-muted mt-1">{term.translation}</div>
-              )}
-            </li>
-          )
-        )}
+        {terms?.map((term) => (
+          <li
+            key={term.id}
+            onClick={() => setEditingTerm(term)}
+            className="rounded-xl border border-border bg-surface shadow-sm p-3 text-sm cursor-pointer hover:border-accent transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{term.lemma}</span>
+              <span className="text-xs text-muted">
+                {term.status}
+                {term.deck && ` · ${term.deck}`}
+              </span>
+            </div>
+            {term.translation && (
+              <div className="text-muted mt-1">{term.translation}</div>
+            )}
+          </li>
+        ))}
       </ul>
+
+      {editingTerm && (
+        <TokenPopover
+          target={{
+            surface: editingTerm.lemma,
+            lemma: editingTerm.lemma,
+            sentence: editingTerm.sentence,
+            // Same phrase heuristic the reader uses (whitespace in the lemma) —
+            // multi-word terms get the translate-only UI, no dictionary/forms.
+            isPhrase: /\s/.test(editingTerm.lemma),
+            existing: {
+              id: editingTerm.id,
+              lemma: editingTerm.lemma,
+              translation: editingTerm.translation,
+              notes: editingTerm.notes,
+              status: editingTerm.status,
+              deck: editingTerm.deck,
+              forms: editingTerm.forms,
+              examples: editingTerm.examples,
+              back_items: editingTerm.back_items,
+            },
+          }}
+          bookId={null}
+          pageNo={null}
+          decks={settings?.decks ?? []}
+          defaultDeck={settings?.default_deck ?? ""}
+          translatorBackend={settings?.translator_backend}
+          onClose={() => setEditingTerm(null)}
+          onSaved={handleSaved}
+          onDeleted={(t) => handleDeleted(t.id)}
+        />
+      )}
     </main>
-  );
-}
-
-function TermEditRow({
-  term,
-  decks,
-  onCancel,
-  onSaved,
-  onDeleted,
-}: {
-  term: Term;
-  decks: string[];
-  onCancel: () => void;
-  onSaved: (term: Term) => void;
-  onDeleted: (id: number) => void;
-}) {
-  const [lemma, setLemma] = useState(term.lemma);
-  const [translation, setTranslation] = useState(term.translation);
-  const [notes, setNotes] = useState(term.notes);
-  const [deck, setDeck] = useState(term.deck);
-  const [status, setStatus] = useState<TermStatus>(term.status);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const deckOptions = term.deck && !decks.includes(term.deck) ? [...decks, term.deck] : decks;
-
-  const save = async () => {
-    const trimmedLemma = lemma.trim();
-    if (!trimmedLemma) {
-      setError("Lemma can't be empty.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const updated = await api.patchTerm(term.id, {
-        lemma: trimmedLemma,
-        translation: translation.trim(),
-        notes: notes.trim(),
-        deck,
-        status,
-      });
-      onSaved(updated);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save.");
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.deleteTerm(term.id);
-      onDeleted(term.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete.");
-      setBusy(false);
-    }
-  };
-
-  return (
-    <li
-      className="rounded-xl border border-accent bg-surface shadow-sm p-3 text-sm flex flex-col gap-2"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <input
-        value={lemma}
-        onChange={(e) => setLemma(e.target.value)}
-        placeholder="Dictionary form (lemma)"
-        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-      />
-
-      <textarea
-        value={translation}
-        onChange={(e) => setTranslation(e.target.value)}
-        placeholder="Translation"
-        rows={3}
-        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-      />
-
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes"
-        rows={2}
-        className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-      />
-
-      <div className="flex gap-2 flex-wrap">
-        <select
-          value={deck}
-          onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        >
-          {deckOptions.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as TermStatus)}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {error && <p className="text-danger text-sm">{error}</p>}
-
-      <div className="flex gap-2 justify-between mt-1">
-        <button
-          onClick={remove}
-          disabled={busy}
-          className="px-3 py-1.5 text-sm rounded-full border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
-        >
-          Delete
-        </button>
-        <div className="flex gap-2">
-          <button
-            onClick={onCancel}
-            disabled={busy}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={busy}
-            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {busy ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
-    </li>
   );
 }

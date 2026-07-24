@@ -305,14 +305,20 @@ export function TokenPopover({
 
         {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
 
-        {/* Front/Back preview — a true WYSIWYG of what syncs to Anki. */}
-        <div className="grid grid-cols-2 gap-2 border-t border-b border-border py-2 text-xs">
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Front</span>
-            {frontEntries.map((entry, i) => (
-              <div key={i} className="flex flex-wrap items-center gap-1">
+        {/* Front → Back preview — a true WYSIWYG of what syncs to Anki. One row
+            per front entry so it's immediately visible which word each Back chip
+            belongs to, instead of two same-height-assuming parallel columns. */}
+        <div className="flex flex-col divide-y divide-border border-t border-b border-border text-xs">
+          {legacyTranslation && (
+            <div className="py-1.5 text-muted italic">(legacy) {legacyTranslation}</div>
+          )}
+          {frontEntries.map((entry, i) => {
+            const group = i === 0 ? LEMMA_GROUP : entry.text;
+            const items = backItemsFor(group);
+            return (
+              <div key={i} className="py-1.5 flex flex-wrap items-center gap-1.5">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 ${chipClass(
                     entry.kind === "lemma" ? "lemma" : entry.kind,
                     i === 0 ? "" : formShade[i - 1]
                   )}`}
@@ -329,42 +335,32 @@ export function TokenPopover({
                     </button>
                   )}
                 </span>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Back</span>
-            {legacyTranslation && (
-              <span className="rounded-full bg-highlight/60 px-2 py-0.5 text-muted italic">
-                (legacy) {legacyTranslation}
-              </span>
-            )}
-            {frontEntries.map((entry, i) => {
-              const group = i === 0 ? LEMMA_GROUP : entry.text;
-              return backItemsFor(group).map((item) => {
-                const bi = backIndexOf(item);
-                return (
-                  <span
-                    key={bi}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
-                      item.kind,
-                      backShade[bi]
-                    )}`}
-                  >
-                    {item.text}
-                    <button
-                      type="button"
-                      onClick={() => removeBackItem(bi)}
-                      aria-label={`Remove ${item.text}`}
-                      className="opacity-80 hover:opacity-100"
+                {items.length > 0 && <span className="text-muted">→</span>}
+                {items.map((item) => {
+                  const bi = backIndexOf(item);
+                  return (
+                    <span
+                      key={bi}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+                        item.kind,
+                        backShade[bi]
+                      )}`}
                     >
-                      ×
-                    </button>
-                  </span>
-                );
-              });
-            })}
-          </div>
+                      {item.text}
+                      <button
+                        type="button"
+                        onClick={() => removeBackItem(bi)}
+                        aria-label={`Remove ${item.text}`}
+                        className="opacity-80 hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {!isPhrase && dictEntries && (
@@ -408,7 +404,6 @@ export function TokenPopover({
         {/* Examples — the literal content of the Anki "Examples" field. */}
         <div className="flex flex-col gap-1 border-t border-border pt-2">
           <span className="text-[11px] uppercase tracking-wide text-muted">Examples</span>
-          {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
           {backItems
             .map((item, i) => ({ item, i }))
             .filter(({ item }) => item.kind === "dict" && item.korean_def)
@@ -504,20 +499,33 @@ export function TokenPopover({
 
         {isEditing && (
           <div className="flex gap-2 flex-wrap text-sm">
-            <button
-              onClick={() => setStatus("known")}
-              disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-            >
-              Mark known
-            </button>
-            <button
-              onClick={() => setStatus("ignored")}
-              disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-            >
-              Ignore
-            </button>
+            {target.existing?.status !== "learning" && (
+              <button
+                onClick={() => setStatus("learning")}
+                disabled={busy !== null}
+                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+              >
+                Mark learning
+              </button>
+            )}
+            {target.existing?.status !== "known" && (
+              <button
+                onClick={() => setStatus("known")}
+                disabled={busy !== null}
+                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+              >
+                Mark known
+              </button>
+            )}
+            {target.existing?.status !== "ignored" && (
+              <button
+                onClick={() => setStatus("ignored")}
+                disabled={busy !== null}
+                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+              >
+                Ignore
+              </button>
+            )}
             <button
               onClick={remove}
               disabled={busy !== null}

@@ -214,7 +214,17 @@ async function handleResponse<T>(res: Response): Promise<T> {
     let message = res.statusText;
     try {
       const body = await res.json();
-      message = body.error ?? body.detail ?? message;
+      if (Array.isArray(body.detail)) {
+        // FastAPI/pydantic 422: a list of {loc, msg, ...} — stringify would
+        // otherwise collapse this to "[object Object],[object Object],...".
+        message = body.detail
+          .map((d: { loc?: (string | number)[]; msg?: string }) =>
+            d.msg ? `${(d.loc ?? []).join(".")}: ${d.msg}` : JSON.stringify(d)
+          )
+          .join("; ");
+      } else {
+        message = body.error ?? body.detail ?? message;
+      }
     } catch {
       // response body wasn't JSON — fall back to statusText
     }
