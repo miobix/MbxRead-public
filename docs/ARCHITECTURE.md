@@ -684,28 +684,41 @@ Routes:
   no other token's own tokenizer-lemma matches means, correctly, that no span
   highlights after a reload — see `docs/DECISIONS.md` 2026-07-21 ("Highlighting
   stays exact-lemma-match...").
-- `/terms` — not yet built (Epic 7).
-- `/settings` — not yet built (Epic 7).
+- `/terms` — table (filter: status, deck, search); tapping a row opens
+  `TokenPopover` (Epic 22 follow-up, 2026-07-24 — see below) instead of the old
+  flat inline `TermEditRow` (removed), closing the gap Epics 20/21 left ("management
+  page does not yet edit forms/examples") — `bookId`/`pageNo` are passed `null`
+  since they're only read on the create path and every `/terms` edit is an existing
+  term. "Sync to Anki" button + `{added, updated, failed}` toast unchanged.
+- `/settings` — deck list editor, default deck, translator backend, page-size
+  controls, retention days.
 
   **Epic 22 popover rewrite** (the flat translation textarea + "Also highlight"
   input above are gone): the lemma input stays, followed by centered Translate/
-  Dictionary buttons, the captured context sentence, then a live read-only Front/
-  Back chip preview — a true WYSIWYG of the Anki card, colored by provenance
-  (lemma + manual entries orange, dictionary-derived chips a blue family paling as
-  more are added this session, Translate results green), each chip deletable
-  (deleting a Front form cascades to its Back items). Dictionary results: clicking
-  a headword adds/attaches its Front chip (deduped by exact text against the lemma
-  and existing chips) plus its first sense as a Back item and that sense's Korean
-  definition into the Examples preview; every sense is independently clickable to
-  add more Back items to the same group. Translate appends a Back item under the
-  lemma's group rather than overwriting anything. An "Examples" preview (exactly
-  that label, matching the real Anki field — not "Notes") shows the context
-  sentence, one deletable line per active Korean definition, and a free-typed
-  textarea (`notes`) underneath. A manual "Add entry" form (Front text + Back
-  text) creates its own independent group, guarded by a duplicate-text check — the
-  hand-enrichment path now that Front/Back chips themselves aren't freely typable.
-  A term with no `back_items` yet (never touched by this system) shows its old
-  flat translation read-only, labeled "(legacy)" — no forced migration.
+  Dictionary buttons, the captured context sentence, then a live read-only Front→
+  Back chip preview — a true WYSIWYG of the Anki card, one row per Front entry
+  with its own Back chips inline after a `→` (not two independent columns, which
+  desync visually the moment group sizes differ — a decluttering pass after the
+  first real try-out), colored by provenance (lemma + manual entries orange,
+  dictionary-derived chips a blue family paling as more are added this session,
+  Translate results green), each chip deletable (deleting a Front form cascades to
+  its Back items). Dictionary results: clicking a headword adds/attaches its Front
+  chip (deduped by exact text against the lemma and existing chips) plus its first
+  sense as a Back item and that sense's Korean definition into the Examples
+  preview; every sense is independently clickable to add more Back items to the
+  same group. Translate appends a Back item under the lemma's group rather than
+  overwriting anything. An "Examples" preview (exactly that label, matching the
+  real Anki field — not "Notes") shows one deletable line per active Korean
+  definition and a free-typed textarea (`notes`) underneath — the reading sentence
+  itself is shown once, above the buttons, not repeated here. A manual "Add entry"
+  form (Front text + Back text) creates its own independent group, guarded by a
+  duplicate-text check — the hand-enrichment path now that Front/Back chips
+  themselves aren't freely typable. A term with no `back_items` yet (never touched
+  by this system) shows its old flat translation read-only, labeled "(legacy)" —
+  no forced migration. Status actions (isEditing only) show "Mark learning"/"Mark
+  known"/"Ignore" — each hidden when it matches the term's current status — plus
+  Delete; the `/terms` reuse needed the "learning" direction, which the reader
+  context alone never did.
 
 Keep dependencies minimal: Next + Tailwind only; no state library (React context/props
 suffice), no component kit. Small shared `lib/api.ts` fetch wrapper (typed, throws
