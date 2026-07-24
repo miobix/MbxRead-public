@@ -743,3 +743,37 @@ Four choices worth recording:
   it — matching the user's words-vs-phrases distinction. Clicking a dict headword adds it
   to `forms`; clicking a sense appends its English gloss to the translation; clicking an
   example chip attaches it to the card's examples.
+
+## 2026-07-24 — Reader pagination switched from char count to estimated row count
+Ad hoc user request (not a numbered epic), three small asks in one session; this is the
+substantial one. The complaint: `settings.page_size` (Epic 16, char-budget) made pages look
+wildly inconsistent depending on how newline-dense the text was — a page of subtitle-style
+short lines or dialogue racked up far more on-screen rows than a page of one dense paragraph
+at the same char count, since char count says nothing about line-wrap behavior.
+- **New `paging.split_pages_by_rows(text, max_rows, chars_per_row)`, `split_pages` (char-based)
+  left untouched.** `difficulty.score_text`/`score_general_difficulty` still call `split_pages(text)`
+  with its own fixed 1500-char default as a page-size-independent scoring reference (the Epic 16
+  rule) — that reference must not drift just because the reader's own pagination changed, so it
+  was left as a separate function entirely rather than folding rows into `split_pages` itself.
+- **`estimate_rows(s, chars_per_row)` is a pure heuristic, not a DOM measurement:** every `\n`
+  forces a row, and each line between newlines wraps every `chars_per_row` characters (ceil
+  division, blank line = 1 row). No client-side measurement needed — pagination stays fully
+  precomputed server-side (at import and on a settings change), so per-page reading load stays
+  exactly as cheap as before (one page's content + tokenize, independent of book length).
+  `chars_per_row` is deliberately a user-editable setting (not hardcoded) since real wrap width
+  depends on the device/font — the user tunes it once they're actually looking at their phone.
+- **`settings.page_size` replaced outright by `page_rows` (default 22) + `chars_per_row`
+  (default 32)**, not kept alongside it — there's no use for a char-budget reader setting once
+  rows exist, and keeping both would mean two independent "page size" concepts to reconcile.
+  Old `page_size` rows left in an existing `settings` table are simply inert extra keys (the
+  settings table is a merge-over-defaults k/v store, not a migrated column), harmless.
+- **Performance: `split_pages_by_rows` walks the sorted breakpoint list with a single forward
+  cursor across the whole call**, instead of `split_pages`'s original pattern of rescanning the
+  full breakpoint list from the start on every page. This was specifically to address the user's
+  stated worry about lag/jitter repaginating a very long (1000+ page) book on a settings change —
+  total breakpoint-list work is now linear in text length rather than closer to quadratic.
+- Same session, two smaller UI asks: a source link (`↗`) on Library rows (Queue already had
+  one) — placed in the row's action-button strip, not inside the row's own `<Link>` wrapper,
+  since nesting an `<a>` inside a Next `Link`'s anchor is invalid HTML; and topic/source filter
+  `<select>`s on `/queue` matching `/`'s existing ones (the API already accepted `?topic=`/
+  `?source=` on `GET /api/books`, just wasn't wired into the Queue page's UI).

@@ -6,6 +6,7 @@ import { api, type Book, type FeedFetchResult } from "@/lib/api";
 import { SourceChip } from "@/lib/chips";
 import { estimatedMinutes, formatLength } from "@/lib/length";
 import { GeneralScoreLine, ScoreLine } from "@/lib/score-display";
+import { SOURCES, TOPICS } from "@/lib/topics";
 
 type ViewMode = "cards" | "list";
 type SortBy = "newest" | "easiest" | "shortest";
@@ -32,6 +33,8 @@ export default function QueuePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [topicFilter, setTopicFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
 
   // Quick title translation so an unfamiliar candidate can be judged at a glance.
   const [titleTx, setTitleTx] = useState<Record<number, string>>({});
@@ -39,12 +42,16 @@ export default function QueuePage() {
 
   const refresh = () => {
     api
-      .listBooks({ status: "candidate" })
+      .listBooks({
+        status: "candidate",
+        topic: topicFilter || undefined,
+        source: sourceFilter || undefined,
+      })
       .then(setBooks)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load the queue."));
   };
 
-  useEffect(refresh, []);
+  useEffect(refresh, [topicFilter, sourceFilter]);
 
   useEffect(() => {
     api
@@ -155,6 +162,35 @@ export default function QueuePage() {
       <p className="text-xs text-muted -mt-2">
         Last fetch attempt: {formatTimestamp(lastFetchAttempt)}
       </p>
+
+      <div className="flex items-center flex-wrap gap-2 text-sm">
+        <span className="text-muted">Topic:</span>
+        <select
+          value={topicFilter}
+          onChange={(e) => setTopicFilter(e.target.value)}
+          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">All</option>
+          {TOPICS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted">Source:</span>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">All</option>
+          {SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {fetchError && <p className="text-danger text-sm">{fetchError}</p>}
 

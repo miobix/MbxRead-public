@@ -1,7 +1,7 @@
 import sqlite3
 
-from server.paging import split_pages
-from server.routes.settings import DEFAULT_PAGE_SIZE
+from server.paging import split_pages_by_rows
+from server.routes.settings import DEFAULT_CHARS_PER_ROW, DEFAULT_PAGE_ROWS
 
 SHORT_STORY = "그는 옷을 입고 나갔다. 날씨가 정말 좋았다! 학교에 가야 했다."
 LONG_STORY = "문장입니다. " * 300  # well over the default page size
@@ -11,8 +11,9 @@ def test_create_book_splits_into_pages_matching_paging_util(client):
     resp = client.post("/api/books", json={"title": "Long", "text": LONG_STORY})
     assert resp.status_code == 201
     body = resp.json()
-    # Imports split at the configured page size (Epic 16), not split_pages' own default.
-    expected_pages = split_pages(LONG_STORY, DEFAULT_PAGE_SIZE)
+    # Imports split at the configured page rows/chars-per-row, not split_pages_by_rows'
+    # own default.
+    expected_pages = split_pages_by_rows(LONG_STORY, DEFAULT_PAGE_ROWS, DEFAULT_CHARS_PER_ROW)
     assert body["page_count"] == len(expected_pages)
     assert body["page_count"] > 1
     assert body["current_page"] == 1

@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS term_forms (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
-Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at import: split text into pages of ≤ ~1500 chars, breaking only at sentence ends (`.` `?` `!` `…` `다.` patterns / newlines); never split mid-sentence. Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`), `default_deck`, `translator_backend`.
+Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at import: split text into pages, breaking only at sentence ends (`.` `?` `!` `…` `다.` patterns / newlines); never split mid-sentence. Originally bounded by a ~1500-char budget (this section's original text); as of 2026-07-24 the reader's own pages are bounded by estimated visual rows instead (`settings.page_rows`/`chars_per_row`, `split_pages_by_rows` — see §227's Epic 16 entry and DECISIONS.md), while difficulty scoring keeps the original 1500-char budget as a fixed, page-size-independent reference. Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`), `default_deck`, `translator_backend`.
 
 ## 5. API contract (all under `/api`, JSON)
 
@@ -245,13 +245,14 @@ reader only after a 5s visible-dwell gate so revisits/flick-throughs don't count
 `GET /api/stats` aggregates totals (words learning/known/total, books finished, this-week),
 streak (union of word-save days + first-read-page days, local-time buckets), a 365-day
 activity list, new-words-per-book (provenance join, reading order), and vocab depth by NIKL
-grade + beginner %. **Page size:** `settings.page_size` (default 650) drives `split_pages` at
-import; changing it re-paginates the library (position preserved by char offset, `page_reads`
-cleared). Difficulty's `new_per_page` stays pinned to `split_pages`'s 1500 default so scores
-don't drift. Frontend: `/stats` (hero tiles, activity heatmap, new-words-per-book line, vocab
-depth bar, milestone badges — all hand-rolled SVG/CSS, no new deps), a page-size control in
-`/settings`, a Stats nav link. Tests: `test_stats.py`, `test_reads.py`, plus `test_db.py`/
-`test_settings.py` additions.
+grade + beginner %. **Page size:** `settings.page_rows`/`chars_per_row` (defaults 22/32,
+row-based since a 2026-07-24 ad hoc change — see below) drive `split_pages_by_rows` at
+import; changing either re-paginates the library (position preserved by char offset,
+`page_reads` cleared). Difficulty's `new_per_page` stays pinned to `split_pages`'s 1500-char
+default so scores don't drift. Frontend: `/stats` (hero tiles, activity heatmap,
+new-words-per-book line, vocab depth bar, milestone badges — all hand-rolled SVG/CSS, no new
+deps), a page-size control in `/settings`, a Stats nav link. Tests: `test_stats.py`,
+`test_reads.py`, plus `test_db.py`/`test_settings.py` additions.
 **Accept:** `pytest` + `npm run build`/`lint` green; saving a word from the reader records
 its book/page; a page counts once after 5s and never on revisit; `GET /api/stats` returns
 sane totals/streak/per-book; changing page size re-paginates and preserves position. *(Cold-
