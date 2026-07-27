@@ -70,8 +70,12 @@ CREATE TABLE IF NOT EXISTS books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf | article
-  current_page INTEGER NOT NULL DEFAULT 1,
+  current_page INTEGER NOT NULL DEFAULT 1,       -- Epic 24: superseded by current_offset, unused by the reader
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  -- Epic 24 (additive migration): reading position as a character offset into the
+  -- book's text — device-independent, unlike a page number, now that each device
+  -- paginates for its own screen. Backfilled once from current_page.
+  current_offset INTEGER NOT NULL DEFAULT 0,
   -- Epic 9 (additive migration): cached difficulty score.
   coverage REAL,                                 -- fraction of lemmas already known; NULL if unscored
   new_per_page REAL,                             -- unknown-unique lemmas / page count
@@ -233,6 +237,18 @@ single forward cursor (`bisect` to seed it, then advanced page by page) so total
 linear in the number of breakpoints across the whole call — relevant for repaginating a
 very long (1000+ page) book on a settings change.
 
+**Superseded by Epic 24 (2026-07-27) for reading.** `split_pages_by_rows` still chunks
+text at import time, but the reader no longer displays those chunks: server-side row
+estimation cannot know a device's viewport, so one global `chars_per_row` was wrong on
+every screen and wrong by *different factors* (the same page rendered 11 lines on web and
+14 on a phone). The `pages` table is now purely a **storage substrate** — contiguous,
+lossless slices that `routes/books._book_text` rejoins — and pagination happens in the
+browser via CSS multi-column (`height: Nlh; column-width: <viewport>px; column-fill: auto`),
+which breaks after exactly N *rendered* lines on any device. `snap_back`/`snap_forward`
+(Epic 24) give the text endpoint its sentence-aligned window boundaries. `page_rows`,
+`chars_per_row`, `estimate_rows`, `split_pages_by_rows` and `repaginate_all` are scheduled
+for deletion in the Epic 24 stage-2 cleanup.
+
 ## API contract (all under `/api`, JSON)
 
 | Method & path | Request | Response |
@@ -241,9 +257,10 @@ very long (1000+ page) book on a settings change.
 | GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds,feed_id,discard_reason}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18), `feed_id`/`discard_reason` (Epic 19) |
 | POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)**. `feed_id` is set only by `routes/feeds.py`'s internal `insert_book()` call, not exposed on this request body — manual imports/paste always leave it NULL |
 | GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
-| PATCH `/api/books/{id}` | `{current_page?, title?, topic?, tags?, archived?, read?, status?}` | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
+| PATCH `/api/books/{id}` | `{current_page?, current_offset?, title?, topic?, tags?, archived?, read?, status?}` (`current_offset` = Epic 24 reading position, `ge=0`) | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
-| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)** |
+| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)**; no longer used by the reader as of Epic 24, kept for scoring/tests |
+| GET `/api/books/{id}/text?offset=&window=` | – | `{offset, total_chars, content, tokens, terms}` — the reader's own source of text as of **Epic 24**. A character-addressed slice; both ends snap **outward** to a sentence/newline boundary, so `offset` in the response may precede the one requested. Token offsets are relative to `content` (absolute = `offset + token.s`). `window` defaults to 20k chars and is capped at 50k. Stamps `last_opened` (moved here from the pages endpoint) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
 | POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists); `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
 | PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3, back_items Epic 22)** |

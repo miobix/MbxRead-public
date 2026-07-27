@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type Settings } from "@/lib/api";
+import {
+  MAX_LINES,
+  MIN_LINES,
+  setReaderLines,
+  useReaderLines,
+} from "@/lib/reader-lines";
 
-const PAGE_ROWS_PRESETS = [
-  { label: "Short", rows: 12 },
-  { label: "Medium", rows: 22 },
-  { label: "Long", rows: 40 },
-] as const;
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const lines = useReaderLines();
 
   useEffect(() => {
     api
@@ -144,52 +146,27 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-muted">Page size</h2>
+            <h2 className="text-sm font-medium text-muted">
+              Lines per page{" "}
+              <span className="font-normal text-xs">· this device only</span>
+            </h2>
             <p className="text-xs text-muted">
-              How many visual rows fit on one reader page, estimated from line breaks
-              and wrapping — so a page with lots of short lines (dialogue, subtitles)
-              and a page of one long paragraph feel like similar amounts of reading.
-              Changing this re-paginates your whole library (and resets pages-read counts).
+              Exactly how many lines of text one reader page holds. The browser breaks
+              the page after this many real lines, so it&apos;s never more or less than
+              you ask for. Stored on this device, not on the server — your phone fits
+              fewer characters per line than a laptop, so each one wants its own value.
             </p>
-            <div className="flex gap-2">
-              {PAGE_ROWS_PRESETS.map((p) => (
-                <button
-                  key={p.rows}
-                  onClick={() => save({ ...settings, page_rows: p.rows })}
-                  disabled={saving}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
-                    settings.page_rows === p.rows
-                      ? "border-accent text-ink font-medium"
-                      : "border-border text-muted hover:border-accent"
-                  }`}
-                >
-                  {p.label}
-                  <span className="block text-xs text-muted">{p.rows} rows</span>
-                </button>
-              ))}
-            </div>
             <label className="flex items-center gap-2 text-sm mt-1">
-              <span className="text-muted shrink-0">Chars per row</span>
+              <span className="text-muted shrink-0">Lines</span>
               <input
                 type="number"
-                min={10}
-                max={120}
-                value={settings.chars_per_row}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n) && n >= 10 && n <= 120) {
-                    save({ ...settings, chars_per_row: n });
-                  }
-                }}
-                disabled={saving}
+                min={MIN_LINES}
+                max={MAX_LINES}
+                value={lines}
+                onChange={(e) => setReaderLines(Number(e.target.value))}
                 className="w-20 rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
               />
             </label>
-            <p className="text-xs text-muted">
-              An estimate of how many characters fit on one line on your device — tune
-              this once you&apos;re actually reading on your phone: too many rows per page
-              means the estimate is too high, too few means it&apos;s too low.
-            </p>
           </section>
 
           <section className="flex flex-col gap-2">

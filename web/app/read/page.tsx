@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   api,
-  type Page as PageData,
   type Settings,
   type Term,
+  type TextWindow,
   type Token,
   type TermSummary,
 } from "@/lib/api";
+import { useReaderLines } from "@/lib/reader-lines";
 import { extractSentence } from "@/lib/sentence";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
@@ -18,6 +26,19 @@ import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 // flicking past a page, and (with the server's INSERT OR IGNORE) revisits never
 // double-count. See docs/DECISIONS.md.
 const READ_DWELL_MS = 5000;
+
+// Epic 24: reading position is a character offset (device-independent), but the
+// reading *log* still needs a discrete unit. 1500 chars is the same unit difficulty's
+// new_per_page uses (server/difficulty.py), so "N new words per page" and "N pages
+// read" finally mean the same page — and unlike a rendered page, a bucket is
+// identical on a phone and a laptop.
+const READ_BUCKET_CHARS = 1500;
+const bucketOf = (offset: number) => Math.floor(offset / READ_BUCKET_CHARS) + 1;
+
+// How far back to reach when paging backwards off the front of the loaded window.
+// Smaller than the server's window so the fetched slice always overlaps the current
+// one, and the character we're paging back to is guaranteed to be inside it.
+const BACK_STEP_CHARS = 12_000;
 
 export default function ReadPage() {
   return (
@@ -32,11 +53,24 @@ function ReadPageContent() {
   const idParam = searchParams.get("id");
   const bookId = idParam ? Number(idParam) : null;
 
-  const [page, setPage] = useState<PageData | null>(null);
+  const [win, setWin] = useState<TextWindow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [target, setTarget] = useState<PopoverTarget | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+
+  const lines = useReaderLines();
+  const [col, setCol] = useState(0);
+  const [colCount, setColCount] = useState(1);
+  const [colStarts, setColStarts] = useState<number[]>([]);
+  const [width, setWidth] = useState(0);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
+  // Set when a load needs to land on a specific character offset, and consumed once
+  // the columns have been measured — the target column can't be known until the
+  // browser has actually laid the text out.
+  const pendingOffset = useRef<number | null>(null);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {
@@ -44,37 +78,106 @@ function ReadPageContent() {
     });
   }, []);
 
-  const loadPage = useCallback((id: number, pageNo: number) => {
-    setLoading(true);
-    setError(null);
-    api
-      .getPage(id, pageNo)
-      .then(setPage)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load page."))
-      .finally(() => setLoading(false));
-  }, []);
+  const loadWindow = useCallback(
+    (id: number, offset: number, landOn?: number) => {
+      setLoading(true);
+      setError(null);
+      pendingOffset.current = landOn ?? offset;
+      api
+        .getText(id, offset)
+        .then(setWin)
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load text."))
+        .finally(() => setLoading(false));
+    },
+    []
+  );
 
   useEffect(() => {
     if (bookId === null) return;
     api
       .getBook(bookId)
-      .then((book) => loadPage(bookId, book.current_page))
+      .then((book) => loadWindow(bookId, book.current_offset))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load item."));
-  }, [bookId, loadPage]);
+  }, [bookId, loadWindow]);
 
-  // Log a genuine read once the current page has stayed visible for the dwell
-  // window. Re-runs per page; pauses while the tab is hidden.
+  // The viewport's width is the column width — one column exactly fills the screen.
   useEffect(() => {
-    if (bookId === null || !page) return;
-    const pageNo = page.page_no;
+    const el = viewportRef.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // One DOM pass per layout produces everything position-related: how many columns
+  // the browser made, and the absolute character offset each one starts at. Reading
+  // it here rather than per-navigation keeps `position` a pure derivation during
+  // render (colStarts[col]) instead of state that has to be synced in an effect.
+  useLayoutEffect(() => {
+    const article = articleRef.current;
+    if (!article || !win || width <= 0) return;
+
+    const count = Math.max(1, Math.round(article.scrollWidth / width));
+    const starts: number[] = [];
+    for (const span of article.querySelectorAll<HTMLElement>("[data-token-index]")) {
+      const c = Math.round(span.offsetLeft / width);
+      if (starts[c] === undefined) {
+        const tok = win.tokens[Number(span.dataset.tokenIndex)];
+        if (tok) starts[c] = win.offset + tok.s;
+      }
+    }
+    // A column can hold no tokens at all (a run of blank lines), leaving a hole —
+    // carry the previous column's offset forward so every index has a position.
+    let carried = win.offset;
+    for (let c = 0; c < count; c++) {
+      if (starts[c] === undefined) starts[c] = carried;
+      else carried = starts[c];
+    }
+
+    setColCount(count);
+    setColStarts(starts);
+
+    const target = pendingOffset.current;
+    if (target !== null) {
+      pendingOffset.current = null;
+      let landing = 0;
+      for (let c = 0; c < count; c++) if (starts[c] <= target) landing = c;
+      setCol(landing);
+    } else {
+      setCol((c) => Math.min(c, count - 1));
+    }
+  }, [win, width, lines]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (el && width > 0) el.scrollLeft = col * width;
+  }, [col, width, win]);
+
+  // Pure derivation — no effect, no synced state. Falls back to the window's own
+  // start before the first measurement has landed.
+  const position = colStarts[col] ?? win?.offset ?? 0;
+
+  // Persist position, and log a genuine read once the current column has stayed
+  // visible for the dwell window. Re-runs per column; pauses while the tab is hidden.
+  useEffect(() => {
+    if (bookId === null || !win || width <= 0) return;
+    const absolute = position;
+
+    const save = setTimeout(() => {
+      api.patchBook(bookId, { current_offset: absolute }).catch(() => {
+        // best-effort — navigation shouldn't block on persisting position
+      });
+    }, 500);
+
     let timer: ReturnType<typeof setTimeout> | null = null;
     let logged = false;
-
     const start = () => {
       if (logged || timer) return;
       timer = setTimeout(() => {
         logged = true;
-        api.markPageRead(bookId, pageNo).catch(() => {
+        api.markPageRead(bookId, bucketOf(absolute)).catch(() => {
           // best-effort — a missed read-log ping shouldn't disrupt reading
         });
       }, READ_DWELL_MS);
@@ -90,33 +193,51 @@ function ReadPageContent() {
     if (!document.hidden) start();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      clearTimeout(save);
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [bookId, page]);
+  }, [bookId, win, width, position]);
 
-  const goToPage = (pageNo: number) => {
-    if (bookId === null || !page || pageNo < 1 || pageNo > page.page_count) return;
-    loadPage(bookId, pageNo);
-    api.patchBook(bookId, { current_page: pageNo }).catch(() => {
-      // best-effort — navigation shouldn't block on persisting current_page
-    });
+  const atStart = !!win && win.offset === 0 && col === 0;
+  const atEnd =
+    !!win && col >= colCount - 1 && win.offset + win.content.length >= win.total_chars;
+
+  const goNext = () => {
+    if (!win || bookId === null) return;
+    if (col < colCount - 1) {
+      setCol(col + 1);
+      return;
+    }
+    const end = win.offset + win.content.length;
+    if (end < win.total_chars) loadWindow(bookId, end);
+  };
+
+  const goPrev = () => {
+    if (!win || bookId === null) return;
+    if (col > 0) {
+      setCol(col - 1);
+      return;
+    }
+    if (win.offset > 0) {
+      loadWindow(bookId, Math.max(0, win.offset - BACK_STEP_CHARS), win.offset - 1);
+    }
   };
 
   const handleArticleClick = (e: React.MouseEvent<HTMLElement>) => {
-    if (!page) return;
+    if (!win) return;
 
     const selectionText = window.getSelection()?.toString().trim();
     if (selectionText) {
       window.getSelection()?.removeAllRanges();
-      const centerIndex = Math.max(page.content.indexOf(selectionText), 0);
-      const sentence = extractSentence(page.content, centerIndex);
+      const centerIndex = Math.max(win.content.indexOf(selectionText), 0);
+      const sentence = extractSentence(win.content, centerIndex);
 
       // A multi-word selection is a phrase — the popover shows a translate-only UI
       // (no dictionary/forms/examples), per the words-vs-phrases distinction.
       const isPhrase = /\s/.test(selectionText);
 
-      const known = page.terms[selectionText] ?? null;
+      const known = win.terms[selectionText] ?? null;
       if (known) {
         setTarget({
           surface: selectionText,
@@ -129,7 +250,7 @@ function ReadPageContent() {
       }
 
       // Multi-word phrase lemmas never match a tokenizer lemma, so they never show up
-      // in page.terms even when saved — fall back to an exact-match terms search.
+      // in the window's terms even when saved — fall back to an exact-match search.
       api
         .listTerms({ q: selectionText })
         .then((matches) => matches.find((t) => t.lemma === selectionText) ?? null)
@@ -160,13 +281,13 @@ function ReadPageContent() {
 
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-token-index]");
     if (!el) return;
-    const token = page.tokens[Number(el.dataset.tokenIndex)];
+    const token = win.tokens[Number(el.dataset.tokenIndex)];
     if (!token) return;
     setTarget({
       surface: token.surface,
       lemma: token.lemma,
-      sentence: extractSentence(page.content, token.s),
-      existing: page.terms[token.lemma] ?? null,
+      sentence: extractSentence(win.content, token.s),
+      existing: win.terms[token.lemma] ?? null,
       isPhrase: false,
     });
   };
@@ -183,7 +304,7 @@ function ReadPageContent() {
       examples: term.examples,
       back_items: term.back_items,
     };
-    setPage((prev) => {
+    setWin((prev) => {
       if (!prev) return prev;
       const nextTerms = { ...prev.terms };
       // Drop every key this term currently occupies (its old lemma and any removed
@@ -200,7 +321,7 @@ function ReadPageContent() {
   };
 
   const handleDeleted = (term: TermSummary) => {
-    setPage((prev) => {
+    setWin((prev) => {
       if (!prev) return prev;
       const nextTerms = { ...prev.terms };
       for (const key of Object.keys(nextTerms)) {
@@ -209,6 +330,11 @@ function ReadPageContent() {
       return { ...prev, terms: nextTerms };
     });
   };
+
+  const percent =
+    win && win.total_chars > 0
+      ? Math.min(100, Math.round((position / win.total_chars) * 100))
+      : 0;
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
@@ -222,46 +348,63 @@ function ReadPageContent() {
 
       {error && <p className="text-danger text-sm">{error}</p>}
 
-      {bookId !== null && !page && !error && (
+      {bookId !== null && !win && !error && (
         <p className="text-muted">Loading…</p>
       )}
 
-      {page && (
-        <>
+      {/* Always mounted so the width measurement has a stable element to observe.
+          The article inside is the multi-column container: a fixed height of N line
+          boxes plus a column width of exactly one screen means the browser breaks a
+          column every N *rendered* lines — no estimate, and correct on any device. */}
+      <div ref={viewportRef} className="overflow-hidden w-full">
+        {win && (
           <article
-            className="leading-loose text-lg whitespace-pre-wrap select-text"
+            ref={articleRef}
             onClick={handleArticleClick}
+            className="leading-loose text-lg whitespace-pre-wrap select-text [word-break:keep-all] [overflow-wrap:break-word]"
+            style={{
+              height: `${lines}lh`,
+              columnWidth: width > 0 ? `${width}px` : undefined,
+              columnGap: 0,
+              // Without this, multicol *balances* content across columns inside the
+              // fixed height instead of filling each one — which would defeat the
+              // whole point of a fixed line count per page.
+              columnFill: "auto",
+            }}
           >
-            {renderContent(page.content, page.tokens, page.terms)}
+            {renderContent(win.content, win.tokens, win.terms)}
           </article>
+        )}
+      </div>
 
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-            <button
-              onClick={() => goToPage(page.page_no - 1)}
-              disabled={page.page_no <= 1 || loading}
-              className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-            <span className="text-sm text-muted">
-              {page.page_no} / {page.page_count}
-            </span>
-            <button
-              onClick={() => goToPage(page.page_no + 1)}
-              disabled={page.page_no >= page.page_count || loading}
-              className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
-            >
-              Next →
-            </button>
-          </div>
-        </>
+      {win && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+          <button
+            onClick={goPrev}
+            disabled={atStart || loading}
+            className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
+          >
+            ← Prev
+          </button>
+          {/* Percentage rather than "7 / 150": page numbers are per-device now (a
+              phone fits fewer lines' worth of text than a laptop), but a percentage
+              derives from the character offset, so it reads the same on both. */}
+          <span className="text-sm text-muted">{percent}%</span>
+          <button
+            onClick={goNext}
+            disabled={atEnd || loading}
+            className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
+          >
+            Next →
+          </button>
+        </div>
       )}
 
       {target && (
         <TokenPopover
           target={target}
           bookId={bookId}
-          pageNo={page?.page_no ?? null}
+          pageNo={bucketOf(position)}
           decks={settings?.decks ?? ["Korean"]}
           defaultDeck={settings?.default_deck ?? "Korean"}
           translatorBackend={settings?.translator_backend}

@@ -5,6 +5,7 @@ export type Book = {
   title: string;
   source: string;
   current_page: number;
+  current_offset: number;
   page_count: number;
   created: string;
   coverage: number | null;
@@ -74,6 +75,7 @@ export type BookDetail = {
   id: number;
   title: string;
   current_page: number;
+  current_offset: number;
   page_count: number;
 };
 
@@ -130,6 +132,18 @@ export type Term = {
   anki_dirty: boolean;
   created: string;
   updated: string;
+};
+
+// Epic 24: a character-addressed slice of a book, which the reader paginates itself
+// with CSS columns. `offset` is where `content` starts in the whole book (the server
+// snaps it back to a sentence boundary, so it may precede what was requested); token
+// offsets are relative to `content`, so absolute position = offset + token.s.
+export type TextWindow = {
+  offset: number;
+  total_chars: number;
+  content: string;
+  tokens: Token[];
+  terms: Record<string, TermSummary>;
 };
 
 export type Page = {
@@ -295,6 +309,7 @@ export const api = {
     id: number,
     body: {
       current_page?: number;
+      current_offset?: number;
       title?: string;
       topic?: string;
       tags?: string[];
@@ -306,6 +321,9 @@ export const api = {
 
   getPage: (bookId: number, pageNo: number) =>
     request<Page>(`/books/${bookId}/pages/${pageNo}`),
+
+  getText: (bookId: number, offset: number) =>
+    request<TextWindow>(`/books/${bookId}/text?offset=${Math.max(0, Math.floor(offset))}`),
 
   createTerm: (body: {
     lemma: string;

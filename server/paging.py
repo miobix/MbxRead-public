@@ -42,6 +42,26 @@ def split_pages(text: str, max_chars: int = MAX_PAGE_CHARS) -> list[str]:
     return pages
 
 
+def snap_back(text: str, i: int) -> int:
+    """Largest sentence/newline boundary at or before `i` (0 if there is none) — used
+    to start a served text window at the top of a sentence rather than mid-clause.
+    Epic 24."""
+    i = max(0, min(i, len(text)))
+    best = 0
+    for m in _BREAK_RE.finditer(text, 0, i):
+        best = m.end()
+    return best if best <= i else 0
+
+
+def snap_forward(text: str, i: int) -> int:
+    """Smallest sentence/newline boundary at or after `i` (len(text) if there is none)
+    — the closing counterpart to snap_back. Epic 24."""
+    if i >= len(text):
+        return len(text)
+    m = _BREAK_RE.search(text, max(0, i))
+    return m.end() if m else len(text)
+
+
 def estimate_rows(s: str, chars_per_row: int) -> int:
     """Approximate how many visual rows `s` renders as under the reader's
     whitespace-preserving layout: every newline forces a row break, and each line
