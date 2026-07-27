@@ -4,7 +4,7 @@ import sqlite3
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import db as db_module
 from ..difficulty import (
@@ -13,7 +13,7 @@ from ..difficulty import (
     score_general_difficulty,
     score_text,
 )
-from ..paging import split_pages_by_rows
+from ..paging import snap_back, snap_forward, split_pages_by_rows
 from ..tokenizer import tokenize
 from .settings import get_chars_per_row, get_page_rows
 from .terms import _back_items_for, _forms_for
@@ -21,6 +21,13 @@ from .terms import _back_items_for, _forms_for
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 BookStatus = Literal["library", "candidate", "discarded"]
+
+# Epic 24: how much text one /text request serves. 20k chars covers a median book
+# (1.8k) whole and takes ~3 fetches for 어린 왕자 (45k), while keeping the token JSON
+# for one response small enough to send to a phone over Tailscale. MAX caps what a
+# caller can ask for so a hand-crafted `?window=` can't force a 100k-char tokenize.
+DEFAULT_TEXT_WINDOW = 20_000
+MAX_TEXT_WINDOW = 50_000
 
 
 class BookCreate(BaseModel):
@@ -37,6 +44,10 @@ class BookCreate(BaseModel):
 
 class BookPatch(BaseModel):
     current_page: int | None = None
+    # Epic 24: the reader's real position. ge=0 only — the upper bound is the book's
+    # length, which the client already respects and which a stale write can't usefully
+    # exceed (the text endpoint clamps anything past the end).
+    current_offset: int | None = Field(default=None, ge=0)
     title: str | None = None
     topic: str | None = None
     tags: list[str] | None = None
@@ -57,6 +68,7 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "title": row["title"],
         "source": row["source"],
         "current_page": row["current_page"],
+        "current_offset": row["current_offset"],
         "page_count": page_count,
         "created": row["created"],
         "coverage": row["coverage"],
@@ -275,6 +287,7 @@ def get_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db))
         "id": book["id"],
         "title": book["title"],
         "current_page": book["current_page"],
+        "current_offset": book["current_offset"],
         "page_count": book["page_count"],
     }
 
@@ -346,8 +359,25 @@ def get_page(
 
     content = page["content"]
     tokens = tokenize(content)
-    lemmas = {t.lemma for t in tokens}
+    terms = _terms_for_lemmas(conn, {t.lemma for t in tokens})
 
+    return {
+        "page_no": page_no,
+        "page_count": page_count,
+        "content": content,
+        "tokens": [
+            {"s": t.s, "e": t.e, "surface": t.surface, "lemma": t.lemma, "pos": t.pos}
+            for t in tokens
+        ],
+        "terms": terms,
+    }
+
+
+def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
+    """Every saved term a set of page/window token lemmas should light up, keyed by the
+    string that matched (the term's own lemma, or one of its extra `forms`). Extracted
+    from get_page in Epic 24 so the new text-window endpoint highlights identically —
+    behaviour unchanged, this is a straight lift."""
     terms: dict = {}
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
@@ -403,13 +433,61 @@ def get_page(
                 entry["forms"] = forms_by_term.get(entry["id"], [])
                 entry["back_items"] = back_items_by_term.get(entry["id"], [])
 
+    return terms
+
+
+def _book_text(conn: sqlite3.Connection, book_id: int) -> str:
+    """The book's full text, reassembled from its stored page slices. `pages` is now
+    purely a storage substrate (Epic 24) — the slices are contiguous and lossless, so
+    joining them with no separator round-trips the original import exactly."""
+    return "".join(
+        row["content"] for row in conn.execute(
+            "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
+        )
+    )
+
+
+@router.get("/{book_id}/text")
+def get_text(
+    book_id: int,
+    offset: int = 0,
+    window: int = DEFAULT_TEXT_WINDOW,
+    conn: sqlite3.Connection = Depends(db_module.get_db),
+):
+    """Epic 24: a character-addressed slice of the book, for the client-side paginator.
+
+    The reader lays this out itself with CSS columns, so the server no longer decides
+    where pages break — it just serves enough text to fill a screenful many times over
+    and lets the browser wrap it. Windowed rather than whole-book because the long YT
+    transcripts run past 100k chars (~MBs of token JSON), which is not something to
+    push to a phone in one response.
+
+    Both ends snap **outward** to a sentence/newline boundary, so a window never opens
+    or closes mid-sentence; `offset` in the response is the snapped start, which may
+    precede the requested one. Token offsets are relative to the returned `content`
+    (exactly like the page endpoint), so the client's existing rendering and
+    sentence-extraction work unchanged — absolute positions are `offset + token.s`.
+    """
+    _get_book_or_404(conn, book_id)
+    # Moved here from get_page: this is now the call the reader makes to display text,
+    # so it's what "most recently opened" should reflect.
+    conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))
+    conn.commit()
+
+    text = _book_text(conn, book_id)
+    window = max(1, min(window, MAX_TEXT_WINDOW))
+    start = snap_back(text, max(0, min(offset, len(text))))
+    end = snap_forward(text, min(start + window, len(text)))
+
+    content = text[start:end]
+    tokens = tokenize(content)
     return {
-        "page_no": page_no,
-        "page_count": page_count,
+        "offset": start,
+        "total_chars": len(text),
         "content": content,
         "tokens": [
             {"s": t.s, "e": t.e, "surface": t.surface, "lemma": t.lemma, "pos": t.pos}
             for t in tokens
         ],
-        "terms": terms,
+        "terms": _terms_for_lemmas(conn, {t.lemma for t in tokens}),
     }

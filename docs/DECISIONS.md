@@ -847,3 +847,59 @@ Two parsing fixes prompted by 어린 왕자 p2 (`〈자연계의 진짜 이야�
 Also corrected the one page's stored text where extraction mis-scanned the closing CJK
 bracket `〉` (U+3009) as `?` — data, not a parser issue; reimport would reproduce it (EPUB
 dedup hashes the same bytes) and would cost the book's reading progress + page-read history.
+
+## 2026-07-27 — Epic 24 (stage 1): reader pagination moves to the client
+
+**Problem.** Reader pages were split server-side by `split_pages_by_rows` using one global
+`chars_per_row: 32` estimate. The server can't know a device's viewport, so the estimate was
+wrong on every screen and wrong by *different factors* — web content width ~480px fits ~27
+Korean chars per line, a phone's ~358px fits ~20. The same page 7 rendered **11 lines on web,
+14 on mobile**, and page length also wandered between pages (the estimate is only wrong for
+long lines; a page of short dialogue lines estimates correctly). Not fixable by tuning: one
+shared `pages` table plus `current_page`/`page_reads` keyed to global page numbers cannot
+represent two devices needing different boundaries.
+
+**Decision.** The browser paginates, via CSS multi-column:
+`height: {N}lh; column-width: {viewport}px; column-gap: 0; column-fill: auto`. The `lh` unit
+is one line-height, so a column breaks after exactly N *rendered* lines — measured after
+wrapping, on any device, with no estimate and no measurement loop. Lines-per-page is a
+**per-device** localStorage value (`readerLines`, default 15), not a server setting.
+
+**Consequences, accepted with the user:**
+- Page boundaries and page counts now differ per device. Position is a **character offset**
+  (`books.current_offset`, backfilled once from `current_page`), so switching devices lands
+  on the same sentence; only the numbering differs.
+- The reader footer shows **percentage, not page numbers** — derived from the offset, so it
+  reads identically everywhere. This was the deciding reason to keep the divergence invisible.
+- `pages` is demoted to a **storage substrate**: its rows are contiguous lossless slices that
+  `_book_text` rejoins. No content migration was needed, which kept the blast radius small.
+- New `GET /api/books/{id}/text?offset=&window=` serves a sentence-aligned slice (20k default,
+  50k cap). Windowed rather than whole-book because the long YT transcripts reach 104k chars;
+  measured, one 20k window is 4.6k tokens / ~330 ms, and 어린 왕자 (45k) walks in 3 fetches.
+
+**Two things found while planning, worth recording:**
+1. **`TokenPopover` was never at risk.** It's a `fixed inset-0` full-screen overlay (bottom
+   sheet on mobile, centred on desktop) rendered as a *sibling* of `<article>`, so it neither
+   anchors to the token nor sits inside the column container. Columns are scrolled with
+   `scrollLeft`, not `translateX`, so the "transform makes a containing block for `position:
+   fixed`" hazard cannot arise even if it later moves inside.
+2. **Korean was breaking mid-word — a pre-existing bug, not caused by this epic.** There was
+   no `word-break` rule anywhere in `web/`, so the article inherited `word-break: normal`,
+   under which browsers may break between any two Hangul syllables (`성공` -> `성` / `공`).
+   Tolerable at a line break, bad at a *column* break where the halves land on separate
+   screens. Fixed with `word-break: keep-all` + `overflow-wrap: break-word`. Note this fix was
+   *incompatible* with the old design — `keep-all` yields a more ragged right edge, i.e. more
+   rows than `chars_per_row` predicts — and is free under browser pagination.
+
+**Deliberately unchanged:** `new_per_page` difficulty scoring still uses the fixed 1500-char
+`split_pages`, independent of reader pagination (Epic 16 entry). Read logging keeps the
+`page_reads` table for now but is keyed to a **1500-char bucket** rather than a rendered page
+— the same unit `new_per_page` uses, so "N new words per page" and "N pages read" finally
+refer to the same page, and the bucket is identical on every device.
+
+**Stage 2 (not yet done):** delete `page_rows`, `chars_per_row`, `estimate_rows`,
+`split_pages_by_rows`, `repaginate_all` and `current_page`; replace `page_reads` with
+`read_days (book_id, day)`. The pages-read *counts* are being dropped as unhelpful, but
+`stats.py` builds `active_days` from `set(words_by_day) | set(pages_by_day)`, so deleting the
+table outright would silently make the **streak words-only** — a day spent reading without
+saving a word would break it. `read_days` exists purely to keep that honest.

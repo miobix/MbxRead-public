@@ -57,6 +57,20 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **23** — Go-live: cold-start `start.ps1`, Tailscale phone access, Task Scheduler fetch
   job — all verified live
 - [x] **—** — Background tray launcher (ad-hoc)
+- [~] **24** — Client-side reader pagination (**stage 1 shipped, stage 2 pending**)
+
+## Epic 24 — remaining work (stage 2)
+
+Stage 1 shipped the fix: the browser paginates with CSS columns, exactly N rendered lines
+per page, per device. Plan + full rationale in `docs/EPIC_24_CLIENT_PAGINATION.md`; decision
+in `docs/DECISIONS.md`. Still to do:
+
+- Delete the now-dead server-side pagination: `settings.page_rows` / `chars_per_row`,
+  `paging.estimate_rows` / `split_pages_by_rows`, `settings.repaginate_all`,
+  `books.current_page`. (`_insert_book` switches to plain `split_pages` for storage chunking.)
+- Replace `page_reads` with `read_days (book_id, day)`. Drop the pages-read counts — but
+  **not** the table's second consumer: `stats.py` derives `active_days` from
+  `set(words_by_day) | set(pages_by_day)`, so a naive delete makes the streak words-only.
 
 ## Live operational facts
 
@@ -68,12 +82,22 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   (Open / Restart / Quit), auto-started at logon via a **Startup-folder shortcut**
   (`shell:startup`), *not* Task Scheduler (logon-trigger registration hits Access Denied in
   this environment). Server output → `scripts/server.log` (gitignored).
-- **Feed fetch** runs daily 06:00 via Task Scheduler (`scripts/fetch_feeds.ps1` → `POST
+- **Feed fetch** is a daily 06:00 Task Scheduler job (`scripts/fetch_feeds.ps1` → `POST
   /api/feeds/fetch`, `-WindowStyle Hidden`, logs to `scripts/fetch_feeds.log`).
+  **Paused 2026-07-27** — task `korean-reader fetch feeds` is *Disabled*, because reading
+  is currently focused on one book and the queue was accumulating unread text. Re-enable
+  with `Enable-ScheduledTask -TaskName 'korean-reader fetch feeds'` (trigger/action are
+  unchanged; nothing else was touched).
 - **Tailscale** address: `<machine>.<tailnet>.ts.net` — phone reaches the app at
   `http://<machine>.<tailnet>.ts.net:8002`.
+- **Reader pagination is client-side** (Epic 24). The browser breaks pages with CSS columns
+  after exactly N rendered lines; N lives in **localStorage per device** (`readerLines`,
+  default 15, editable on `/settings`) — your phone and the laptop each keep their own. The
+  footer shows a percentage, not a page number, because page numbering is now per-device.
+  Position is `books.current_offset`, a character offset, so devices stay in sync.
 - **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text (tokens
-  computed on read). As of go-live: ~200 books / 1.14M chars / 3.7MB — nowhere near a
+  computed on read). Since Epic 24 `pages` is *storage only* — the reader reads
+  `GET /api/books/{id}/text?offset=`, not `/pages/{n}`. As of go-live: ~200 books / 1.14M chars / 3.7MB — nowhere near a
   constraint. Discarded article/yt candidates have their `pages` text auto-purged (Epic 17
   retention + the storage pass); paste/pdf/epub/txt text is kept indefinitely.
 

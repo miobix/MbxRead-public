@@ -160,7 +160,8 @@ def test_list_books_shape(client):
     assert len(books) == 2
     for book in books:
         assert set(book.keys()) == {
-            "id", "title", "source", "current_page", "page_count", "created",
+            "id", "title", "source", "current_page", "current_offset",
+            "page_count", "created",
             "coverage", "new_per_page", "scored_at",
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
             "status", "general_coverage", "general_level",
@@ -400,3 +401,128 @@ def test_list_books_omitting_limit_returns_everything(client):
     for i in range(3):
         client.post("/api/books", json={"title": f"Book {i}", "text": SHORT_STORY})
     assert len(client.get("/api/books").json()) == 3
+
+
+# --- Epic 24: character-addressed text windows ------------------------------
+
+def test_get_text_returns_whole_short_book_with_absolute_total(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Short", "text": SHORT_STORY}
+    ).json()["id"]
+
+    body = client.get(f"/api/books/{book_id}/text").json()
+    assert body["offset"] == 0
+    assert body["content"] == SHORT_STORY
+    assert body["total_chars"] == len(SHORT_STORY)
+    assert body["tokens"]
+    # token offsets are relative to `content`, so they slice it directly
+    tok = body["tokens"][0]
+    assert body["content"][tok["s"]:tok["e"]] == tok["surface"]
+
+
+def test_get_text_windows_a_long_book_and_joins_losslessly(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Long", "text": LONG_STORY}
+    ).json()["id"]
+
+    chunks, offset, guard = [], 0, 0
+    while guard < 100:
+        guard += 1
+        body = client.get(
+            f"/api/books/{book_id}/text", params={"offset": offset, "window": 200}
+        ).json()
+        assert body["offset"] == offset  # requested offsets are already boundaries
+        chunks.append(body["content"])
+        offset = body["offset"] + len(body["content"])
+        if offset >= body["total_chars"]:
+            break
+
+    assert guard > 1  # actually windowed rather than one response
+    assert "".join(chunks) == LONG_STORY
+
+
+def test_get_text_snaps_a_mid_sentence_offset_backwards(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Short", "text": SHORT_STORY}
+    ).json()["id"]
+
+    mid = SHORT_STORY.index("날씨") + 3  # deliberately inside the second sentence
+    body = client.get(f"/api/books/{book_id}/text", params={"offset": mid}).json()
+    assert body["offset"] < mid
+    # snaps to just after the previous sentence's period — the window therefore opens
+    # on the whitespace before the sentence, never partway into a clause
+    assert body["content"].strip().startswith("날씨")
+    assert SHORT_STORY[body["offset"]:] == body["content"]
+
+
+def test_get_text_clamps_window_and_offset(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Short", "text": SHORT_STORY}
+    ).json()["id"]
+
+    past_end = client.get(
+        f"/api/books/{book_id}/text", params={"offset": 10_000}
+    ).json()
+    assert past_end["offset"] <= len(SHORT_STORY)
+    assert past_end["content"] == ""
+
+    huge = client.get(
+        f"/api/books/{book_id}/text", params={"window": 10_000_000}
+    ).json()
+    assert huge["content"] == SHORT_STORY
+
+
+def test_get_text_highlights_saved_terms(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Short", "text": SHORT_STORY}
+    ).json()["id"]
+    page = client.get(f"/api/books/{book_id}/pages/1").json()
+    lemma = page["tokens"][0]["lemma"]
+    client.post("/api/terms", json={"lemma": lemma, "translation": "x"})
+
+    body = client.get(f"/api/books/{book_id}/text").json()
+    assert lemma in body["terms"]
+    # identical highlighting to the page endpoint it was extracted from
+    assert set(body["terms"]) == set(client.get(f"/api/books/{book_id}/pages/1").json()["terms"])
+
+
+def test_get_text_404s_for_unknown_book(client):
+    assert client.get("/api/books/999999/text").status_code == 404
+
+
+def test_patch_current_offset_round_trips(client):
+    book_id = client.post(
+        "/api/books", json={"title": "Long", "text": LONG_STORY}
+    ).json()["id"]
+
+    assert client.patch(f"/api/books/{book_id}", json={"current_offset": 512}).status_code == 200
+    assert client.get(f"/api/books/{book_id}").json()["current_offset"] == 512
+    # negative offsets are rejected by the schema, not silently stored
+    assert client.patch(f"/api/books/{book_id}", json={"current_offset": -1}).status_code == 422
+
+
+def test_current_offset_backfills_from_current_page(client, db_path):
+    """The one-time Epic 24 migration: an existing DB's page-number positions become
+    character offsets. `client` is only here to build the schema."""
+    from server import db as db_module
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    book_id = conn.execute(
+        "INSERT INTO books (title, source, current_page) VALUES ('B', 'paste', 3)"
+    ).lastrowid
+    for n, content in enumerate(["첫째다. ", "둘째다. ", "셋째다. "], start=1):
+        conn.execute(
+            "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
+            (book_id, n, content),
+        )
+    conn.commit()
+
+    db_module._backfill_current_offset(conn)
+    conn.commit()
+    offset = conn.execute(
+        "SELECT current_offset FROM books WHERE id = ?", (book_id,)
+    ).fetchone()["current_offset"]
+    # page 3 starts after pages 1 and 2
+    assert offset == len("첫째다. ") + len("둘째다. ")
+    conn.close()

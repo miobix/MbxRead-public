@@ -157,6 +157,13 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # time a page is actually viewed (routes/books.py's get_page), not on
         # create/patch, so it reflects reading activity rather than list churn.
         "last_opened": "TIMESTAMP",
+        # Epic 24: reading position as a character offset into the book's text, which
+        # is device-independent — the reader now paginates client-side (CSS columns,
+        # exact N rendered lines per device), so `current_page` no longer means the
+        # same thing on a phone and a laptop. Backfilled once from current_page by
+        # _backfill_current_offset; current_page is left in place but unused by the
+        # reader until the stage-2 cleanup.
+        "current_offset": "INTEGER NOT NULL DEFAULT 0",
     },
     "term_forms": {
         # Epic 22: was this form clicked in from the dictionary, or typed by hand via
@@ -203,12 +210,32 @@ _SEED_FEEDS: list[tuple[str, str, str, str]] = [
 ]
 
 
+def _backfill_current_offset(conn: sqlite3.Connection) -> None:
+    """Epic 24, run once at the moment books.current_offset is added: convert every
+    book's existing page-number position into a character offset by summing the
+    lengths of the pages before it. Same arithmetic the retired repaginate_all used
+    to preserve position across a re-split — pages hold contiguous, lossless slices,
+    so the sum is the exact offset where that page starts."""
+    conn.execute(
+        "UPDATE books SET current_offset = COALESCE(("
+        "  SELECT SUM(LENGTH(p.content)) FROM pages p "
+        "  WHERE p.book_id = books.id AND p.page_no < books.current_page"
+        "), 0)"
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection) -> None:
+    added: set[tuple[str, str]] = set()
     for table, columns in _ADDED_COLUMNS.items():
         existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
         for name, decl in columns.items():
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                added.add((table, name))
+    # Only on the upgrade itself — re-running init_db must not clobber a position the
+    # reader has since written directly to current_offset.
+    if ("books", "current_offset") in added:
+        _backfill_current_offset(conn)
     # Partial index: NULL source_ref (paste/txt books) never collides, but two
     # imports of the same video id / feed guid do — the dedup guarantee Epic 12's
     # importers and Epic 15's feed fetcher rely on.

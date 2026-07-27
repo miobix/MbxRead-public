@@ -1,4 +1,10 @@
-from server.paging import estimate_rows, split_pages, split_pages_by_rows
+from server.paging import (
+    estimate_rows,
+    snap_back,
+    snap_forward,
+    split_pages,
+    split_pages_by_rows,
+)
 
 
 def test_empty_text_returns_one_empty_page():
@@ -88,3 +94,45 @@ def test_single_long_line_with_no_break_point_is_not_split_by_rows():
 
 def test_empty_text_returns_one_empty_page_by_rows():
     assert split_pages_by_rows("") == [""]
+
+
+# --- snap_back / snap_forward (Epic 24 text windows) ------------------------
+
+TEXT = "첫째 문장이다. 둘째 문장이다.\n셋째 문장이다."
+
+
+def test_snap_back_returns_boundary_at_or_before_index():
+    # index inside the second sentence snaps back to just after the first's period —
+    # i.e. onto the space, not onto the first character of the next sentence
+    i = TEXT.index("둘째") + 2
+    assert snap_back(TEXT, i) == TEXT.index(".") + 1
+
+
+def test_snap_back_before_any_boundary_returns_zero():
+    assert snap_back(TEXT, 3) == 0
+
+
+def test_snap_forward_returns_boundary_at_or_after_index():
+    i = TEXT.index("둘째") + 2
+    # next boundary is the second sentence's period (which ends before the newline)
+    assert snap_forward(TEXT, i) == TEXT.index("\n")
+
+
+def test_snap_forward_past_last_boundary_returns_length():
+    assert snap_forward(TEXT, len(TEXT) - 1) == len(TEXT)
+    assert snap_forward(TEXT, len(TEXT) + 50) == len(TEXT)
+
+
+def test_snaps_clamp_out_of_range_indices():
+    assert snap_back(TEXT, -10) == 0
+    assert snap_back(TEXT, len(TEXT) + 10) <= len(TEXT)
+
+
+def test_snapped_window_never_starts_or_ends_mid_sentence():
+    text = "문장입니다. " * 200
+    start = snap_back(text, 137)
+    end = snap_forward(text, start + 500)
+    window = text[start:end]
+    # every window boundary lands right after a sentence-ending period
+    assert start == 0 or text[start - 1] in " ."
+    assert window.rstrip().endswith(".")
