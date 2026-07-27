@@ -161,7 +161,7 @@ def test_list_books_shape(client):
     for book in books:
         assert set(book.keys()) == {
             "id", "title", "source", "current_page", "current_offset",
-            "page_count", "created",
+            "page_count", "total_chars", "created",
             "coverage", "new_per_page", "scored_at",
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
             "status", "general_coverage", "general_level",

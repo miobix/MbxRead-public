@@ -7,6 +7,7 @@ export type Book = {
   current_page: number;
   current_offset: number;
   page_count: number;
+  total_chars: number;
   created: string;
   coverage: number | null;
   new_per_page: number | null;

@@ -63,6 +63,13 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
     page_count = conn.execute(
         "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
     ).fetchone()[0]
+    # Epic 24: the denominator for reading progress. current_page stopped moving when
+    # the reader switched to character offsets, so the Library reports
+    # current_offset/total_chars as a percentage instead of a page number.
+    total_chars = conn.execute(
+        "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM pages WHERE book_id = ?",
+        (book_id,),
+    ).fetchone()[0]
     return {
         "id": row["id"],
         "title": row["title"],
@@ -70,6 +77,7 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "current_page": row["current_page"],
         "current_offset": row["current_offset"],
         "page_count": page_count,
+        "total_chars": total_chars,
         "created": row["created"],
         "coverage": row["coverage"],
         "new_per_page": row["new_per_page"],
