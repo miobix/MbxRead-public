@@ -64,6 +64,7 @@ function ReadPageContent() {
   const [colCount, setColCount] = useState(1);
   const [colStarts, setColStarts] = useState<number[]>([]);
   const [width, setWidth] = useState(0);
+  const [lineHeight, setLineHeight] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
@@ -101,10 +102,18 @@ function ReadPageContent() {
   }, [bookId, loadWindow]);
 
   // The viewport's width is the column width — one column exactly fills the screen.
+  // Its line-height gives the page height in real pixels: `height: {N}lh` would say
+  // the same thing more elegantly, but `lh` needs Chrome 109+/Safari 16.4+ and
+  // silently degrades to `height: auto` when unsupported — which drops the column
+  // breaking entirely. Measuring is exact everywhere.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    const measure = () => {
+      setWidth(el.clientWidth);
+      const lh = Number.parseFloat(window.getComputedStyle(el).lineHeight);
+      if (Number.isFinite(lh) && lh > 0) setLineHeight(lh);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -148,7 +157,9 @@ function ReadPageContent() {
     } else {
       setCol((c) => Math.min(c, count - 1));
     }
-  }, [win, width, lines]);
+    // lineHeight is a dependency because it sets the page height, and the page
+    // height is what decides where the browser breaks each column.
+  }, [win, width, lines, lineHeight]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -352,18 +363,27 @@ function ReadPageContent() {
         <p className="text-muted">Loading…</p>
       )}
 
-      {/* Always mounted so the width measurement has a stable element to observe.
+      {/* Always mounted, and always exactly N lines tall, so the divider and the
+          nav buttons below never move — not while a window loads, and not when a
+          phone's address bar slides away and changes the available height.
+          `shrink-0` matters: <body> and <main> are both flex columns, so without it
+          this box is a shrinkable flex item and gets squeezed whenever vertical
+          space is tight, which is what made the buttons jump on mobile.
           The article inside is the multi-column container: a fixed height of N line
           boxes plus a column width of exactly one screen means the browser breaks a
-          column every N *rendered* lines — no estimate, and correct on any device. */}
-      <div ref={viewportRef} className="overflow-hidden w-full">
+          column every N *rendered* lines — no estimate, correct on any device. */}
+      <div
+        ref={viewportRef}
+        className="overflow-hidden w-full shrink-0 leading-loose text-lg"
+        style={{ height: lineHeight > 0 ? lines * lineHeight : undefined }}
+      >
         {win && (
           <article
             ref={articleRef}
             onClick={handleArticleClick}
             className="leading-loose text-lg whitespace-pre-wrap select-text [word-break:keep-all] [overflow-wrap:break-word]"
             style={{
-              height: `${lines}lh`,
+              height: "100%",
               columnWidth: width > 0 ? `${width}px` : undefined,
               columnGap: 0,
               // Without this, multicol *balances* content across columns inside the
@@ -378,7 +398,7 @@ function ReadPageContent() {
       </div>
 
       {win && (
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+        <div className="flex shrink-0 items-center justify-between mt-4 pt-4 border-t border-border">
           <button
             onClick={goPrev}
             disabled={atStart || loading}
