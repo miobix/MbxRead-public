@@ -11,6 +11,60 @@ import { SOURCES, TOPICS } from "@/lib/topics";
 // compatible with every existing caller that omits limit/offset entirely.
 const PAGE_SIZE = 30;
 
+const NAV_LINKS = [
+  { href: "/queue", label: "Queue" },
+  { href: "/stats", label: "Stats" },
+  { href: "/feeds", label: "Feeds" },
+  { href: "/terms", label: "Terms" },
+  { href: "/settings", label: "Settings" },
+] as const;
+
+/** Mobile-only nav. Below `sm` the five inline links crowd out "+ Add", so they
+ *  collapse behind a hamburger; at `sm` and up this is hidden and the inline links
+ *  render instead, leaving the desktop header untouched. Bars are drawn with plain
+ *  spans rather than an icon dependency — the app ships no icon library. */
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative sm:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Menu"
+        aria-expanded={open}
+        className="flex flex-col justify-center gap-1 rounded-md border border-border px-2.5 py-2 text-muted hover:text-ink hover:border-accent transition-colors"
+      >
+        <span className="block h-0.5 w-4 rounded-full bg-current" />
+        <span className="block h-0.5 w-4 rounded-full bg-current" />
+        <span className="block h-0.5 w-4 rounded-full bg-current" />
+      </button>
+      {open && (
+        <>
+          {/* Invisible full-screen catcher so a tap anywhere else dismisses the menu. */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <nav className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2.5 text-sm text-muted hover:bg-paper hover:text-ink transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -90,28 +144,27 @@ export default function HomePage() {
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold font-serif">MbxAndria</h1>
-        <div className="flex items-center gap-3">
-          <Link href="/queue" className="text-sm text-muted hover:text-ink transition-colors">
-            Queue
-          </Link>
-          <Link href="/stats" className="text-sm text-muted hover:text-ink transition-colors">
-            Stats
-          </Link>
-          <Link href="/feeds" className="text-sm text-muted hover:text-ink transition-colors">
-            Feeds
-          </Link>
-          <Link href="/terms" className="text-sm text-muted hover:text-ink transition-colors">
-            Terms
-          </Link>
-          <Link href="/settings" className="text-sm text-muted hover:text-ink transition-colors">
-            Settings
-          </Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Desktop keeps the inline links exactly as they were — the hamburger is
+              a mobile-only addition, where five links plus "+ Add" no longer fit. */}
+          <nav className="hidden sm:flex items-center gap-3">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm text-muted hover:text-ink transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
           <button
             onClick={() => setModalOpen(true)}
-            className="rounded-md bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
+            className="rounded-md bg-accent text-accent-ink px-2.5 py-1.5 sm:px-4 sm:py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
           >
             + Add
           </button>
+          <MobileNav />
         </div>
       </div>
 
@@ -190,67 +243,78 @@ export default function HomePage() {
         {books?.map((book) => (
           <li
             key={book.id}
-            className="rounded-xl border border-border bg-surface p-4 shadow-sm"
+            className="flex gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm"
           >
-            <Link
-              href={`/read/?id=${book.id}`}
-              className="block hover:text-accent transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{book.title}</span>
-                {(book.source === "pdf" || book.source === "epub") && (
-                  <span className="text-xs text-muted border border-border rounded-full px-1.5">
-                    Book
-                  </span>
-                )}
-                {book.read && <span className="text-xs text-accent">✓ read</span>}
-              </div>
-              <div className="text-sm text-muted">
-                {book.current_page} / {book.page_count} pages
-              </div>
-              {(book.topic || book.tags.length > 0) && (
-                <div className="text-xs text-muted mt-0.5">
-                  {[book.topic, ...book.tags].filter(Boolean).join(" · ")}
-                </div>
-              )}
-            </Link>
-            <div className="mt-2 flex items-center gap-3 flex-wrap">
-              <ScoreLine book={book} />
-              <GeneralScoreLine book={book} />
-              {book.source_url && (
-                <a
-                  href={book.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted hover:text-accent transition-colors"
-                  title="Open source"
-                >
-                  ↗ source
-                </a>
-              )}
+            {/* Actions live in their own column, off to the side of the card body:
+                they used to sit inline under the title, where Archive was easy to
+                hit by accident when reaching for the book itself. */}
+            <div className="flex w-14 shrink-0 flex-col gap-1 text-center text-[10px] leading-tight">
               <button
                 onClick={() => score(book.id)}
                 disabled={scoring === book.id}
-                className="text-xs text-muted hover:text-ink transition-colors disabled:opacity-50"
+                title={book.scored_at ? "Re-score difficulty" : "Score difficulty"}
+                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors disabled:opacity-50"
               >
-                {scoring === book.id
-                  ? "Scoring…"
-                  : book.scored_at
-                    ? "re-score"
-                    : "Score difficulty"}
+                {scoring === book.id ? "…" : book.scored_at ? "rescore" : "score"}
               </button>
               <button
                 onClick={() => toggle(book.id, "read", !book.read)}
-                className="text-xs text-muted hover:text-ink transition-colors"
+                title={book.read ? "Mark unread" : "Mark read"}
+                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
               >
-                {book.read ? "Mark unread" : "Mark read"}
+                {book.read ? "unread" : "read"}
               </button>
               <button
                 onClick={() => toggle(book.id, "archived", !book.archived)}
-                className="text-xs text-muted hover:text-ink transition-colors"
+                title={book.archived ? "Restore from archive" : "Archive"}
+                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
               >
-                {book.archived ? "Unarchive" : "Archive"}
+                {book.archived ? "restore" : "archive"}
               </button>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/read/?id=${book.id}`}
+                className="block hover:text-accent transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{book.title}</span>
+                  {(book.source === "pdf" || book.source === "epub") && (
+                    <span className="text-xs text-muted border border-border rounded-full px-1.5">
+                      Book
+                    </span>
+                  )}
+                  {book.read && <span className="text-xs text-accent">✓ read</span>}
+                </div>
+                {/* Progress as a percentage of the text, not a page number: pages are
+                    per-device since Epic 24, and current_page no longer moves. */}
+                <div className="text-sm text-muted">
+                  {book.current_offset > 0 && book.total_chars > 0
+                    ? `${Math.min(100, Math.round((book.current_offset / book.total_chars) * 100))}% read`
+                    : "not started"}
+                </div>
+                {(book.topic || book.tags.length > 0) && (
+                  <div className="text-xs text-muted mt-0.5">
+                    {[book.topic, ...book.tags].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+              </Link>
+              <div className="mt-2 flex items-center gap-3 flex-wrap">
+                <ScoreLine book={book} />
+                <GeneralScoreLine book={book} />
+                {book.source_url && (
+                  <a
+                    href={book.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted hover:text-accent transition-colors"
+                    title="Open source"
+                  >
+                    ↗ source
+                  </a>
+                )}
+              </div>
             </div>
           </li>
         ))}
