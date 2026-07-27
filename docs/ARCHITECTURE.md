@@ -70,11 +70,11 @@ CREATE TABLE IF NOT EXISTS books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf | article
-  current_page INTEGER NOT NULL DEFAULT 1,       -- Epic 24: superseded by current_offset, unused by the reader
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  -- Epic 24 (additive migration): reading position as a character offset into the
-  -- book's text — device-independent, unlike a page number, now that each device
-  -- paginates for its own screen. Backfilled once from current_page.
+  -- Epic 24: reading position as a character offset into the book's text —
+  -- device-independent, unlike a page number, now that each device paginates for
+  -- its own screen. Replaced current_page, which was backfilled into it and then
+  -- dropped (db._backfill_current_offset, then ALTER TABLE ... DROP COLUMN).
   current_offset INTEGER NOT NULL DEFAULT 0,
   -- Epic 9 (additive migration): cached difficulty score.
   coverage REAL,                                 -- fraction of lemmas already known; NULL if unscored
@@ -153,13 +153,19 @@ CREATE TABLE IF NOT EXISTS term_back_items (
   korean_def TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- Epic 16: reading-activity log for /stats. One row per page ever read; the
--- PRIMARY KEY + INSERT OR IGNORE dedup means a revisit never double-counts.
-CREATE TABLE IF NOT EXISTS page_reads (
+-- Epic 16 as page_reads, re-keyed by day in Epic 24: reading-activity log for
+-- /stats. One row per book per local day read; PRIMARY KEY + INSERT OR IGNORE
+-- dedup means every later page that day is a no-op. Page numbers became
+-- per-device when pagination moved client-side, so a page key no longer
+-- identified the same text across devices. The pages-read *counts* were dropped
+-- as unhelpful; the table survives because /api/stats derives the streak from
+-- days-with-a-word-saved UNION days-with-reading — without it, a day spent
+-- reading but saving nothing would break the streak. Old history was folded in
+-- (db._migrate_page_reads_to_read_days), not discarded.
+CREATE TABLE IF NOT EXISTS read_days (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  page_no INTEGER NOT NULL,
-  read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (book_id, page_no)
+  day TEXT NOT NULL,
+  PRIMARY KEY (book_id, day)
 );
 -- Epic 11: the subscription roster the fetch job iterates. Epic 14 seeds the full
 -- curated multi-topic roster (db._SEED_FEEDS; see docs/CONTENT_CATALOG.md) and adds
@@ -222,42 +228,35 @@ book has at least one (possibly empty) page. `difficulty.score_text`/`score_gene
 still call this with its 1500-char default, as a fixed page-size-independent reference
 (see the Epic 16 DECISIONS.md entry).
 
-`split_pages_by_rows(text, max_rows=22, chars_per_row=32)` (2026-07-24, ad hoc, not a
-numbered epic — see DECISIONS.md): what the reader actually uses now, via
-`routes/books.insert_book` and `routes/settings.repaginate_all`. Same break-point set and
-"never split mid-sentence" contract as `split_pages`, but the budget is `estimate_rows(s,
-chars_per_row)` — every `\n` forces a row, and each line between newlines wraps every
-`chars_per_row` characters — instead of a raw char count. This replaced the char budget
-because newline-dense text (subtitles, dialogue) and single-paragraph prose looked wildly
-different on screen at the same char count; row estimation makes them comparable.
-`chars_per_row` is a settings-editable wrap-width estimate the user tunes to their own
-device. Implementation note: unlike the char-based `split_pages`, which rescans the full
-breakpoint list per page, `split_pages_by_rows` walks the sorted breakpoint list with a
-single forward cursor (`bisect` to seed it, then advanced page by page) so total work stays
-linear in the number of breakpoints across the whole call — relevant for repaginating a
-very long (1000+ page) book on a settings change.
+**Reader pagination is client-side (Epic 24, 2026-07-27).** Between 2026-07-24 and
+Epic 24 the reader used `split_pages_by_rows`/`estimate_rows`, which budgeted pages by
+*estimated visual rows* using a global `chars_per_row`. That could not be made correct:
+the server cannot know a device's viewport, so the estimate was wrong on every screen
+and wrong by *different factors* — the same page rendered 11 lines on web and 14 on a
+phone, and page length also wandered between pages, since the estimate is only wrong for
+long lines. All of it (`split_pages_by_rows`, `estimate_rows`, `settings.page_rows`,
+`settings.chars_per_row`, `settings.repaginate_all`, `books.current_page`) was deleted in
+Epic 24 stage 2.
 
-**Superseded by Epic 24 (2026-07-27) for reading.** `split_pages_by_rows` still chunks
-text at import time, but the reader no longer displays those chunks: server-side row
-estimation cannot know a device's viewport, so one global `chars_per_row` was wrong on
-every screen and wrong by *different factors* (the same page rendered 11 lines on web and
-14 on a phone). The `pages` table is now purely a **storage substrate** — contiguous,
-lossless slices that `routes/books._book_text` rejoins — and pagination happens in the
-browser via CSS multi-column (`height: Nlh; column-width: <viewport>px; column-fill: auto`),
-which breaks after exactly N *rendered* lines on any device. `snap_back`/`snap_forward`
-(Epic 24) give the text endpoint its sentence-aligned window boundaries. `page_rows`,
-`chars_per_row`, `estimate_rows`, `split_pages_by_rows` and `repaginate_all` are scheduled
-for deletion in the Epic 24 stage-2 cleanup.
+Today: `pages` is purely a **storage substrate** — contiguous, lossless slices, chunked
+by plain `split_pages`, rejoined by `routes/books._book_text`. The reader fetches
+character windows from `GET /api/books/{id}/text` (bounds sentence-aligned by
+`snap_back`/`snap_forward`) and the *browser* paginates them with CSS multi-column
+(`column-width: <viewport>px; column-fill: auto`, on a container whose height is N
+measured line-heights), which breaks after exactly N *rendered* lines on any device.
+Lines-per-page is a per-device `localStorage` value (`web/lib/reader-lines.ts`), and
+reading position is a character offset (`books.current_offset`), so devices share a
+position without sharing a pagination.
 
 ## API contract (all under `/api`, JSON)
 
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` — **implemented (Epic 0)** |
-| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_page,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds,feed_id,discard_reason}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18), `feed_id`/`discard_reason` (Epic 19) |
+| GET `/api/books` | `?topic=&archived=&source=&status=` | `[{id,title,source,current_offset,total_chars,page_count,created,coverage,new_per_page,scored_at,topic,tags,source_url,source_ref,fetched,archived,read,status,general_coverage,general_level,word_count,duration_seconds,feed_id,discard_reason}]` — `source`/`status` filters **implemented (Epic 15)**, `status` defaults to `"library"` when omitted; `topic`/`archived` (Epic 11), base shape (Epic 2), score fields (Epic 9, general fields Epic 15), `word_count`/`duration_seconds` (Epic 18), `feed_id`/`discard_reason` (Epic 19) |
 | POST `/api/books` | `{title, text, source?, topic?, tags?, source_url?, source_ref?, fetched?, status?}` | created book (splits pages); 409 on duplicate `source_ref` — **implemented (Epic 2, extended Epic 11, Epic 15)**. `feed_id` is set only by `routes/feeds.py`'s internal `insert_book()` call, not exposed on this request body — manual imports/paste always leave it NULL |
-| GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` — **implemented (Epic 2)** |
-| PATCH `/api/books/{id}` | `{current_page?, current_offset?, title?, topic?, tags?, archived?, read?, status?}` (`current_offset` = Epic 24 reading position, `ge=0`) | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
+| GET `/api/books/{id}` | – | `{id,title,current_offset,total_chars,page_count}` — **implemented (Epic 2)**; `current_offset`/`total_chars` Epic 24 |
+| PATCH `/api/books/{id}` | `{current_offset?, title?, topic?, tags?, archived?, read?, status?}` (`current_offset` = Epic 24 reading position, `ge=0`; replaced `current_page`) | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)**; no longer used by the reader as of Epic 24, kept for scoring/tests |
 | GET `/api/books/{id}/text?offset=&window=` | – | `{offset, total_chars, content, tokens, terms}` — the reader's own source of text as of **Epic 24**. A character-addressed slice; both ends snap **outward** to a sentence/newline boundary, so `offset` in the response may precede the one requested. Token offsets are relative to `content` (absolute = `offset + token.s`). `window` defaults to 20k chars and is capped at 50k. Stamps `last_opened` (moved here from the pages endpoint) |
@@ -268,8 +267,8 @@ for deletion in the Epic 24 stage-2 cleanup.
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call) — **implemented (Epic 3, examples Epic 21)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend, page_rows, chars_per_row, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7; `page_size` Epic 16, replaced by `page_rows`/`chars_per_row` 2026-07-24; `candidate_retention_days`/`last_fetch_attempt` Epic 17)** |
-| PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge; changing `page_rows` or `chars_per_row` re-paginates the library — **implemented (Epic 7; `page_size` Epic 16, replaced by `page_rows`/`chars_per_row` 2026-07-24; `candidate_retention_days` Epic 17)** |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. Retired keys are deleted from the `settings` table by the migration, since stored rows merge *over* DEFAULTS and would otherwise resurface |
+| PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge. No setting re-paginates anything as of Epic 24 — `repaginate_all` is gone — so this is a plain write — **implemented (Epic 7; `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
 | POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
@@ -282,7 +281,7 @@ for deletion in the Epic 24 stage-2 cleanup.
 | DELETE `/api/feeds/{id}` | – | 204 — **implemented (Epic 14)** |
 | POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded', discard_reason='expired'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17, `discard_reason` Epic 19)**. Every created candidate is also stamped with its `feed_id` (Epic 19) |
 | POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
-| GET `/api/stats` | – | `{totals, streak, activity:[{date,words,pages}], new_words_per_book:[{book_id,title,new_words,pages_read}], vocab_depth:{buckets,beginner_pct,total_a}, curation:{by_topic:[{topic,promoted,user_discarded,expired,pending}], by_feed:[{feed_id,feed_name,promoted,user_discarded,expired,pending}]}}` — **implemented (Epic 16, `curation` Epic 19)**. `curation` is computed only over `books` rows with `feed_id IS NOT NULL` (feed-fetched content); manual imports/paste are outside its scope by construction |
+| GET `/api/stats` | – | `{totals, streak, activity:[{date,words,read}], new_words_per_book:[{book_id,title,new_words,days_read}], vocab_depth:{buckets,beginner_pct,total_a}, curation:{by_topic:[{topic,promoted,user_discarded,expired,pending}], by_feed:[{feed_id,feed_name,promoted,user_discarded,expired,pending}]}}` — **implemented (Epic 16, `curation` Epic 19)**. `curation` is computed only over `books` rows with `feed_id IS NOT NULL` (feed-fetched content); manual imports/paste are outside its scope by construction |
 
 **Epic 7 status:** `server/routes/settings.py` stores each top-level settings key
 as its own row in the `settings` (key/value) table, JSON-encoded in the `value`
@@ -657,15 +656,19 @@ no-op for the static export, ignored with a warning; only takes effect under `ne
 dev`, where FastAPI must be separately running on 8002).
 
 Routes:
-- `/` — **implemented (Epic 4).** Book list (title, progress
-  `current_page/page_count`), "Add book" modal: title + paste-textarea or `.txt`
+- `/` — **implemented (Epic 4).** Book list (title, progress as a percentage of
+  `current_offset/total_chars` — Epic 24; page numbers are per-device now), a
+  per-card action column (score / read / archive, moved off the card body in
+  Epic 24 follow-up so Archive isn't hit by accident), a mobile-only hamburger
+  for the nav links, "Add book" modal: title + paste-textarea or `.txt`
   upload → `POST /api/books`. `app/page.tsx`, both the list and the modal in one
   file (single small component, no separate `components/` dir yet).
 - `/read/?id=<bookId>` — **implemented (Epic 4 rendering, Epic 5 tooltip flow).**
   `app/read/page.tsx`. Renders `content` as spans using `tokens` offsets; only
   tokens whose lemma is in `terms` with status `learning` get a highlight
-  (`bg-amber-200/70 dark:bg-amber-300/25`). Page prev/next `PATCH`es
-  `current_page` (best-effort — a failed PATCH doesn't block navigation).
+  (`bg-amber-200/70 dark:bg-amber-300/25`). Prev/next moves one CSS column and
+  `PATCH`es `current_offset` (best-effort — a failed PATCH doesn't block
+  navigation); the footer shows a percentage, not a page number (Epic 24).
   **Not `/read/[bookId]` as SPEC literally names it** — see "Deviations" below.
 
   **Tap/selection handling (Epic 5):** one delegated `onClick` on the `<article>`

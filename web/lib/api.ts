@@ -4,7 +4,6 @@ export type Book = {
   id: number;
   title: string;
   source: string;
-  current_page: number;
   current_offset: number;
   page_count: number;
   total_chars: number;
@@ -75,8 +74,8 @@ export type Feed = {
 export type BookDetail = {
   id: number;
   title: string;
-  current_page: number;
   current_offset: number;
+  total_chars: number;
   page_count: number;
 };
 
@@ -175,21 +174,21 @@ export type Settings = {
   decks: string[];
   default_deck: string;
   translator_backend: "deepl" | "claude";
-  page_rows: number;
-  chars_per_row: number;
   candidate_retention_days: number;
   // System-managed (stamped by POST /api/feeds/fetch) — read-only in the UI, see
   // SettingsPut on the backend, which deliberately has no field for this.
   last_fetch_attempt: string | null;
 };
 
-export type StatsActivity = { date: string; words: number; pages: number };
+// `read` = how many books were read that day (Epic 24 — was a page count, which
+// stopped being comparable once each device paginates for its own screen).
+export type StatsActivity = { date: string; words: number; read: number };
 
 export type StatsBookRow = {
   book_id: number;
   title: string;
   new_words: number;
-  pages_read: number;
+  days_read: number;
 };
 
 export type CurationCounts = {
@@ -209,7 +208,7 @@ export type Stats = {
     words_total: number;
     books_finished: number;
     words_week: number;
-    pages_week: number;
+    days_read_week: number;
   };
   streak: { current: number; longest: number };
   activity: StatsActivity[];
@@ -309,7 +308,6 @@ export const api = {
   patchBook: (
     id: number,
     body: {
-      current_page?: number;
       current_offset?: number;
       title?: string;
       topic?: string;
@@ -437,9 +435,10 @@ export const api = {
 
   getStats: () => request<Stats>("/stats"),
 
-  markPageRead: (bookId: number, pageNo: number) =>
+  // Logs "this book was read today" — once per book per day, deduped server-side.
+  markRead: (bookId: number) =>
     request<{ counted: boolean }>("/reads", {
       method: "POST",
-      body: JSON.stringify({ book_id: bookId, page_no: pageNo }),
+      body: JSON.stringify({ book_id: bookId }),
     }),
 };

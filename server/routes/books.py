@@ -13,9 +13,8 @@ from ..difficulty import (
     score_general_difficulty,
     score_text,
 )
-from ..paging import snap_back, snap_forward, split_pages_by_rows
+from ..paging import snap_back, snap_forward, split_pages
 from ..tokenizer import tokenize
-from .settings import get_chars_per_row, get_page_rows
 from .terms import _back_items_for, _forms_for
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -43,8 +42,7 @@ class BookCreate(BaseModel):
 
 
 class BookPatch(BaseModel):
-    current_page: int | None = None
-    # Epic 24: the reader's real position. ge=0 only — the upper bound is the book's
+    # Epic 24: the reader's position. ge=0 only — the upper bound is the book's
     # length, which the client already respects and which a stale write can't usefully
     # exceed (the text endpoint clamps anything past the end).
     current_offset: int | None = Field(default=None, ge=0)
@@ -63,9 +61,8 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
     page_count = conn.execute(
         "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
     ).fetchone()[0]
-    # Epic 24: the denominator for reading progress. current_page stopped moving when
-    # the reader switched to character offsets, so the Library reports
-    # current_offset/total_chars as a percentage instead of a page number.
+    # Epic 24: the denominator for reading progress — the Library reports
+    # current_offset/total_chars as a percentage, page numbers being per-device now.
     total_chars = conn.execute(
         "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM pages WHERE book_id = ?",
         (book_id,),
@@ -74,7 +71,6 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         "id": row["id"],
         "title": row["title"],
         "source": row["source"],
-        "current_page": row["current_page"],
         "current_offset": row["current_offset"],
         "page_count": page_count,
         "total_chars": total_chars,
@@ -167,7 +163,10 @@ def insert_book(
     except sqlite3.IntegrityError:
         raise DuplicateSourceRef(source_ref)
     book_id = cur.lastrowid
-    pages = split_pages_by_rows(text, get_page_rows(conn), get_chars_per_row(conn))
+    # Epic 24: `pages` is a storage substrate, not a display unit — the reader
+    # paginates client-side and reads whole character windows via /text. So the
+    # split is just the plain 1500-char, never-mid-sentence chunking.
+    pages = split_pages(text)
     conn.executemany(
         "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
         [(book_id, i + 1, page) for i, page in enumerate(pages)],
@@ -294,8 +293,8 @@ def get_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db))
     return {
         "id": book["id"],
         "title": book["title"],
-        "current_page": book["current_page"],
         "current_offset": book["current_offset"],
+        "total_chars": book["total_chars"],
         "page_count": book["page_count"],
     }
 

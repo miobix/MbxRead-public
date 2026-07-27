@@ -69,19 +69,19 @@ def test_books_finished_counts_read_library_books(client):
 def test_activity_and_streak_from_today(client):
     book_id = client.post("/api/books", json={"title": "A", "text": STORY}).json()["id"]
     client.post("/api/terms", json={"lemma": "가다", "translation": "go"})
-    client.post("/api/reads", json={"book_id": book_id, "page_no": 1})
+    client.post("/api/reads", json={"book_id": book_id})
     body = client.get("/api/stats").json()
     assert body["streak"]["current"] == 1
     assert len(body["activity"]) == 1
     assert body["activity"][0]["words"] == 1
-    assert body["activity"][0]["pages"] == 1
+    assert body["activity"][0]["read"] == 1
     assert body["totals"]["words_week"] == 1
-    assert body["totals"]["pages_week"] == 1
+    assert body["totals"]["days_read_week"] == 1
 
 
 def test_new_words_per_book_uses_provenance(client):
     book_id = client.post("/api/books", json={"title": "Origin", "text": STORY}).json()["id"]
-    client.post("/api/reads", json={"book_id": book_id, "page_no": 1})
+    client.post("/api/reads", json={"book_id": book_id})
     client.post(
         "/api/terms",
         json={"lemma": "가다", "translation": "go", "source_book_id": book_id, "source_page": 1},
@@ -97,7 +97,7 @@ def test_new_words_per_book_uses_provenance(client):
     assert len(rows) == 1
     assert rows[0]["book_id"] == book_id
     assert rows[0]["new_words"] == 2
-    assert rows[0]["pages_read"] == 1
+    assert rows[0]["days_read"] == 1
 
 
 def test_vocab_depth_buckets_and_beginner_pct(client, db_path):

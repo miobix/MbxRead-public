@@ -23,7 +23,7 @@ def test_schema_creates_on_temp_db(tmp_path):
         "settings",
         "feeds",
         "vocab_levels",
-        "page_reads",
+        "read_days",
     } <= tables
 
 
