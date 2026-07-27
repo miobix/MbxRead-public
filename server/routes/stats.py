@@ -4,7 +4,8 @@ One aggregate blob for the stats screen. All day-buckets are in LOCAL time
 (`date(..., 'localtime')`) — the server runs on the user's own PC, so server-local
 is user-local — which is what makes "today" and the streak line up with the wall
 clock. Activity feeding the streak/heatmap is the UNION of two signals: days a word
-was saved (`terms.created`) and days a page was first read (`page_reads.read_at`).
+was saved (`terms.created`) and days something was read (`read_days.day`, Epic 24 —
+formerly `page_reads.read_at`, re-keyed by day when page numbers became per-device).
 """
 import sqlite3
 from datetime import date, timedelta
@@ -124,28 +125,30 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
             "SELECT date(created, 'localtime') d, COUNT(*) c FROM terms GROUP BY d"
         )
     }
-    pages_by_day: dict[str, int] = {
+    # Epic 24: one row per book per day read, replacing the per-page log. The count
+    # is therefore "books read that day", not "pages" — page counts stopped being
+    # comparable once each device paginates for its own screen.
+    read_by_day: dict[str, int] = {
         row["d"]: row["c"]
-        for row in conn.execute(
-            "SELECT date(read_at, 'localtime') d, COUNT(*) c FROM page_reads GROUP BY d"
-        )
+        for row in conn.execute("SELECT day d, COUNT(*) c FROM read_days GROUP BY d")
     }
 
     today = date.today()
     cutoff = today - timedelta(days=ACTIVITY_WINDOW_DAYS)
-    all_day_keys = set(words_by_day) | set(pages_by_day)
+    all_day_keys = set(words_by_day) | set(read_by_day)
     activity = [
-        {"date": d, "words": words_by_day.get(d, 0), "pages": pages_by_day.get(d, 0)}
+        {"date": d, "words": words_by_day.get(d, 0), "read": read_by_day.get(d, 0)}
         for d in sorted(all_day_keys)
         if d and date.fromisoformat(d) >= cutoff
     ]
 
+    # The streak counts a day active if a word was saved *or* something was read.
     active_days = {date.fromisoformat(d) for d in all_day_keys if d}
     streak = _streak(active_days, today)
 
     week_start = (today - timedelta(days=6)).isoformat()
     words_week = sum(a["words"] for a in activity if a["date"] >= week_start)
-    pages_week = sum(a["pages"] for a in activity if a["date"] >= week_start)
+    days_read_week = sum(1 for a in activity if a["date"] >= week_start and a["read"])
 
     # --- new words per book (needs term provenance), in reading order ---
     new_words_per_book = [
@@ -153,11 +156,11 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
             "book_id": row["id"],
             "title": row["title"],
             "new_words": row["new_words"],
-            "pages_read": row["pages_read"],
+            "days_read": row["days_read"],
         }
         for row in conn.execute(
             "SELECT b.id, b.title, COUNT(t.id) new_words, "
-            "  (SELECT COUNT(*) FROM page_reads pr WHERE pr.book_id = b.id) pages_read "
+            "  (SELECT COUNT(*) FROM read_days rd WHERE rd.book_id = b.id) days_read "
             "FROM books b JOIN terms t ON t.source_book_id = b.id "
             "GROUP BY b.id ORDER BY b.created, b.id"
         )
@@ -183,7 +186,7 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
             "words_total": words_learning + words_known,
             "books_finished": books_finished,
             "words_week": words_week,
-            "pages_week": pages_week,
+            "days_read_week": days_read_week,
         },
         "streak": streak,
         "activity": activity,

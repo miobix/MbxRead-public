@@ -1,7 +1,6 @@
 import sqlite3
 
-from server.paging import split_pages_by_rows
-from server.routes.settings import DEFAULT_CHARS_PER_ROW, DEFAULT_PAGE_ROWS
+from server.paging import split_pages
 
 SHORT_STORY = "그는 옷을 입고 나갔다. 날씨가 정말 좋았다! 학교에 가야 했다."
 LONG_STORY = "문장입니다. " * 300  # well over the default page size
@@ -11,12 +10,10 @@ def test_create_book_splits_into_pages_matching_paging_util(client):
     resp = client.post("/api/books", json={"title": "Long", "text": LONG_STORY})
     assert resp.status_code == 201
     body = resp.json()
-    # Imports split at the configured page rows/chars-per-row, not split_pages_by_rows'
-    # own default.
-    expected_pages = split_pages_by_rows(LONG_STORY, DEFAULT_PAGE_ROWS, DEFAULT_CHARS_PER_ROW)
-    assert body["page_count"] == len(expected_pages)
+    # Epic 24: `pages` is storage only, chunked by the plain 1500-char splitter.
+    assert body["page_count"] == len(split_pages(LONG_STORY))
     assert body["page_count"] > 1
-    assert body["current_page"] == 1
+    assert body["current_offset"] == 0
     assert body["title"] == "Long"
     assert body["source"] == "paste"
 
@@ -113,18 +110,6 @@ def test_get_nonexistent_page_returns_404(client):
     assert client.get(f"/api/books/{book_id}/pages/99").status_code == 404
 
 
-def test_current_page_patch_persists(client):
-    resp = client.post("/api/books", json={"title": "Long", "text": LONG_STORY})
-    book_id = resp.json()["id"]
-
-    patch = client.patch(f"/api/books/{book_id}", json={"current_page": 3})
-    assert patch.status_code == 200
-    assert patch.json()["current_page"] == 3
-
-    fetched = client.get(f"/api/books/{book_id}")
-    assert fetched.json()["current_page"] == 3
-
-
 def test_title_patch_persists(client):
     resp = client.post("/api/books", json={"title": "Old", "text": SHORT_STORY})
     book_id = resp.json()["id"]
@@ -160,7 +145,7 @@ def test_list_books_shape(client):
     assert len(books) == 2
     for book in books:
         assert set(book.keys()) == {
-            "id", "title", "source", "current_page", "current_offset",
+            "id", "title", "source", "current_offset",
             "page_count", "total_chars", "created",
             "coverage", "new_per_page", "scored_at",
             "topic", "tags", "source_url", "source_ref", "fetched", "archived", "read",
@@ -503,11 +488,13 @@ def test_patch_current_offset_round_trips(client):
 
 def test_current_offset_backfills_from_current_page(client, db_path):
     """The one-time Epic 24 migration: an existing DB's page-number positions become
-    character offsets. `client` is only here to build the schema."""
+    character offsets. current_page no longer exists in the schema, so the legacy
+    shape is reconstructed here. `client` is only present to build the schema."""
     from server import db as db_module
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    conn.execute("ALTER TABLE books ADD COLUMN current_page INTEGER NOT NULL DEFAULT 1")
     book_id = conn.execute(
         "INSERT INTO books (title, source, current_page) VALUES ('B', 'paste', 3)"
     ).lastrowid
@@ -525,4 +512,60 @@ def test_current_offset_backfills_from_current_page(client, db_path):
     ).fetchone()["current_offset"]
     # page 3 starts after pages 1 and 2
     assert offset == len("첫째다. ") + len("둘째다. ")
+    conn.close()
+
+
+def test_apply_migrations_drops_current_page_and_is_idempotent(client, db_path):
+    """A database still carrying current_page loses it, and re-running the migration
+    over an already-migrated database is a no-op rather than an error."""
+    from server import db as db_module
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("ALTER TABLE books ADD COLUMN current_page INTEGER NOT NULL DEFAULT 1")
+    conn.commit()
+
+    for _ in range(2):
+        db_module._apply_migrations(conn)
+        conn.commit()
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(books)")}
+        assert "current_page" not in columns
+        assert "current_offset" in columns
+    conn.close()
+
+
+def test_page_reads_history_migrates_into_read_days(client, db_path):
+    """Epic 24 stage 2 folds the per-page log into a per-day one. Existing history is
+    preserved — two pages read on the same day collapse to one read_days row, so the
+    streak and heatmap carry over rather than resetting."""
+    from server import db as db_module
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    book_id = conn.execute(
+        "INSERT INTO books (title, source) VALUES ('B', 'paste')"
+    ).lastrowid
+    conn.execute(
+        "CREATE TABLE page_reads ("
+        "  book_id INTEGER NOT NULL, page_no INTEGER NOT NULL,"
+        "  read_at TIMESTAMP, PRIMARY KEY (book_id, page_no))"
+    )
+    conn.executemany(
+        "INSERT INTO page_reads (book_id, page_no, read_at) VALUES (?, ?, ?)",
+        [(book_id, 1, "2026-07-20 09:00:00"), (book_id, 2, "2026-07-20 10:00:00"),
+         (book_id, 3, "2026-07-21 09:00:00")],
+    )
+    conn.commit()
+
+    db_module._migrate_page_reads_to_read_days(conn)
+    conn.commit()
+
+    days = [row["day"] for row in conn.execute(
+        "SELECT day FROM read_days WHERE book_id = ? ORDER BY day", (book_id,)
+    )]
+    assert days == ["2026-07-20", "2026-07-21"]  # two pages on the 20th -> one day
+    tables = {row["name"] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    )}
+    assert "page_reads" not in tables
     conn.close()

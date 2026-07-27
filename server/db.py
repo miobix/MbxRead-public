@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'paste',
-  current_page INTEGER NOT NULL DEFAULT 1,
+  -- Epic 24: reading position as a character offset. Replaced current_page, which
+  -- could not mean the same thing on two devices once each paginates for its own
+  -- screen. Also declared in _ADDED_COLUMNS so pre-Epic-24 databases gain it.
+  current_offset INTEGER NOT NULL DEFAULT 0,
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS pages (
@@ -66,15 +69,17 @@ CREATE TABLE IF NOT EXISTS term_back_items (
   korean_def TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- Epic 16: reading-activity log for the stats screen. One row per page ever read
--- (PRIMARY KEY dedup + INSERT OR IGNORE on write) so revisiting a page — e.g. to
--- re-check a word on a page read yesterday — never double-counts; read_at stamps
--- the first genuine read, which is what the streak/heatmap bucket by.
-CREATE TABLE IF NOT EXISTS page_reads (
+-- Epic 24: reading-activity log, replacing Epic 16's page_reads. One row per book
+-- per local day it was read (PRIMARY KEY dedup + INSERT OR IGNORE on write). The
+-- pages-read *counts* were dropped as unhelpful, but this table has to survive,
+-- because the stats screen derives the streak from days-with-a-word-saved UNION
+-- days-with-reading — drop it entirely and the streak silently becomes words-only,
+-- so a day spent reading without saving a word would break it. Keyed by day rather
+-- than by page because page numbers are per-device now and would not compose.
+CREATE TABLE IF NOT EXISTS read_days (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  page_no INTEGER NOT NULL,
-  read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (book_id, page_no)
+  day TEXT NOT NULL,
+  PRIMARY KEY (book_id, day)
 );
 CREATE TABLE IF NOT EXISTS feeds (
   id INTEGER PRIMARY KEY,
@@ -224,6 +229,26 @@ def _backfill_current_offset(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_page_reads_to_read_days(conn: sqlite3.Connection) -> None:
+    """Epic 24 stage 2: fold the old per-page read log into the per-day one, then
+    drop it. Existing history is preserved rather than discarded — every distinct
+    (book, local day) that had any page read becomes one read_days row, so the
+    streak and heatmap carry straight over."""
+    tables = {
+        row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    if "page_reads" not in tables:
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO read_days (book_id, day) "
+        "SELECT book_id, date(read_at, 'localtime') FROM page_reads "
+        "WHERE read_at IS NOT NULL"
+    )
+    conn.execute("DROP TABLE page_reads")
+
+
 def _apply_migrations(conn: sqlite3.Connection) -> None:
     added: set[tuple[str, str]] = set()
     for table, columns in _ADDED_COLUMNS.items():
@@ -232,10 +257,25 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
                 added.add((table, name))
-    # Only on the upgrade itself — re-running init_db must not clobber a position the
-    # reader has since written directly to current_offset.
-    if ("books", "current_offset") in added:
+
+    book_columns = {row["name"] for row in conn.execute("PRAGMA table_info(books)")}
+    # Order matters for a database upgrading straight from pre-Epic-24: add
+    # current_offset, derive it from current_page, and only then drop current_page.
+    if ("books", "current_offset") in added and "current_page" in book_columns:
         _backfill_current_offset(conn)
+    if "current_page" in book_columns:
+        conn.execute("ALTER TABLE books DROP COLUMN current_page")
+
+    _migrate_page_reads_to_read_days(conn)
+
+    # Settings are stored as rows and merged *over* DEFAULTS, so deleting a key from
+    # DEFAULTS isn't enough — a previously-written row keeps surfacing in GET
+    # /api/settings forever. These three are all retired reader-pagination knobs
+    # (page_size: Epic 16; page_rows/chars_per_row: 2026-07-24, both dropped in
+    # Epic 24 when pagination moved client-side).
+    conn.execute(
+        "DELETE FROM settings WHERE key IN ('page_size', 'page_rows', 'chars_per_row')"
+    )
     # Partial index: NULL source_ref (paste/txt books) never collides, but two
     # imports of the same video id / feed guid do — the dedup guarantee Epic 12's
     # importers and Epic 15's feed fetcher rely on.

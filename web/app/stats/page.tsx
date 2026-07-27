@@ -49,7 +49,11 @@ function HeroRow({ stats }: { stats: Stats }) {
     { label: "Words learned", value: totals.words_total, hint: `${totals.words_known} known` },
     { label: "Day streak", value: streak.current, hint: `best ${streak.longest} 🔥` },
     { label: "Finished", value: totals.books_finished, hint: "" },
-    { label: "This week", value: totals.words_week, hint: `${totals.pages_week} pages` },
+    {
+      label: "This week",
+      value: totals.words_week,
+      hint: `read ${totals.days_read_week} ${totals.days_read_week === 1 ? "day" : "days"}`,
+    },
   ];
   return (
     <section className="grid grid-cols-2 gap-3">
@@ -84,7 +88,7 @@ function intensity(count: number): number {
 
 function Heatmap({ stats }: { stats: Stats }) {
   const weeks = useMemo(() => {
-    const counts = new Map(stats.activity.map((a) => [a.date, a.words + a.pages]));
+    const counts = new Map(stats.activity.map((a) => [a.date, a.words + a.read]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const start = new Date(today.getTime() - 363 * DAY_MS);
@@ -100,7 +104,7 @@ function Heatmap({ stats }: { stats: Stats }) {
     return chunked;
   }, [stats.activity]);
 
-  const activeDays = stats.activity.filter((a) => a.words + a.pages > 0).length;
+  const activeDays = stats.activity.filter((a) => a.words + a.read > 0).length;
 
   return (
     <section className="flex flex-col gap-2">
@@ -193,7 +197,9 @@ function NewWordsPerBook({ stats }: { stats: Stats }) {
             <circle key={r.book_id} cx={x(i)} cy={y(r.new_words)} r={3} fill="var(--color-accent)">
               <title>
                 {r.title}: {r.new_words} new
-                {r.pages_read > 0 ? ` · ${(r.new_words / r.pages_read).toFixed(1)}/pg` : ""}
+                {r.days_read > 0
+                  ? ` · read on ${r.days_read} ${r.days_read === 1 ? "day" : "days"}`
+                  : ""}
               </title>
             </circle>
           ))}

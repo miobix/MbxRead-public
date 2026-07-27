@@ -57,20 +57,7 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **23** — Go-live: cold-start `start.ps1`, Tailscale phone access, Task Scheduler fetch
   job — all verified live
 - [x] **—** — Background tray launcher (ad-hoc)
-- [~] **24** — Client-side reader pagination (**stage 1 shipped, stage 2 pending**)
-
-## Epic 24 — remaining work (stage 2)
-
-Stage 1 shipped the fix: the browser paginates with CSS columns, exactly N rendered lines
-per page, per device. Plan + full rationale in `docs/EPIC_24_CLIENT_PAGINATION.md`; decision
-in `docs/DECISIONS.md`. Still to do:
-
-- Delete the now-dead server-side pagination: `settings.page_rows` / `chars_per_row`,
-  `paging.estimate_rows` / `split_pages_by_rows`, `settings.repaginate_all`,
-  `books.current_page`. (`_insert_book` switches to plain `split_pages` for storage chunking.)
-- Replace `page_reads` with `read_days (book_id, day)`. Drop the pages-read counts — but
-  **not** the table's second consumer: `stats.py` derives `active_days` from
-  `set(words_by_day) | set(pages_by_day)`, so a naive delete makes the streak words-only.
+- [x] **24** — Client-side reader pagination (both stages) + Library nav/card pass
 
 ## Live operational facts
 

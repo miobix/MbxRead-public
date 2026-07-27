@@ -23,15 +23,13 @@ import { extractSentence } from "@/lib/sentence";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
 // A page only counts as "read" once it's been visible this long — filters out
-// flicking past a page, and (with the server's INSERT OR IGNORE) revisits never
-// double-count. See docs/DECISIONS.md.
+// flicking past a page, and (with the server's INSERT OR IGNORE) later pages the
+// same day are a silent no-op. See docs/DECISIONS.md.
 const READ_DWELL_MS = 5000;
 
-// Epic 24: reading position is a character offset (device-independent), but the
-// reading *log* still needs a discrete unit. 1500 chars is the same unit difficulty's
-// new_per_page uses (server/difficulty.py), so "N new words per page" and "N pages
-// read" finally mean the same page — and unlike a rendered page, a bucket is
-// identical on a phone and a laptop.
+// Term provenance (terms.source_page) still wants a discrete unit. 1500 chars is the
+// same unit difficulty's new_per_page uses (server/difficulty.py), and unlike a
+// rendered page it means the same thing on a phone and a laptop.
 const READ_BUCKET_CHARS = 1500;
 const bucketOf = (offset: number) => Math.floor(offset / READ_BUCKET_CHARS) + 1;
 
@@ -188,7 +186,7 @@ function ReadPageContent() {
       if (logged || timer) return;
       timer = setTimeout(() => {
         logged = true;
-        api.markPageRead(bookId, bucketOf(absolute)).catch(() => {
+        api.markRead(bookId).catch(() => {
           // best-effort — a missed read-log ping shouldn't disrupt reading
         });
       }, READ_DWELL_MS);

@@ -903,3 +903,46 @@ refer to the same page, and the bucket is identical on every device.
 `stats.py` builds `active_days` from `set(words_by_day) | set(pages_by_day)`, so deleting the
 table outright would silently make the **streak words-only** — a day spent reading without
 saving a word would break it. `read_days` exists purely to keep that honest.
+
+## 2026-07-27 — Epic 24 (stage 2): the cleanup
+
+Deletes everything stage 1 made dead, and re-keys the reading log. Nothing user-visible
+changes except the two stats labels below.
+
+**Deleted:** `paging.estimate_rows`, `paging.split_pages_by_rows`,
+`settings.repaginate_all`, `settings.get_page_rows`, `settings.get_chars_per_row`, the
+`page_rows` / `chars_per_row` settings, and `books.current_page`. `_insert_book` now chunks
+storage with plain `split_pages`. `PUT /api/settings` no longer re-paginates anything, so
+it's a plain write.
+
+**Two migration details worth remembering:**
+
+1. **Stored settings outlive their defaults.** `_read` returns `{**DEFAULTS, **stored}`, so
+   removing a key from `DEFAULTS` is *not* enough — a row written before the change keeps
+   surfacing in `GET /api/settings` forever. Caught on a dry run against a copy of the live
+   DB, where `page_rows: 12` (written 2026-07-27) was still being served after the code that
+   defined it was gone. The migration now deletes `page_size`, `page_rows` and
+   `chars_per_row` rows outright. Any future settings removal needs the same treatment.
+2. **Ordering in `_apply_migrations` matters** for a DB upgrading straight from pre-Epic-24:
+   add `current_offset`, backfill it *from* `current_page`, and only then drop
+   `current_page`. Guarded so re-running is a no-op (verified by a test that runs it twice).
+
+**`page_reads` → `read_days (book_id, day)`.** The pages-read counts were dropped as
+unhelpful (user's call), but the table could not simply be deleted: `stats.py` builds
+`active_days` from `set(words_by_day) | set(pages_by_day)`, so removing it would have made
+the streak **words-only** — a day spent reading a book you mostly understand, saving
+nothing, would break it. Keyed by day rather than page because page numbers are per-device
+since stage 1 and wouldn't compose across a phone and a laptop.
+
+**Existing history was preserved, not discarded** — the migration folds every distinct
+(book, local day) from `page_reads` into `read_days`, using `date(read_at, 'localtime')`,
+the same bucketing `stats.py` already applied. Verified on a copy of the live DB: streak
+stayed at 2, and all reading positions were untouched.
+
+**Stats field renames** (`/api/stats`): `totals.pages_week` → `totals.days_read_week`,
+`activity[].pages` → `activity[].read` (books read that day), `new_words_per_book[].pages_read`
+→ `.days_read`. The UI's "N pages" hint became "read N days", and the per-book chart tooltip
+dropped its `new_words/pages_read` ratio, which no longer had a meaningful denominator.
+
+**Deliberately kept:** `GET /api/books/{id}/pages/{n}`. Unused by the reader now, but it's a
+coherent read API and the scoring/import tests exercise it.
