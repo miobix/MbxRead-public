@@ -19,8 +19,12 @@ import {
   type TermSummary,
 } from "@/lib/api";
 import { useReaderLines } from "@/lib/reader-lines";
-import { extractSentence } from "@/lib/sentence";
+import { capSelection, extractSentence } from "@/lib/sentence";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
+
+// Below this, a press-and-release is a tap, not a drag, and there's nothing to
+// reconstruct from two points that are the same point.
+const DRAG_MIN_PX = 6;
 
 // A page only counts as "read" once it's been visible this long — filters out
 // flicking past a page, and (with the server's INSERT OR IGNORE) later pages the
@@ -70,6 +74,9 @@ function ReadPageContent() {
   // the columns have been measured — the target column can't be known until the
   // browser has actually laid the text out.
   const pendingOffset = useRef<number | null>(null);
+  // Where a mouse selection started, so the released drag can be turned back into a
+  // character range by hit-testing both ends (see readSelection).
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {
@@ -164,6 +171,23 @@ function ReadPageContent() {
     if (el && width > 0) el.scrollLeft = col * width;
   }, [col, width, win]);
 
+  // Nothing but the line above is allowed to scroll the viewport. It's overflow:hidden,
+  // but that only stops the *user* scrolling it: while a selection drag is in progress
+  // the browser still scrolls it to keep the selection's edge in view, which slides the
+  // columns sideways under the cursor mid-drag — the jitter. Snapping back on every
+  // stray scroll pins the page. (Assigning scrollLeft re-fires `scroll`, but by then
+  // it already equals `want`, so this settles immediately.)
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || width <= 0) return;
+    const pin = () => {
+      const want = col * width;
+      if (el.scrollLeft !== want) el.scrollLeft = want;
+    };
+    el.addEventListener("scroll", pin);
+    return () => el.removeEventListener("scroll", pin);
+  }, [col, width]);
+
   // Pure derivation — no effect, no synced state. Falls back to the window's own
   // start before the first measurement has landed.
   const position = colStarts[col] ?? win?.offset ?? 0;
@@ -233,14 +257,54 @@ function ReadPageContent() {
     }
   };
 
+  /**
+   * What the user actually selected, as text plus where it starts in the content —
+   * or null when this was a plain tap.
+   *
+   * The article is one multi-column flow that's horizontally scrolled to the current
+   * column, and dragging inside it makes Chrome pull the selection's anchor back to
+   * the start of the flow: `getSelection()` then returns everything from the top of
+   * the loaded window down to the phrase. So when a real drag happened, rebuild the
+   * range by hit-testing the press and release points instead. Touch selection
+   * (long-press, then tap to open) has no drag to rebuild from and falls back to the
+   * native string. Either way the result is capped to the last two sentences.
+   */
+  const readSelection = (e: React.MouseEvent<HTMLElement>) => {
+    const down = dragStart.current;
+    dragStart.current = null;
+    if (!win) return null;
+
+    // The browser deciding there's no selection is still authoritative — that's what
+    // keeps a tap on a word a tap on a word.
+    const native = window.getSelection()?.toString().trim();
+    if (!native) return null;
+
+    const article = articleRef.current;
+    const dragged =
+      down && Math.hypot(e.clientX - down.x, e.clientY - down.y) >= DRAG_MIN_PX;
+    if (article && dragged) {
+      const a = caretIndexAt(article, down.x, down.y);
+      const b = caretIndexAt(article, e.clientX, e.clientY);
+      if (a !== null && b !== null && a !== b) {
+        const from = Math.min(a, b);
+        const text = capSelection(win.content.slice(from, Math.max(a, b)));
+        if (text) return { text, index: Math.max(win.content.indexOf(text, from), 0) };
+      }
+    }
+
+    const text = capSelection(native);
+    if (!text) return null;
+    return { text, index: Math.max(win.content.indexOf(text), 0) };
+  };
+
   const handleArticleClick = (e: React.MouseEvent<HTMLElement>) => {
     if (!win) return;
 
-    const selectionText = window.getSelection()?.toString().trim();
-    if (selectionText) {
+    const picked = readSelection(e);
+    if (picked) {
+      const selectionText = picked.text;
       window.getSelection()?.removeAllRanges();
-      const centerIndex = Math.max(win.content.indexOf(selectionText), 0);
-      const sentence = extractSentence(win.content, centerIndex);
+      const sentence = extractSentence(win.content, picked.index);
 
       // A multi-word selection is a phrase — the popover shows a translate-only UI
       // (no dictionary/forms/examples), per the words-vs-phrases distinction.
@@ -378,6 +442,9 @@ function ReadPageContent() {
         {win && (
           <article
             ref={articleRef}
+            onMouseDown={(e) => {
+              dragStart.current = { x: e.clientX, y: e.clientY };
+            }}
             onClick={handleArticleClick}
             className="leading-loose text-lg whitespace-pre-wrap select-text [word-break:keep-all] [overflow-wrap:break-word]"
             style={{
@@ -462,4 +529,42 @@ function renderContent(
   if (cursor < content.length) nodes.push(content.slice(cursor));
 
   return nodes;
+}
+
+/**
+ * Character offset into the window's content at a viewport point, or null if the
+ * point isn't over the article's text.
+ *
+ * `caretPositionFromPoint` is a *visual* hit test, so unlike the browser's own
+ * drag-to-extend logic it lands in the column the user is actually looking at.
+ * Firefox/Chrome ≥128 have the standard method; older WebKit/Blink only have the
+ * deprecated `caretRangeFromPoint`.
+ */
+function caretIndexAt(article: HTMLElement, x: number, y: number): number | null {
+  let node: Node | null = null;
+  let offset = 0;
+
+  if (typeof document.caretPositionFromPoint === "function") {
+    const pos = document.caretPositionFromPoint(x, y);
+    if (!pos) return null;
+    node = pos.offsetNode;
+    offset = pos.offset;
+  } else if (typeof document.caretRangeFromPoint === "function") {
+    const range = document.caretRangeFromPoint(x, y);
+    if (!range) return null;
+    node = range.startContainer;
+    offset = range.startOffset;
+  }
+
+  if (!node || node.nodeType !== Node.TEXT_NODE || !article.contains(node)) return null;
+
+  // renderContent emits the content's text nodes in order and covers every
+  // character exactly once, so summing their lengths up to `node` is the offset.
+  const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+  let total = 0;
+  while (walker.nextNode()) {
+    if (walker.currentNode === node) return total + offset;
+    total += walker.currentNode.textContent?.length ?? 0;
+  }
+  return null;
 }
