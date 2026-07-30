@@ -95,16 +95,23 @@ def _render_examples_field(
     """Epic 22: the reading sentence, then each dict-sourced item's Korean
     definition (its krdict example, if any, glued directly onto the end — no
     separator — at add-time in the popover), labeled to match the Back field, then
-    the free-typed Notes block last, blank-line separated."""
-    lines = [sentence] if sentence else []
-    for label, item in labeled:
-        if item["kind"] == "dict" and item["korean_def"]:
-            lines.append(f"{label} {item['korean_def']}".strip())
+    the free-typed Notes block last. The three blocks (sentence / definitions /
+    notes) are blank-line separated so the captured sentence doesn't crowd the first
+    definition on the Anki card."""
+    definitions = [
+        f"{label} {item['korean_def']}".strip()
+        for label, item in labeled
+        if item["kind"] == "dict" and item["korean_def"]
+    ]
+    blocks = []
+    if sentence:
+        blocks.append([sentence])
+    if definitions:
+        blocks.append(definitions)
     if notes:
-        if lines:
-            lines.append("")
-        lines.append(notes)
-    return "<br>".join(lines)
+        blocks.append([notes])
+    # One <br> between lines within a block, a blank line (<br><br>) between blocks.
+    return "<br><br>".join("<br>".join(block) for block in blocks)
 
 
 def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str]:

@@ -117,7 +117,8 @@ def test_sync_single_dict_sense_has_no_label(client, monkeypatch):
     )
     client.post("/api/anki/sync")
 
-    assert add_calls == [("Korean", "입다", "to wear", "옷을 입다.<br>옷을 몸에 걸치다")]
+    # Blank line between the captured sentence and the definition block.
+    assert add_calls == [("Korean", "입다", "to wear", "옷을 입다.<br><br>옷을 몸에 걸치다")]
 
 
 def test_sync_multi_sense_labels_back_and_examples(client, monkeypatch):
@@ -209,7 +210,7 @@ def test_sync_notes_free_text_appended_after_definitions(client, monkeypatch):
             "Korean",
             "입다",
             "to wear",
-            "옷을 입다.<br>옷을 몸에 걸치다<br><br>freely typed context",
+            "옷을 입다.<br><br>옷을 몸에 걸치다<br><br>freely typed context",
         )
     ]
 
