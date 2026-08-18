@@ -63,6 +63,9 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   stripped for every format, dash-prefixed speaker turns kept on their own lines,
   2 s of silence becomes a paragraph break. Speaker *names* need an SDH/CC track —
   a plain track has none to give.
+- [x] **—** — Library card edit affordance (ad-hoc, 2026-08-18): an `edit` button in the
+  card's action column opens a modal for title / topic / tags. `PATCH /books/{id}` already
+  took all three — the UI was the only gap.
 
 ## Live operational facts
 
