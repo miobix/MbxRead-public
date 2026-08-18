@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Book, type BookSort, type ScoreResult } from "@/lib/api";
+import {
+  api,
+  type Book,
+  type BookSort,
+  type ScoreResult,
+  type SubtitleImportResult,
+} from "@/lib/api";
 import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
 import { SOURCES, TOPICS } from "@/lib/topics";
 
@@ -285,6 +291,11 @@ export default function HomePage() {
                       Book
                     </span>
                   )}
+                  {book.source === "subs" && (
+                    <span className="text-xs text-muted border border-border rounded-full px-1.5">
+                      Subs
+                    </span>
+                  )}
                   {book.read && <span className="text-xs text-accent">✓ read</span>}
                 </div>
                 {/* Progress as a percentage of the text, not a page number: pages are
@@ -343,13 +354,14 @@ export default function HomePage() {
   );
 }
 
-type Mode = "paste" | "youtube" | "pdf" | "epub" | "article";
+type Mode = "paste" | "youtube" | "pdf" | "epub" | "subs" | "article";
 
 const MODES: { key: Mode; label: string }[] = [
   { key: "paste", label: "Paste / .txt" },
   { key: "youtube", label: "YouTube" },
   { key: "pdf", label: "PDF" },
   { key: "epub", label: "EPUB" },
+  { key: "subs", label: "Subtitles" },
   { key: "article", label: "Article URL" },
 ];
 
@@ -371,6 +383,8 @@ function AddBookModal({
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfPages, setPdfPages] = useState("");
   const [epubFile, setEpubFile] = useState<File | null>(null);
+  const [subsFiles, setSubsFiles] = useState<File[]>([]);
+  const [subsResult, setSubsResult] = useState<SubtitleImportResult | null>(null);
   const [topic, setTopic] = useState("");
   const [tags, setTags] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -440,6 +454,35 @@ function AddBookModal({
       return;
     }
 
+    if (mode === "subs") {
+      if (subsFiles.length === 0) {
+        setError("Choose one or more subtitle files first.");
+        return;
+      }
+      setSubmitting(true);
+      setSubsResult(null);
+      try {
+        const result = await api.importSubtitles({
+          files: subsFiles,
+          title: title.trim(),
+          topic,
+          tags,
+        });
+        // Re-dropping a season is expected to be mostly duplicates, so a batch
+        // that wasn't perfectly clean reports per-file rather than closing
+        // silently on a partial result.
+        if (result.skipped.length === 0 && result.failed.length === 0) {
+          onCreated();
+          return;
+        }
+        setSubsResult(result);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Import failed.");
+      }
+      setSubmitting(false);
+      return;
+    }
+
     if (mode === "epub") {
       if (!epubFile) {
         setError("Choose an EPUB file first.");
@@ -487,6 +530,28 @@ function AddBookModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold font-serif">Add to Library</h2>
+
+        {subsResult && (
+          <div className="rounded-lg border border-border bg-paper p-3 text-sm flex flex-col gap-1">
+            <p className="font-medium">
+              Imported {subsResult.imported.length} of{" "}
+              {subsResult.imported.length +
+                subsResult.skipped.length +
+                subsResult.failed.length}
+            </p>
+            {subsResult.skipped.length > 0 && (
+              <p className="text-muted text-xs">
+                {subsResult.skipped.length} already in the Library:{" "}
+                {subsResult.skipped.map((s) => s.filename).join(", ")}
+              </p>
+            )}
+            {subsResult.failed.map((f) => (
+              <p key={f.filename} className="text-danger text-xs">
+                {f.filename}: {f.error}
+              </p>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-1 rounded-lg bg-paper p-1 text-sm">
           {MODES.map((m) => (
@@ -622,9 +687,39 @@ function AddBookModal({
           </>
         )}
 
+        {mode === "subs" && (
+          <>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title (single file only — a batch titles per filename)"
+              className={inputClass}
+            />
+            <label className="text-sm text-muted flex flex-col gap-1">
+              Subtitle files — .srt, .vtt, .smi, .ass, .ttml
+              <input
+                type="file"
+                multiple
+                accept=".srt,.vtt,.webvtt,.smi,.sami,.ass,.ssa,.ttml,.dfxp,.xml"
+                onChange={(e) => {
+                  setSubsFiles(Array.from(e.target.files ?? []));
+                  setSubsResult(null);
+                }}
+                className="text-sm"
+              />
+            </label>
+            {subsFiles.length > 0 && (
+              <p className="text-xs text-muted -mt-1">
+                {subsFiles.length} file{subsFiles.length === 1 ? "" : "s"} selected — one
+                item each, imported in filename order.
+              </p>
+            )}
+          </>
+        )}
+
         {mode !== "paste" && (
           <p className="text-xs text-muted -mt-1">
-            {mode === "pdf" || mode === "epub"
+            {mode === "pdf" || mode === "epub" || mode === "subs"
               ? "Duplicate files (same file re-uploaded) are detected automatically."
               : "Re-importing the same link won't create a duplicate item."}
           </p>
@@ -655,10 +750,12 @@ function AddBookModal({
 
         <div className="flex gap-2 justify-end mt-2">
           <button
-            onClick={onClose}
+            // A partial batch leaves the modal open on its summary, so closing
+            // still has to refresh the Library for whatever did import.
+            onClick={subsResult?.imported.length ? onCreated : onClose}
             className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
           >
-            Cancel
+            {subsResult ? "Close" : "Cancel"}
           </button>
           <button
             onClick={submit}

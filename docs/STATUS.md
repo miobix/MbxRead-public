@@ -13,13 +13,13 @@ this first" is actually realistic. See `docs/README.md` for what each doc is for
 
 Read Korean texts → tap a word → translate (DeepL/krdict) → hand-enrich into a structured
 Anki card → save the term by dictionary form so every inflection highlights → bulk-sync to
-Anki. Content arrives three ways: manual import (paste/txt/YouTube/PDF/EPUB/article) and an
-automated feed roster that fetches candidates into a review Queue. A difficulty scorer
+Anki. Content arrives two ways: manual import (paste/txt/YouTube/PDF/EPUB/subtitle
+files/article) and an automated feed roster that fetches candidates into a review Queue. A difficulty scorer
 (personal coverage + a NIKL-vocab general signal) tells you a text's cost before you commit.
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 236 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 260 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist — all done
@@ -58,6 +58,8 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   job — all verified live
 - [x] **—** — Background tray launcher (ad-hoc)
 - [x] **24** — Client-side reader pagination (both stages) + Library nav/card pass
+- [x] **—** — Subtitle-file import (ad-hoc, 2026-08-18): `.srt/.vtt/.smi/.ass/.ttml`,
+  batch upload for a whole season, source `subs`
 
 ## Live operational facts
 

@@ -946,3 +946,62 @@ dropped its `new_words/pages_read` ratio, which no longer had a meaningful denom
 
 **Deliberately kept:** `GET /api/books/{id}/pages/{n}`. Unused by the reader now, but it's a
 coherent read API and the scoring/import tests exercise it.
+
+## 2026-08-18 — Subtitle import: a format-agnostic file importer, not a Netflix client
+
+**Ask:** import Netflix episodes (BoJack Horseman) as readable Korean text.
+
+**What was built instead:** `POST /api/import/subtitles`, which takes *subtitle files* in
+any of five formats and knows nothing about where they came from. Netflix publishes no
+subtitle export, and the only way to get one out of the player is against their terms — so a
+Netflix-specific client was never on the table. It would also have been the wrong shape even
+if it were: it breaks the first time the player changes, and it only ever serves one source.
+A file importer serves Netflix, Disney+, a DVD rip, a fansub, or a `.smi` from 2009 with the
+same code, which is the same reasoning the PDF and EPUB importers already embody — the app
+takes a file, the user decides where files come from.
+
+**One parser, five formats, via a common `Cue`.** `.srt`, `.vtt`, `.smi`, `.ass/.ssa` and
+`.ttml/.dfxp` all normalize to `Cue(start_ms, end_ms, text)` before a single cleanup path
+runs. This is what makes the format count cheap: the cleanup, the duplicate collapsing, the
+duration and the "did we get any text" check are written once. SRT and WebVTT share a parser
+outright — the dialect differences (index lines, cue identifiers, trailing cue settings,
+`,` vs `.` in timestamps) are all absorbed by one timestamp regex and a "read until blank
+line" loop, so neither dialect needs to be identified.
+
+**Format is sniffed from content, extension only as fallback.** Misnamed subtitle files are
+routine — a `.srt` that is actually WebVTT is common enough to be worth handling, and it
+costs nothing here because they parse identically anyway.
+
+**Encoding is sniffed, and CP949 is in the list.** Korean `.smi` files are overwhelmingly
+CP949, and the failure mode matters: latin-1 would *succeed* and import silent mojibake,
+where a bad decode should either be caught or fail loudly. Order is utf-8-sig → utf-8 →
+cp949 → latin-1.
+
+**A cue's internal line breaks are display wrapping, so they collapse to a space.** Subtitles
+are broken to fit the screen, not the grammar. Keeping those breaks would hand the tokenizer
+and the sentence-aware pager fragments of sentences. Breaks *between* cues are kept — one
+cue per line, matching what `yt_subs.clean_vtt` already produced for YouTube.
+
+**Batch, not one-file-per-request.** The whole point is dropping a season in at once; 24
+sequential round trips would each need their own error handling in the UI. Consequences:
+the route always returns 201 with a per-file `{imported, skipped, failed}` summary, because
+partial success is the *normal* outcome (a re-dropped season is expected to be mostly
+duplicates) and no single status code describes it. Files import in filename order so an
+episode-numbered season lands in the Library in episode order. A malformed file is recorded
+in `failed` and the rest of the batch continues.
+
+**`title` only overrides for a single file.** A batch title would be identical across every
+episode, which is worse than useless in a Library list, so a batch always titles per
+filename — with the trailing language tag (`.ko`, `.kor`, `.ko-KR`) stripped, since it would
+otherwise appear in the title of every single episode ever imported.
+
+**Duration counts every cue, including dropped ones.** Text-less cues (music-note-only,
+stray punctuation) are dropped from the text but still count toward `duration_seconds` — a
+closing music cue is real screen time, and the field describes the episode, not the
+transcript. Caught by a test, having originally been written the other way. Seconds are
+rounded half-up with integer arithmetic rather than `round()`, whose banker's rounding
+reported an 8.5-second file as 8.
+
+**Tests run the real parser, not a mock at the module boundary.** Every other importer is
+mocked there because it does network I/O; subtitle parsing is pure local string work, so
+end-to-end costs nothing offline and is what actually proves the route.
