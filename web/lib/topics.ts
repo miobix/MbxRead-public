@@ -15,4 +15,4 @@ export const FEED_TYPES = ["rss", "youtube", "scraper"] as const;
 
 // Book/candidate source values (server's `books.source` column) — shared by the
 // Library and Queue filters.
-export const SOURCES = ["paste", "txt", "yt", "pdf", "epub", "article"] as const;
+export const SOURCES = ["paste", "txt", "yt", "pdf", "epub", "subs", "article"] as const;

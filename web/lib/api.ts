@@ -30,6 +30,15 @@ export type Book = {
 
 export type BookSort = "recent" | "opened" | "easiest" | "shortest";
 
+// Subtitle import is a batch — a whole season goes in at once — so partial
+// success is the normal outcome and the result is a per-file summary rather
+// than a single Book.
+export type SubtitleImportResult = {
+  imported: Book[];
+  skipped: { filename: string; reason: string }[];
+  failed: { filename: string; error: string }[];
+};
+
 export type ScoreResult = {
   coverage: number | null;
   new_lemmas: number;
@@ -412,6 +421,20 @@ export const api = {
     if (body.topic) fd.set("topic", body.topic);
     if (body.tags) fd.set("tags", body.tags);
     return requestForm<Book>("/import/epub", fd);
+  },
+
+  importSubtitles: (body: {
+    files: File[];
+    title?: string;
+    topic?: string;
+    tags?: string;
+  }) => {
+    const fd = new FormData();
+    for (const file of body.files) fd.append("files", file);
+    if (body.title) fd.set("title", body.title);
+    if (body.topic) fd.set("topic", body.topic);
+    if (body.tags) fd.set("tags", body.tags);
+    return requestForm<SubtitleImportResult>("/import/subtitles", fd);
   },
 
   fetchFeeds: () => request<FeedFetchResult>("/feeds/fetch", { method: "POST" }),

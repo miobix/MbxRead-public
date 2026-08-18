@@ -267,3 +267,94 @@ def test_epub_import_end_to_end_with_real_extractor(client):
     assert body["title"] == "mybook"
     assert body["source"] == "epub"
     assert body["page_count"] >= 1
+
+
+# --------------------------------------------------------------------------- #
+# subtitle import (batch)
+# --------------------------------------------------------------------------- #
+# Unlike the other importers these tests run the *real* parser rather than
+# mocking at the module boundary: subtitle parsing is pure local string work with
+# no network or API key involved, so exercising it end-to-end costs nothing and
+# is what actually proves the route.
+
+_SRT_1 = (
+    b"1\n00:00:01,000 --> 00:00:03,000\n\xec\xb2\xab \xeb\xb2\x88\xec\xa7\xb8.\n\n"
+)
+_SRT_2 = (
+    b"1\n00:00:01,000 --> 00:00:04,000\n\xeb\x91\x90 \xeb\xb2\x88\xec\xa7\xb8.\n\n"
+)
+
+
+def _sub(name: str, data: bytes):
+    return ("files", (name, data, "application/x-subrip"))
+
+
+def test_subtitle_batch_imports_in_filename_order(client):
+    resp = client.post(
+        "/api/import/subtitles",
+        data={"topic": "tv", "tags": "bojack, sitcom"},
+        files=[_sub("Show S01E02.ko.srt", _SRT_2), _sub("Show S01E01.ko.srt", _SRT_1)],
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["skipped"] == [] and body["failed"] == []
+    # Uploaded E02-first, but a season must land in episode order.
+    assert [b["title"] for b in body["imported"]] == ["Show S01E01", "Show S01E02"]
+    assert all(b["source"] == "subs" for b in body["imported"])
+    assert body["imported"][0]["topic"] == "tv"
+    assert body["imported"][0]["tags"] == ["bojack", "sitcom"]
+    # Duration comes from the last cue, so the Library length stat works here too.
+    assert body["imported"][0]["duration_seconds"] == 3
+    assert body["imported"][1]["duration_seconds"] == 4
+
+
+def test_subtitle_batch_skips_already_imported_files(client):
+    first = client.post("/api/import/subtitles", files=[_sub("a.ko.srt", _SRT_1)])
+    assert len(first.json()["imported"]) == 1
+
+    # Re-dropping a season is the normal case: same bytes, different filename.
+    second = client.post(
+        "/api/import/subtitles",
+        files=[_sub("renamed.ko.srt", _SRT_1), _sub("new.ko.srt", _SRT_2)],
+    )
+    body = second.json()
+    assert [s["reason"] for s in body["skipped"]] == ["already imported"]
+    assert [b["title"] for b in body["imported"]] == ["new"]
+    assert len(client.get("/api/books").json()) == 2
+
+
+def test_one_bad_file_does_not_sink_the_batch(client):
+    resp = client.post(
+        "/api/import/subtitles",
+        files=[
+            _sub("good.ko.srt", _SRT_1),
+            # Named .srt, so it is recognised as SRT and fails for having no cues…
+            _sub("empty.ko.srt", b"not a subtitle file"),
+            # …while an unknown extension fails earlier, at format detection.
+            _sub("notes.doc", b"not a subtitle file"),
+        ],
+    )
+
+    body = resp.json()
+    assert [b["title"] for b in body["imported"]] == ["good"]
+    failures = {f["filename"]: f["error"] for f in body["failed"]}
+    assert "No subtitle text found" in failures["empty.ko.srt"]
+    assert "Unrecognised subtitle file" in failures["notes.doc"]
+
+
+def test_title_overrides_only_for_a_single_file(client):
+    single = client.post(
+        "/api/import/subtitles",
+        data={"title": "My Title"},
+        files=[_sub("ignored.ko.srt", _SRT_1)],
+    )
+    assert single.json()["imported"][0]["title"] == "My Title"
+
+    batch = client.post(
+        "/api/import/subtitles",
+        data={"title": "My Title"},
+        files=[_sub("ep one.ko.srt", _SRT_2), _sub("ep two.ko.vtt", b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n\xea\xb7\xb8\xeb\x9e\x98.\n")],
+    )
+    # A batch title would collide across every episode, so filenames win.
+    assert sorted(b["title"] for b in batch.json()["imported"]) == ["ep one", "ep two"]
