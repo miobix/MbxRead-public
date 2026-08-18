@@ -82,6 +82,7 @@ export default function HomePage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [editing, setEditing] = useState<Book | null>(null);
 
   const refresh = () => {
     api
@@ -277,6 +278,13 @@ export default function HomePage() {
               >
                 {book.archived ? "restore" : "archive"}
               </button>
+              <button
+                onClick={() => setEditing(book)}
+                title="Edit title, topic and tags"
+                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
+              >
+                edit
+              </button>
             </div>
 
             <div className="min-w-0 flex-1">
@@ -346,6 +354,17 @@ export default function HomePage() {
           onClose={() => setModalOpen(false)}
           onCreated={() => {
             setModalOpen(false);
+            refresh();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditBookModal
+          book={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             refresh();
           }}
         />
@@ -763,6 +782,118 @@ function AddBookModal({
             className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {submitting ? "Adding…" : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+/** Edit an existing item's details. PATCH /books/{id} accepts more than this
+ *  (archived/read/status), but those already have their own buttons in the card's
+ *  action column — this covers the fields that had no UI at all. Deliberately not
+ *  editable: source/source_ref (the import's identity, used for dedupe) and the
+ *  cached difficulty scores (recomputed by "rescore"). */
+function EditBookModal({
+  book,
+  onClose,
+  onSaved,
+}: {
+  book: Book;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(book.title);
+  const [topic, setTopic] = useState(book.topic);
+  const [tags, setTags] = useState(book.tags.join(", "));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    if (!title.trim()) {
+      setError("Title can't be empty.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patchBook(book.id, {
+        title: title.trim(),
+        topic,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save changes.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold font-serif">Edit details</h2>
+
+        <label className="text-sm text-muted flex flex-col gap-1">
+          Title
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className={`${inputClass} text-ink`}
+          />
+        </label>
+
+        <div className="flex gap-2">
+          <label className="text-sm text-muted flex flex-col gap-1 flex-1">
+            Topic
+            <select
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              className="rounded-lg border border-border bg-transparent px-2 py-2 text-sm text-ink"
+            >
+              <option value="">No topic</option>
+              {TOPICS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-muted flex flex-col gap-1 flex-1">
+            Tags
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="tags, comma, separated"
+              className={`${inputClass} text-ink`}
+            />
+          </label>
+        </div>
+
+        {error && <p className="text-danger text-sm">{error}</p>}
+
+        <div className="flex gap-2 justify-end mt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
