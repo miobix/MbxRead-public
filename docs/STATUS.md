@@ -59,7 +59,10 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **—** — Background tray launcher (ad-hoc)
 - [x] **24** — Client-side reader pagination (both stages) + Library nav/card pass
 - [x] **—** — Subtitle-file import (ad-hoc, 2026-08-18): `.srt/.vtt/.smi/.ass/.ttml`,
-  batch upload for a whole season, source `subs`
+  batch upload for a whole season, source `subs`. Text shaping: SubStation tags
+  stripped for every format, dash-prefixed speaker turns kept on their own lines,
+  2 s of silence becomes a paragraph break. Speaker *names* need an SDH/CC track —
+  a plain track has none to give.
 
 ## Live operational facts
 

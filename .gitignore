@@ -10,3 +10,14 @@ web/out/
 .idea/
 scripts/fetch_feeds.log
 scripts/server.log
+anki_decks/
+
+# Source material dropped in the root for a one-off import — copyrighted, and
+# never part of the repo.
+*.srt
+*.vtt
+*.smi
+*.ass
+*.ssa
+*.ttml
+*.dfxp
