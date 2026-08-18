@@ -68,6 +68,23 @@ _TAG = re.compile(r"<[^>]+>")
 _BR = re.compile(r"<br\s*/?>", re.I)
 _WORDISH = re.compile(r"[0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ぀-ヿ一-鿿]")
 
+# SubStation override blocks and escapes leak well beyond .ass files: converters
+# routinely dump a {\an8} position tag or a \N hard break straight into the .srt
+# or .vtt they emit, so this belongs in the shared cleanup, not in parse_ass.
+# Only brace groups that really are markup are stripped — an override block
+# always opens with a backslash, and {y:i} is the legacy SSA-inside-SRT spelling
+# — so a brace in actual dialogue survives.
+_OVERRIDE = re.compile(r"\{\s*(?:\\[^{}]*|[yY]\s*:[^{}]*)\}")
+_ESCAPE = re.compile(r"\\[Nnh]")
+
+# The one piece of speaker information a plain subtitle track carries: when two
+# people speak inside a single cue, each of their lines is dash-prefixed. That
+# dash is the only thing distinguishing a real speaker change from ordinary
+# display wrapping, so it opens a new line while every other break folds away.
+# Matched as dash + space, or dash + letter, so a line opening on a negative
+# number is left alone.
+_SPEAKER_DASH = re.compile(r"^[-–—](?:\s+(?=\S)|(?=[^\W\d_]))")
+
 
 def _clean_cue_text(raw: str) -> str:
     """Markup out, entities decoded, display line-wrapping undone.
@@ -75,36 +92,75 @@ def _clean_cue_text(raw: str) -> str:
     A cue's own newlines are display wrapping — subtitles are broken to fit the
     screen, not to fit the grammar — so they collapse to a single space and the
     sentence reads as one line, which is what both the tokenizer and the
-    sentence-aware pager want. Line breaks *between* cues are kept by the caller.
+    sentence-aware pager want. The exception is the dash convention above: it
+    marks a genuine speaker change, and folding it away makes one person appear
+    to say both halves. Line breaks *between* cues are kept by the caller.
+
+    May therefore return several lines for a single cue.
     """
-    text = _BR.sub("\n", raw)
+    text = _OVERRIDE.sub("", raw)
+    text = _BR.sub("\n", text)
     text = _TAG.sub("", text)
+    text = _ESCAPE.sub(" ", text)
     text = html.unescape(text)
     text = text.replace("​", "").replace("\xa0", " ")
-    return " ".join(text.split())
+    turns: list[str] = []
+    for line in text.split("\n"):
+        line = " ".join(line.split())
+        if not line:
+            continue
+        if turns and not _SPEAKER_DASH.match(line):
+            turns[-1] += " " + line  # wrapped continuation of the line above
+        else:
+            turns.append(line)
+    return "\n".join(turns)
+
+
+_SCENE_GAP_MS = 2000
 
 
 def _assemble(cues: list[Cue]) -> tuple[str, int | None]:
-    """Cleaned cues -> (text, duration_seconds), one cue per line.
+    """Cleaned cues -> (text, duration_seconds), one line per spoken turn.
 
     Drops cues carrying no actual word characters (music-note-only cues, stray
     punctuation) and collapses consecutive identical lines, which is how
     "rolling" subtitles that repeat a line across several cues would otherwise
     show up.
+
+    Silence longer than ``_SCENE_GAP_MS`` becomes a blank line. A subtitle file
+    is otherwise an undifferentiated wall of one-line utterances, and the timings
+    already say where the scenes are: inside a conversation cues follow each
+    other within a tenth of a second, so a two-second hole is a cut, a location
+    change, or the end of a beat. The reader renders the blank line as a
+    paragraph break (`whitespace-pre-wrap`), which is the whole point.
     """
     lines: list[str] = []
     end_ms = 0
+    spoke_until: int | None = None  # end of the last cue that produced text
     for cue in cues:
         # Every cue counts toward the runtime, including the ones whose text is
         # dropped below — a closing music cue is still screen time, and duration
         # is meant to describe the episode, not the transcript.
         end_ms = max(end_ms, cue.end_ms or cue.start_ms)
-        text = _clean_cue_text(cue.text)
-        if not text or not _WORDISH.search(text):
+        # A cue can clean to more than one line — two speakers sharing a cue.
+        texts = [
+            t
+            for t in _clean_cue_text(cue.text).split("\n")
+            if t and _WORDISH.search(t)
+        ]
+        if not texts:
             continue
-        if lines and lines[-1] == text:
-            continue
-        lines.append(text)
+        # Measured from the last cue that actually said something, so silence
+        # counts the same whether the file leaves a hole in the timeline (SRT,
+        # VTT) or fills it with a text-less clear cue (SAMI, where every cue runs
+        # up against the next one and a hole is impossible).
+        if lines and spoke_until is not None and cue.start_ms - spoke_until >= _SCENE_GAP_MS:
+            lines.append("")
+        for text in texts:
+            if lines and lines[-1] == text:
+                continue
+            lines.append(text)
+        spoke_until = max(cue.end_ms or cue.start_ms, spoke_until or 0)
     # Integer half-up, not round(): round() is banker's, so a 8.5s file would
     # report 8 seconds.
     return "\n".join(lines), ((end_ms + 500) // 1000 if end_ms else None)
@@ -218,8 +274,10 @@ def parse_ass(text: str) -> list[Cue]:
         parts = line.split(":", 1)[1].split(",", field_count - 1)
         if len(parts) <= max(start_i, end_i, text_i):
             continue
+        # Broader than the shared `_OVERRIDE` on purpose: inside a Dialogue line
+        # any {...} is markup, including the {comment} form that carries no
+        # backslash. The \N/\h escapes are handled by the shared cleanup.
         body = _ASS_OVERRIDE.sub("", parts[text_i])
-        body = re.sub(r"\\[Nnh]", " ", body)
         cues.append(Cue(_ass_ts_to_ms(parts[start_i]), _ass_ts_to_ms(parts[end_i]), body))
     return cues
 

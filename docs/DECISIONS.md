@@ -1005,3 +1005,72 @@ reported an 8.5-second file as 8.
 **Tests run the real parser, not a mock at the module boundary.** Every other importer is
 mocked there because it does network I/O; subtitle parsing is pure local string work, so
 end-to-end costs nothing offline and is what actually proves the route.
+
+## 2026-08-18 — SubStation tag stripping is shared cleanup, not an `.ass` concern
+
+The first real subtitle import (a Netflix-sourced `.srt`) came in with `{\an8}` position
+tags on 28 lines. The parser stripped `{...}` only inside `parse_ass`, on the assumption
+that SubStation markup arrives in SubStation files — but converters routinely emit `.srt`
+and `.vtt` carrying the tags they failed to translate, and that is the common case, not an
+exotic one.
+
+So `{\...}` blocks, the legacy `{y:i}` spelling, and the `\N` / `\n` / `\h` escapes are now
+removed in `_clean_cue_text`, which every format goes through. The shared pattern only
+strips brace groups that are *demonstrably* markup — an override block always opens with a
+backslash — so a brace in real dialogue survives; `parse_ass` keeps its broader "any `{...}`
+is markup" rule, which is true inside a Dialogue line and lets it drop `{comment}` blocks
+too.
+
+The one already-imported episode was repaired in place with the same regexes rather than
+re-imported: re-importing would have collided with its own `source_ref` digest, and the book
+was unread (`current_offset` 0), so rewriting the two affected pages shifted nothing.
+
+## 2026-08-18 — Subtitle text: recover the structure the file *does* carry
+
+Reading the first imported episode raised the obvious complaint: a subtitle track is an
+undifferentiated wall of one-line utterances with no indication of who is speaking. Surveying
+the real file (a Netflix `.srt` rip, 519 cues) settled what is actually available:
+
+**Speaker names are simply not in a plain track, and that is normal.** SubRip and SAMI have
+no speaker field at all; ASS/SSA has a Name column that fansubs sometimes fill and rips leave
+empty; WebVTT has a real `<v Speaker>` voice tag and TTML has `ttm:agent`, both of which
+streaming services author around rather than with. The one place names reliably appear is an
+SDH/CC track, where the Korean convention is a parenthetical `(이름)` before the line — a
+different file to download, not something a parser can recover. This file had zero of any of
+them: no italics, no font tags, no parentheses, no music notes.
+
+*Correction, same day:* the sentence above originally asserted that a Korean SDH track carries
+`(이름)` speaker labels. That was written from recollection, not checked, and the user could
+not source such a track. What holds is the definition — SDH exists precisely to identify
+speakers and sound cues — not the claim that a Korean one is available for a given title.
+Korean SDH is authored far less consistently than English SDH. Treat the parenthetical form
+as unverified until an actual file confirms it.
+
+**What it did carry, and we were destroying: the dash convention.** When two people speak
+inside one cue, each line is dash-prefixed. Cue-internal newlines were being collapsed to a
+space wholesale — correct for display wrapping, which is the reason the rule exists — so
+`- 안녕하세요` / `- 반가워요` arrived as one line reading as a single person saying both. 63 of
+this episode's lines were affected. A dash now opens a new line; every other break still
+folds. Matched as dash + space or dash + letter, so `-5도` on a wrapped line stays put.
+
+**Silence is structure, so a gap becomes a paragraph break.** The timings were being used
+only for the duration stat, but they say where the scenes are: within a conversation cues
+follow each other in under a tenth of a second (this file's median gap is 84 ms), while the
+tail is real — 31 gaps over 2 s in 25 minutes. Two seconds of silence now emits a blank line,
+which the reader already renders as a paragraph (`whitespace-pre-wrap`). The gap is measured
+from the last cue that *produced text*, not the last cue, so it works identically whether the
+file leaves a hole in its timeline (SRT/VTT) or fills it with a text-less clear cue (SAMI,
+where every cue runs up against the next and a hole is impossible).
+
+Two existing fixtures straddled the 2 s threshold and started emitting a paragraph break.
+Their timings were nudged rather than their expectations rewritten: those tests are about
+CP949 decoding and TTML tick times, and paragraphing now has its own two tests.
+
+**`{\an8}` stays stripped rather than becoming a marker.** It is tempting to read
+top-positioning as "on-screen text, not dialogue", but it only means the line was moved to
+avoid covering something burned into the frame — in this episode it marks a TV interview that
+*is* dialogue. Not a reliable signal, so it remains markup to discard.
+
+The already-imported episode was rebuilt from the source file rather than patched, since both
+changes alter line structure. It was still unread (`current_offset` 0), so no offset remap was
+needed; the rebuilt pages round-trip identically through the `/text` concatenation.
