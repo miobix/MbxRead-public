@@ -195,6 +195,13 @@ export function TokenPopover({
       setError("Lemma can't be empty.");
       return;
     }
+    // hanjaMode is /terms' "Add word" entry point — its whole point is capturing
+    // the hanja spelling, so a blank field here would silently fall back to the
+    // plain two-way Anki model instead of the Hanja one.
+    if (hanjaMode && !hanja.trim()) {
+      setError("Hanja can't be empty — look it up or type it in.");
+      return;
+    }
     setBusy("save");
     setError(null);
     // Only send back_items when there's actually structured content — an empty
@@ -411,9 +418,13 @@ export function TokenPopover({
                     <li key={j}>
                       <button
                         type="button"
-                        onClick={() =>
-                          addDictSense(groupKeyFor(entry.word.trim()), d, entry.examples[0])
-                        }
+                        onClick={() => {
+                          addDictSense(groupKeyFor(entry.word.trim()), d, entry.examples[0]);
+                          // Picking a sense is the homograph disambiguation just as much
+                          // as clicking the headword itself — don't require that extra
+                          // click for the hanja spelling to come along.
+                          if (entry.origin) setHanja(entry.origin);
+                        }}
                         className="text-left text-muted hover:text-ink transition-colors"
                         title="Add this definition to Back"
                       >

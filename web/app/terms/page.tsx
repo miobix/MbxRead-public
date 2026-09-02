@@ -144,7 +144,12 @@ export default function TermsPage() {
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         >
           <option value="">All decks</option>
-          {(settings?.decks ?? []).map((d) => (
+          {/* settings.decks is a plain user-edited list — it doesn't automatically
+              include hanja_deck (a separate setting), so merge it in here too or
+              Epic 25's saves are unfilterable. */}
+          {[...new Set([...(settings?.decks ?? []), settings?.hanja_deck].filter(
+            (d): d is string => !!d
+          ))].map((d) => (
             <option key={d} value={d}>
               {d}
             </option>
