@@ -25,6 +25,10 @@ DEFAULTS = {
     "default_deck": "Korean",
     "translator_backend": "deepl",
     "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
+    # Epic 25: separate deck for on-demand hanja saves, distinct from the user's
+    # existing "Hanja" character-review deck — 한자어 (Sino-Korean vocabulary) is
+    # exactly what this one holds.
+    "hanja_deck": "한자어",
     # Epic 17: system-managed, not user-editable — see SettingsPut below. Stamped by
     # POST /api/feeds/fetch (scheduled or manual) via stamp_last_fetch_attempt().
     "last_fetch_attempt": None,
@@ -36,6 +40,7 @@ class SettingsPut(BaseModel):
     default_deck: str | None = None
     translator_backend: str | None = None
     candidate_retention_days: int | None = Field(default=None, ge=1, le=90)
+    hanja_deck: str | None = None
     # last_fetch_attempt is deliberately NOT a field here — it's stamped internally
     # by the fetch job, never by the user, so a PUT body can't overwrite it (an
     # unknown field in the request body is simply ignored by pydantic).

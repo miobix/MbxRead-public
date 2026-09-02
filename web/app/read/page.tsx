@@ -345,6 +345,7 @@ function ReadPageContent() {
                   forms: exact.forms,
                   examples: exact.examples,
                   back_items: exact.back_items,
+                  hanja: exact.hanja,
                 }
               : null,
           });
@@ -376,6 +377,7 @@ function ReadPageContent() {
       forms: term.forms,
       examples: term.examples,
       back_items: term.back_items,
+      hanja: term.hanja,
     };
     setWin((prev) => {
       if (!prev) return prev;

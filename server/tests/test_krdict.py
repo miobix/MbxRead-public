@@ -9,6 +9,7 @@ SEARCH_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <target_code>12345</target_code>
     <word>기타</word>
     <pos>명사</pos>
+    <origin>其他</origin>
     <sense>
       <definition>현악기의 하나.</definition>
       <translation>
@@ -66,8 +67,24 @@ def test_lookup_attaches_examples_from_view(monkeypatch):
     entry = entries[0]
     assert entry["word"] == "기타"
     assert entry["target_code"] == "12345"
+    assert entry["origin"] == "其他"
     assert entry["definitions"][0]["en_word"] == "guitar"
     assert entry["examples"] == ["기타를 치다", "그는 기타를 잘 친다."]
+
+
+def test_lookup_origin_defaults_empty_when_absent(monkeypatch):
+    monkeypatch.setattr(krdict, "KRDICT_API_KEY", "test-key")
+    no_origin_xml = SEARCH_XML.replace("<origin>其他</origin>", "")
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda url, params=None, timeout=None: _Resp(no_origin_xml)
+        if url == krdict.API_URL
+        else _Resp(VIEW_XML),
+    )
+
+    entries = krdict.lookup("기타")
+    assert entries[0]["origin"] == ""
 
 
 def test_lookup_with_examples_false_skips_view_call(monkeypatch):

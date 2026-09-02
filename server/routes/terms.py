@@ -15,7 +15,7 @@ Status = Literal["learning", "known", "ignored"]
 # JSON column but the value is compared as its stored JSON string, so it fits the
 # same generic dirty check as the plain text columns. `translation` also changes
 # whenever `back_items` (Epic 22) does — see the derived-mirror note on patch_term.
-_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples"}
+_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples", "hanja"}
 
 
 class FormIn(BaseModel):
@@ -49,6 +49,9 @@ class TermCreate(BaseModel):
     # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
     source_book_id: int | None = None
     source_page: int | None = None
+    # Epic 25: hanja spelling for on-demand Sino-Korean word saves. Empty for every
+    # reading-flow term.
+    hanja: str = ""
 
 
 class TermPatch(BaseModel):
@@ -61,6 +64,7 @@ class TermPatch(BaseModel):
     forms: list[FormIn] | None = None
     examples: list[str] | None = None
     back_items: list[BackItemIn] | None = None
+    hanja: str | None = None
 
 
 def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
@@ -165,6 +169,7 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "updated": row["updated"],
         "source_book_id": row["source_book_id"],
         "source_page": row["source_page"],
+        "hanja": row["hanja"],
     }
 
 
@@ -212,7 +217,8 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
     try:
         cur = conn.execute(
             "INSERT INTO terms (lemma, translation, notes, status, deck, sentence, "
-            "examples, source_book_id, source_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "examples, source_book_id, source_page, hanja) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 body.lemma,
                 translation,
@@ -223,6 +229,7 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 json.dumps(_normalize_examples(body.examples)),
                 body.source_book_id,
                 body.source_page,
+                body.hanja.strip(),
             ),
         )
     except sqlite3.IntegrityError:
@@ -270,6 +277,9 @@ def patch_term(
     # handle it (it's in _DIRTY_TRIGGER_FIELDS; the DB stores its JSON string).
     if "examples" in fields:
         fields["examples"] = json.dumps(_normalize_examples(fields["examples"] or []))
+
+    if "hanja" in fields:
+        fields["hanja"] = (fields["hanja"] or "").strip()
 
     if not fields and not forms_provided and not back_items_provided:
         return _term_dict(conn, row)

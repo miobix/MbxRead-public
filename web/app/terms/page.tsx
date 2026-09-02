@@ -21,6 +21,9 @@ export default function TermsPage() {
   // lemma/translation/notes textareas — that gap predated this epic (Epic 20/21
   // never touched /terms either) and the user asked for parity.
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
+  // Epic 25: on-demand hanja saves reuse the same popover, opened target-less
+  // (no existing term, no book/page) with hanjaMode on.
+  const [addingWord, setAddingWord] = useState(false);
 
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<AnkiSyncResult | null>(null);
@@ -77,15 +80,23 @@ export default function TermsPage() {
         ← Library
       </Link>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold font-serif">Terms</h1>
-        <button
-          onClick={sync}
-          disabled={syncing}
-          className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {syncing ? "Syncing…" : "Sync to Anki"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAddingWord(true)}
+            className="rounded-full border border-border px-4 py-2 text-sm font-medium hover:border-accent transition-colors"
+          >
+            Add word
+          </button>
+          <button
+            onClick={sync}
+            disabled={syncing}
+            className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync to Anki"}
+          </button>
+        </div>
       </div>
 
       {syncError && <p className="text-danger text-sm">{syncError}</p>}
@@ -162,7 +173,10 @@ export default function TermsPage() {
             className="rounded-xl border border-border bg-surface shadow-sm p-3 text-sm cursor-pointer hover:border-accent transition-colors"
           >
             <div className="flex items-center justify-between">
-              <span className="font-medium">{term.lemma}</span>
+              <span className="font-medium">
+                {term.lemma}
+                {term.hanja && <span className="text-muted font-normal"> {term.hanja}</span>}
+              </span>
               <span className="text-xs text-muted">
                 {term.status}
                 {term.deck && ` · ${term.deck}`}
@@ -194,6 +208,7 @@ export default function TermsPage() {
               forms: editingTerm.forms,
               examples: editingTerm.examples,
               back_items: editingTerm.back_items,
+              hanja: editingTerm.hanja,
             },
           }}
           bookId={null}
@@ -204,6 +219,27 @@ export default function TermsPage() {
           onClose={() => setEditingTerm(null)}
           onSaved={handleSaved}
           onDeleted={(t) => handleDeleted(t.id)}
+        />
+      )}
+
+      {addingWord && (
+        <TokenPopover
+          target={{
+            surface: "",
+            lemma: "",
+            sentence: "",
+            isPhrase: false,
+            existing: null,
+          }}
+          bookId={null}
+          pageNo={null}
+          decks={settings?.decks ?? []}
+          defaultDeck={settings?.hanja_deck || settings?.default_deck || ""}
+          translatorBackend={settings?.translator_backend}
+          hanjaMode
+          onClose={() => setAddingWord(false)}
+          onSaved={() => refresh()}
+          onDeleted={() => {}}
         />
       )}
     </main>

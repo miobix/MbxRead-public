@@ -14,7 +14,7 @@ VIEW_URL = "https://krdict.korean.go.kr/api/view"
 
 
 def lookup(word: str, max_entries: int = 5, with_examples: bool = True) -> list[dict]:
-    """Returns [{word, pos, target_code, definitions: [{ko, en_word, en_def}],
+    """Returns [{word, pos, origin, target_code, definitions: [{ko, en_word, en_def}],
     examples: [str]}] or [].
 
     Epic 21: `max_entries` raised from 3 → 5 so more derived headwords (승인하다,
@@ -44,6 +44,7 @@ def lookup(word: str, max_entries: int = 5, with_examples: bool = True) -> list[
         entry = {
             "word": item.findtext("word", ""),
             "pos": item.findtext("pos", ""),
+            "origin": item.findtext("origin", ""),
             "target_code": item.findtext("target_code", ""),
             "definitions": [],
             "examples": [],

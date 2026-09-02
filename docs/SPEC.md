@@ -354,6 +354,118 @@ Done 2026-07-24. The user found the popover's translation textarea disorganized 
 
 **Accept:** `pytest` + `npm run build`/`lint` green; a word with 2+ dictionary senses shows numbered/lettered chips in the popover matching what syncs to Anki; a manual entry is independent and orange; a pre-existing (legacy) term still displays and syncs exactly as before.
 
+### Epic 25 — Save-a-word: on-demand hanja term entry (separate deck + note type)
+
+Done (2026-09-02). Scoped 2026-09-02; re-scoped the same day in a planning session with the
+user (the changes below supersede the first draft, which sent these words to the shared
+reading deck with no hanja stored).
+
+**Motivation:** the user's separate Hanja study track (see `hanja/DECISIONS.md`) surfaces
+new Sino-Korean words from their own study material (a character's origin story + sample
+compound words) that they want to save for Anki review. Typing each one manually into
+`/terms` is too slow to bother with, and an automated "generate a deck from every word
+decomposable from studied hanja" approach was explored and deliberately abandoned (see that
+file: the volume compounds unsustainably, and no available signal — krdict grade, hanja
+composition, usage frequency — tracks what actually makes a word *worth* learning). This
+epic is the lightweight middle ground: a fast, on-demand "I found this word, save it" flow,
+driven by typing the 한글 form from memory (recall practice in itself), with krdict's hanja
+spelling shown to pick the right homograph. No level/hanja-grade tracking.
+
+**Decisions from the planning session:**
+
+- **These words go to their own deck**, separate from the reading-flow deck, chosen via a
+  new `hanja_deck` setting.
+- **The hanja spelling is a first-class Anki field** (the user wants to practice *reading*
+  the hanja, so it must not be hidden in notes). New note type, fields
+  `Korean` / `Hanja` / `English` / `KoreanDef`. The last field is deliberately named
+  `KoreanDef`, not `Examples` (user request: its content is the krdict Korean definition;
+  extra example sentences are not the point of this deck).
+- **Card templates are deliberately undecided.** The app creates the note type once with a
+  minimal starter template; the user shapes the cards in Anki desktop later. The
+  create-once `ensure_model` pattern (guard on `modelNames`) guarantees the app never
+  overwrites their template edits.
+- **Entry point: reuse `TokenPopover`** via an "Add word" button on `/terms`. No new
+  dictionary UI: the popover already has an editable lemma input, a Dictionary button, sense
+  chips that build `back_items` in the right shape, and a book-less create path (`/terms`
+  already opens it with `bookId={null}`).
+
+**Scope:**
+
+1. **`translate_svc/krdict.py`** — `lookup()`'s returned entry dict gains an `origin` field
+   (`item.findtext("origin", "")`, the hanja spelling krdict already returns per entry,
+   currently discarded). Purely additive; existing callers are unaffected by the extra key.
+2. **`server/db.py`** — `_ADDED_COLUMNS["terms"]` gains `"hanja": "TEXT NOT NULL DEFAULT
+   ''"` (idempotent PRAGMA-guarded ALTER, same as every prior column).
+3. **`server/routes/terms.py`** — `hanja` accepted on create (`TermIn`) and patch, returned
+   in the term dict, trimmed like other text fields. A hanja change is a dirty trigger like
+   any other card-content change.
+4. **`server/routes/settings.py`** — `DEFAULTS` gains `"hanja_deck": "한자어"`;
+   `SettingsPut` gains `hanja_deck: str | None`. Same merge-over-defaults mechanics as
+   `default_deck`. The default name is deliberate: the user already has a main "Hanja"
+   deck for character reviews, so this deck must not be named anything that collides with
+   it, and 한자어 (the Korean word for Sino-Korean vocabulary) is exactly what it holds.
+   Editable on `/settings`; sync's existing `create_deck` auto-creates it in Anki.
+5. **`server/anki.py`** — `HANJA_MODEL_NAME = "Korean Reader Hanja"`;
+   `ensure_hanja_model()` (create-once, guarded on `modelNames`, fields
+   `["Korean", "Hanja", "English", "KoreanDef"]`, one simple starter template: Front
+   `{{Korean}}<br>{{Hanja}}` — Korean above, Hanja on its own line below, both on the
+   Front since the whole point of the hanja field is to tell homographs (e.g. 제일
+   祭日 vs 第一) apart, so it can't be the thing under test — Back showing English +
+   KoreanDef (confirmed live against the user's Anki during the epic; they shape it
+   further in Anki desktop from there);
+   `add_note_hanja(deck, korean, hanja, english, korean_def) -> int` and
+   `update_note_hanja(note_id, …)`, mirroring the existing two-way-model helpers.
+6. **`server/routes/anki_sync.py`** — best-effort `ensure_hanja_model()` alongside the
+   existing `ensure_model()` call. New-term loop: `row["hanja"]` non-empty →
+   `add_note_hanja(...)`, stamp `anki_model = HANJA_MODEL_NAME`; otherwise unchanged.
+   Dirty-term loop: new branch for `anki_model == HANJA_MODEL_NAME` →
+   `update_note_hanja(...)`. Rendering reuses the existing helpers: Korean =
+   `_render_korean(front_entries)`, English = `_render_english(labeled)`, KoreanDef =
+   `_render_examples_field(sentence, labeled, notes)` (sentence is `''` for these saves;
+   notes ride along as the final block). `korean_def` as captured by the popover may have a
+   krdict example glued on; kept as-is, removable via the chip's ×.
+7. **`web/lib/api.ts`** — `DictEntry` gains `origin: string`; `Term`/`TermSummary` gain
+   `hanja: string`; `Settings` gains `hanja_deck: string`; `createTerm`/`patchTerm`
+   payloads accept `hanja`.
+8. **`web/app/read/TokenPopover.tsx`** — (a) dict-entry list renders `entry.origin` next to
+   the headword and POS (e.g. `제일 第一 명사` vs `제일 祭日 명사` — both are real krdict
+   entries, confirmed during the `hanja/` exploration); this is the homograph
+   disambiguation, and appears in the reading flow too as a display-only bonus. (b) New
+   optional prop (e.g. `hanjaMode?: boolean`). When true, or when editing a term whose
+   `existing.hanja` is set: show an editable Hanja input under the lemma input;
+   `addDictHeadword` on an entry with an origin fills it (overwriting — the click *is* the
+   disambiguation choice), stays hand-editable; `save()` includes `hanja` in the
+   create/patch payload. Reading-flow saves (no `hanjaMode`, no existing hanja) never send
+   it, so the reading deck is untouched.
+9. **`web/app/terms/page.tsx`** — "Add word" button next to "Sync to Anki" → opens
+   `TokenPopover` with `target={{surface: "", lemma: "", sentence: "", isPhrase: false,
+   existing: null}}`, `bookId={null}`, `pageNo={null}`, `hanjaMode`, and `defaultDeck` =
+   `settings.hanja_deck || settings.default_deck`. `onSaved` → the existing `refresh()`
+   (the id-mapping `handleSaved` only covers edits). Minor nicety: show a term's hanja next
+   to its lemma in the list rows when present. `sentence`/`source_book_id`/`source_page`
+   all omitted (`terms` already allows a source-less save).
+10. **`web/app/settings/page.tsx`** — a "Hanja deck" control alongside the existing
+    default-deck one, PUT through the extended `SettingsPut`.
+
+**Tests** (offline/mocked per section 9 conventions):
+
+- `test_krdict.py`: `<origin>` added to `SEARCH_XML`, assert `entry["origin"]` (and `""`
+  when the element is absent).
+- `test_terms.py`: hanja roundtrip on create/patch/GET; patching hanja sets `anki_dirty`.
+- `test_settings.py`: `hanja_deck` default + PUT roundtrip.
+- `test_anki_sync.py`: new term with hanja → `add_note_hanja` called with the four rendered
+  fields and `anki_model` stamped `HANJA_MODEL_NAME`; dirty hanja term →
+  `update_note_hanja`; `ensure_hanja_model` idempotency (mirror the existing
+  `ensure_model` tests); a hanja-less term still routes exactly as today.
+
+**Accept:** `pytest` + `npm run build`/`npm run lint` green; on `/terms`, Add word → typing
+제일 → Dictionary shows the 第一 and 祭日 entries as separate choices with hanja visible;
+picking one fills the Hanja input and clicking Save creates a `terms` row with the right
+lemma/hanja/back_items, no `source_book_id`, deck = the hanja deck; Sync creates a note on
+the `Korean Reader Hanja` type with all four fields populated, in the hanja deck; a
+reading-flow save still syncs to the two-way model exactly as before. Live smoke against
+Anki desktop at the end (the note type lands once, templates then editable in Anki).
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

@@ -1074,3 +1074,18 @@ avoid covering something burned into the frame — in this episode it marks a TV
 The already-imported episode was rebuilt from the source file rather than patched, since both
 changes alter line structure. It was still unread (`current_offset` 0), so no offset remap was
 needed; the rebuilt pages round-trip identically through the `/text` concatenation.
+
+## 2026-09-02 — Epic 25: hanja Front template settled live, against the real note type
+
+The spec left the starter card template as an illustrative placeholder ("Card templates are
+deliberately undecided... the user shapes the cards in Anki desktop later"), with an example
+Front of just `{{Korean}}`. Testing live against the user's actual Anki (they had it open
+mid-session) surfaced the real requirement immediately: the whole point of storing Hanja is
+to tell homographs apart (제일 祭日 "day of ancestral rite" vs 제일 第一 "the most"), so hiding
+it behind a flip defeats the feature — you can't test "what does 제일 mean" without already
+knowing which 제일. Final Front is `{{Korean}}<br>{{Hanja}}` (Hanja on its own line below,
+not inline/parenthesized — user correction after the first attempt), Back is English +
+KoreanDef only. Because `ensure_hanja_model()` is create-once (guarded on `modelNames`), the
+already-created live model had to be patched in place via `updateModelTemplates` — code and
+the user's real Anki were re-verified to match afterward. `docs/SPEC.md` §Epic 25 was updated
+to record this as the actual starter template, not just an example.
