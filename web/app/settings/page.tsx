@@ -131,6 +131,21 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-muted">Hanja deck</h2>
+            <p className="text-xs text-muted">
+              Anki deck for on-demand hanja saves (Terms → Add word), kept separate from
+              your regular reading decks and from your character-review Hanja deck.
+            </p>
+            <input
+              value={settings.hanja_deck}
+              onChange={(e) => setSettings({ ...settings, hanja_deck: e.target.value })}
+              onBlur={() => save(settings)}
+              disabled={saving}
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+            />
+          </section>
+
+          <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium text-muted">Translator backend</h2>
             <select
               value={settings.translator_backend}

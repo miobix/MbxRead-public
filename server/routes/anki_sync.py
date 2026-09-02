@@ -131,6 +131,23 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
     return korean, english, examples
 
 
+def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str]:
+    """Korean/English/KoreanDef for the hanja model. Same building blocks as the
+    two-way model's rendering, but there's no captured sentence to fold in — these
+    are on-demand saves, not reading-flow ones."""
+    front_entries = _front_entries(conn, row["id"], row["lemma"])
+    korean = _render_korean(front_entries)
+    back_items = _back_items_for(conn, row["id"])
+    if not back_items:
+        english = row["translation"]
+        korean_def = row["notes"]
+    else:
+        labeled = _label_items(front_entries, back_items)
+        english = _render_english(labeled)
+        korean_def = _render_examples_field("", labeled, row["notes"])
+    return korean, english, korean_def
+
+
 @router.post("/sync")
 def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     try:
@@ -142,6 +159,10 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     # per-note addNote calls fail and land in `failed`, isolated from the rest.
     try:
         anki.ensure_model()
+    except anki.AnkiError:
+        pass
+    try:
+        anki.ensure_hanja_model()
     except anki.AnkiError:
         pass
 
@@ -165,13 +186,23 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     # New terms → the Epic 21 two-way model (Korean/English/Examples), tagged with
     # the model name so later edits update it in place rather than the legacy path.
     for row in new_terms:
-        korean, english, examples = _render_two_way(conn, row)
         try:
-            note_id = anki.add_note_model(row["deck"] or DEFAULT_DECK, korean, english, examples)
+            if row["hanja"]:
+                korean, english, korean_def = _render_hanja(conn, row)
+                note_id = anki.add_note_hanja(
+                    row["deck"] or DEFAULT_DECK, korean, row["hanja"], english, korean_def
+                )
+                model_name = anki.HANJA_MODEL_NAME
+            else:
+                korean, english, examples = _render_two_way(conn, row)
+                note_id = anki.add_note_model(
+                    row["deck"] or DEFAULT_DECK, korean, english, examples
+                )
+                model_name = anki.MODEL_NAME
             conn.execute(
                 "UPDATE terms SET anki_note_id = ?, anki_model = ?, anki_dirty = 0 "
                 "WHERE id = ?",
-                (note_id, anki.MODEL_NAME, row["id"]),
+                (note_id, model_name, row["id"]),
             )
             added += 1
         except anki.AnkiError as e:
@@ -179,7 +210,12 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
 
     for row in dirty_terms:
         try:
-            if row["anki_model"] == anki.MODEL_NAME:
+            if row["anki_model"] == anki.HANJA_MODEL_NAME:
+                korean, english, korean_def = _render_hanja(conn, row)
+                anki.update_note_hanja(
+                    row["anki_note_id"], korean, row["hanja"], english, korean_def
+                )
+            elif row["anki_model"] == anki.MODEL_NAME:
                 korean, english, examples = _render_two_way(conn, row)
                 anki.update_note_model(row["anki_note_id"], korean, english, examples)
             else:

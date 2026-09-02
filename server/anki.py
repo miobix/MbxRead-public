@@ -115,3 +115,66 @@ def update_note_model(note_id: int, korean: str, english: str, examples: str) ->
             "fields": {"Korean": korean, "English": english, "Examples": examples},
         },
     )
+
+
+# Epic 25: on-demand hanja saves get their own note type — a separate deck from the
+# reading-flow terms, with the hanja spelling as a first-class field (the user wants
+# to practice *reading* the hanja, not have it hidden in notes). Templates are
+# deliberately minimal; the user shapes the cards in Anki desktop afterwards, and
+# ensure_hanja_model()'s create-once guard means the app never overwrites that.
+HANJA_MODEL_NAME = "Korean Reader Hanja"
+
+_HANJA_CARD_TEMPLATES = [
+    {
+        "Name": "Card 1",
+        # Korean + Hanja together on the Front — the whole point of surfacing the
+        # hanja is to tell homographs (e.g. 제일 祭日 vs 第一) apart, so it can't be
+        # the thing under test.
+        "Front": "{{Korean}}<br>{{Hanja}}",
+        "Back": (
+            "{{FrontSide}}<hr id=answer>{{English}}"
+            '{{#KoreanDef}}<div class="examples">{{KoreanDef}}</div>{{/KoreanDef}}'
+        ),
+    }
+]
+
+
+def ensure_hanja_model() -> None:
+    """Create the hanja note type once. Idempotent — guarded on modelNames, so it's
+    a cheap no-op on every sync after the first."""
+    if HANJA_MODEL_NAME in (_invoke("modelNames") or []):
+        return
+    _invoke(
+        "createModel",
+        modelName=HANJA_MODEL_NAME,
+        inOrderFields=["Korean", "Hanja", "English", "KoreanDef"],
+        css=_CARD_CSS,
+        isCloze=False,
+        cardTemplates=_HANJA_CARD_TEMPLATES,
+    )
+
+
+def add_note_hanja(deck: str, korean: str, hanja: str, english: str, korean_def: str) -> int:
+    note = {
+        "deckName": deck,
+        "modelName": HANJA_MODEL_NAME,
+        "fields": {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def},
+        "tags": ["korean-reader"],
+        "options": {"allowDuplicate": False},
+    }
+    return _invoke("addNote", note=note)
+
+
+def update_note_hanja(note_id: int, korean: str, hanja: str, english: str, korean_def: str) -> None:
+    _invoke(
+        "updateNoteFields",
+        note={
+            "id": note_id,
+            "fields": {
+                "Korean": korean,
+                "Hanja": hanja,
+                "English": english,
+                "KoreanDef": korean_def,
+            },
+        },
+    )

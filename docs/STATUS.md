@@ -1,8 +1,8 @@
 # Project status — read this first, update it last
 
 **MbxAndria** (internal repo name: korean-reader). **Live and in daily use since
-2026-07-24.** Every planned epic is done; future work is ad-hoc user requests and polish,
-not a fixed backlog.
+2026-07-24.** All planned epics are done; future work is ad-hoc user requests and polish, not
+a fixed backlog.
 
 This file is **living state**: it describes what is true *now*. When something is finished,
 its detail is *removed* from here — the full narrative of every epic lives in `git log` and
@@ -19,10 +19,10 @@ files/article) and an automated feed roster that fetches candidates into a revie
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 260 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 278 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
-## Epic checklist — all done
+## Epic checklist
 
 Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECISIONS.md`.
 
@@ -66,6 +66,13 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **—** — Library card edit affordance (ad-hoc, 2026-08-18): an `edit` button in the
   card's action column opens a modal for title / topic / tags. `PATCH /books/{id}` already
   took all three — the UI was the only gap.
+- [x] **25** — Save-a-word: on-demand hanja term entry, separate deck + note type
+  (`Korean Reader Hanja`: Korean/Hanja/English/KoreanDef, Hanja on its own line under
+  Korean on the Front — it disambiguates homographs like 제일 祭日 vs 第一, so it can't be
+  the thing under test). Entry point: "Add word" on `/terms` reuses `TokenPopover`. Verified
+  live: krdict origin/homograph display, save, and a real AnkiConnect sync. Grew out of a
+  separate Hanja-study exploration (`hanja/`, not part of the app) that tried and abandoned
+  full deck automation — see `hanja/DECISIONS.md`.
 
 ## Live operational facts
 

@@ -31,6 +31,47 @@ def test_create_term_defaults(client):
     assert body["updated"]
 
 
+def test_create_term_defaults_hanja_empty(client):
+    resp = _create(client)
+    assert resp.json()["hanja"] == ""
+
+
+def test_create_and_patch_round_trip_hanja(client):
+    term_id = _create(client, lemma="제일", hanja=" 第一 ").json()["id"]
+    resp = client.get("/api/terms")
+    assert [t["hanja"] for t in resp.json() if t["id"] == term_id] == ["第一"]
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": " 祭日 "})
+    assert resp.status_code == 200
+    assert resp.json()["hanja"] == "祭日"
+
+
+def test_patch_hanja_after_sync_marks_dirty(client, db_path):
+    term_id = _create(client, hanja="第一").json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": "祭日"})
+    assert resp.status_code == 200
+    assert resp.json()["anki_dirty"] is True
+
+
+def test_patch_same_hanja_after_sync_does_not_mark_dirty(client, db_path):
+    term_id = _create(client, hanja="第一").json()["id"]
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": "第一"})
+    assert resp.status_code == 200
+    assert resp.json()["anki_dirty"] is False
+
+
 def test_create_term_duplicate_lemma_409(client):
     _create(client)
     resp = _create(client, translation="different")

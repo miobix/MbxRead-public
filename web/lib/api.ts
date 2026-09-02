@@ -124,6 +124,7 @@ export type TermSummary = {
   forms: FormEntry[];
   examples: string[];
   back_items: BackItem[];
+  hanja: string;
 };
 
 export type Term = {
@@ -141,6 +142,7 @@ export type Term = {
   anki_dirty: boolean;
   created: string;
   updated: string;
+  hanja: string;
 };
 
 // Epic 24: a character-addressed slice of a book, which the reader paginates itself
@@ -166,6 +168,7 @@ export type Page = {
 export type DictEntry = {
   word: string;
   pos: string;
+  origin: string;
   target_code: string;
   definitions: { ko: string; en_word: string; en_def: string }[];
   examples: string[];
@@ -184,6 +187,7 @@ export type Settings = {
   default_deck: string;
   translator_backend: "deepl" | "claude";
   candidate_retention_days: number;
+  hanja_deck: string;
   // System-managed (stamped by POST /api/feeds/fetch) — read-only in the UI, see
   // SettingsPut on the backend, which deliberately has no field for this.
   last_fetch_attempt: string | null;
@@ -345,6 +349,7 @@ export const api = {
     back_items?: BackItem[];
     source_book_id?: number;
     source_page?: number;
+    hanja?: string;
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
 
   patchTerm: (
@@ -361,6 +366,7 @@ export const api = {
         | "forms"
         | "examples"
         | "back_items"
+        | "hanja"
       >
     >
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

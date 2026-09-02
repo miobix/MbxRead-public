@@ -124,6 +124,9 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # the custom two-way model name for anything synced afterwards.
         "examples": "TEXT NOT NULL DEFAULT '[]'",
         "anki_model": "TEXT",
+        # Epic 25: hanja spelling for on-demand Sino-Korean word saves (separate deck
+        # + note type). Empty for every reading-flow term.
+        "hanja": "TEXT NOT NULL DEFAULT ''",
     },
     "books": {
         "coverage": "REAL",

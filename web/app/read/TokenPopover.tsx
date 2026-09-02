@@ -34,6 +34,7 @@ export function TokenPopover({
   decks,
   defaultDeck,
   translatorBackend,
+  hanjaMode,
   onClose,
   onSaved,
   onDeleted,
@@ -44,6 +45,10 @@ export function TokenPopover({
   decks: string[];
   defaultDeck: string;
   translatorBackend?: string;
+  // Epic 25: on-demand hanja saves (from /terms' "Add word") show an editable
+  // Hanja field and route it into the create/patch payload. Also turns on when
+  // editing a term that already has one, so it stays editable after the fact.
+  hanjaMode?: boolean;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
@@ -53,10 +58,13 @@ export function TokenPopover({
   // affordance all hide, since a multi-word span has no single dictionary lemma or
   // card-worthy forms.
   const isPhrase = target.isPhrase;
-  const deckOptions =
-    target.existing?.deck && !decks.includes(target.existing.deck)
-      ? [...decks, target.existing.deck]
-      : decks;
+  // The select must always include whatever deck the save will actually use —
+  // the term's current deck when editing, and the popover's defaultDeck (e.g.
+  // Epic 25's hanja_deck) when adding new, neither of which is necessarily one
+  // of the user's regular `decks`.
+  const deckOptions = [...new Set([...decks, target.existing?.deck, defaultDeck])].filter(
+    (d): d is string => !!d
+  );
 
   // When a saved word is tapped via one of its extra forms (e.g. 승인서), the token
   // lemma is that form — show the term's real dictionary form (승인) instead.
@@ -65,6 +73,8 @@ export function TokenPopover({
   const [forms, setForms] = useState<FormEntry[]>(target.existing?.forms ?? []);
   const [backItems, setBackItems] = useState<BackItem[]>(target.existing?.back_items ?? []);
   const [notes, setNotes] = useState(target.existing?.notes ?? "");
+  const [hanja, setHanja] = useState(target.existing?.hanja ?? "");
+  const showHanja = hanjaMode || !!target.existing?.hanja;
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [manualFront, setManualFront] = useState("");
   const [manualBack, setManualBack] = useState("");
@@ -112,6 +122,8 @@ export function TokenPopover({
       setForms((prev) => [...prev, { text: group, kind: "dict" }]);
     }
     if (entry.definitions[0]) addDictSense(group, entry.definitions[0], entry.examples[0]);
+    // The click is the homograph disambiguation — overwrite whatever was there.
+    if (entry.origin) setHanja(entry.origin);
   };
 
   const addManualEntry = () => {
@@ -189,6 +201,9 @@ export function TokenPopover({
     // array would otherwise blank out a legacy term's flat translation on any
     // save (e.g. just changing the deck) via the server's derived-mirror rule.
     const backItemsPayload = backItems.length > 0 ? backItems : undefined;
+    // Never send hanja from a plain reading-flow save — only /terms' hanjaMode
+    // (or editing a term that already has one) touches this field.
+    const hanjaPayload = showHanja ? hanja.trim() : undefined;
     try {
       const term = target.existing
         ? await api.patchTerm(target.existing.id, {
@@ -198,6 +213,7 @@ export function TokenPopover({
             notes,
             forms,
             back_items: backItemsPayload,
+            hanja: hanjaPayload,
           })
         : await api.createTerm({
             lemma: trimmedLemma,
@@ -211,6 +227,7 @@ export function TokenPopover({
             // Provenance: record where this word was first saved (Epic 16 stats).
             source_book_id: bookId ?? undefined,
             source_page: pageNo ?? undefined,
+            hanja: hanjaPayload,
           });
       onSaved(term);
       onClose();
@@ -283,6 +300,15 @@ export function TokenPopover({
           placeholder="Dictionary form (lemma)"
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
+
+        {showHanja && (
+          <input
+            value={hanja}
+            onChange={(e) => setHanja(e.target.value)}
+            placeholder="Hanja"
+            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          />
+        )}
 
         <div className="flex gap-3 flex-wrap justify-center">
           <button
@@ -378,6 +404,7 @@ export function TokenPopover({
                 >
                   {entry.word}
                 </button>{" "}
+                {entry.origin && <span className="text-muted">{entry.origin}</span>}{" "}
                 <span className="text-muted">{entry.pos}</span>
                 <ul className="mt-0.5 flex flex-col gap-0.5">
                   {entry.definitions.map((d, j) => (
