@@ -1089,3 +1089,27 @@ KoreanDef only. Because `ensure_hanja_model()` is create-once (guarded on `model
 already-created live model had to be patched in place via `updateModelTemplates` — code and
 the user's real Anki were re-verified to match afterward. `docs/SPEC.md` §Epic 25 was updated
 to record this as the actual starter template, not just an example.
+
+## 2026-09-02 — Epic 25 same-day fix: hanja lost on save, deck filter blind to hanja_deck
+
+First live use of "Add word" surfaced two bugs. `reader.db` showed the smoking gun directly:
+a saved term with `hanja=''` that had synced as a plain `Korean Reader 2-way` note instead of
+`Korean Reader Hanja` — the create-time branch in `routes/anki_sync.py` picks the model on
+`if row["hanja"]:`, so a blank Hanja field doesn't error, it silently downgrades the note
+type. Root cause: `TokenPopover.addDictHeadword` (click the dictionary headword) was the only
+path that copied krdict's `origin` into the Hanja field; clicking one of its definitions
+underneath — the more natural action when you just want a translation — called
+`addDictSense`, which never touched `hanja`. Fixed by also setting `hanja` from `entry.origin`
+on a definition click. Separately, added a save-time guard specific to `hanjaMode` (the "Add
+word" entry point only, not the reading-flow popover): an empty Hanja field now blocks save
+with an inline error, so a word krdict has no `origin` for can't repeat this silently.
+
+Second bug: `/terms`' deck filter dropdown only read `settings.decks` (the plain user-edited
+list, default `["Korean"]"`) — `hanja_deck` is a separate setting and was never merged in, so
+한자어 could never appear as a filter option no matter how many words landed there. Fixed by
+unioning `hanja_deck` into the filter's option set, same as `TokenPopover`'s own `deckOptions`
+already did for the save-target select.
+
+The one stuck term (근본, wrong model) was deleted from the app DB; its stray Anki note was
+left for the user to remove by hand — this app has no note-delete path to Anki, deliberately
+(sync only ever adds/updates).

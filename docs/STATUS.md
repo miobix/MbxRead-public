@@ -72,7 +72,13 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   the thing under test). Entry point: "Add word" on `/terms` reuses `TokenPopover`. Verified
   live: krdict origin/homograph display, save, and a real AnkiConnect sync. Grew out of a
   separate Hanja-study exploration (`hanja/`, not part of the app) that tried and abandoned
-  full deck automation — see `hanja/DECISIONS.md`.
+  full deck automation — see `hanja/DECISIONS.md`. Same-day follow-up (2026-09-02): the
+  `/terms` deck filter didn't include `hanja_deck`, and picking a dictionary *definition*
+  (vs. the headword itself) never captured krdict's `origin` into the Hanja field — both
+  fixed, plus a save-time guard requiring Hanja non-empty from this entry point. The Hanja
+  note type also deliberately ships with only one card direction (Korean+Hanja→English);
+  a reverse card is a manual add in Anki desktop, safe because `ensure_hanja_model()` never
+  touches an existing model.
 
 ## Live operational facts
 
