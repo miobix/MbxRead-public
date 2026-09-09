@@ -73,6 +73,38 @@ def test_term_back_items_table_created_idempotently(tmp_path):
     assert cols == {"id", "term_id", "group_key", "kind", "text", "korean_def"}
 
 
+def test_hanja_backfill_converts_epic25_values_and_regroups_back_items(tmp_path):
+    """Epic 26: the single-spelling column becomes a JSON sense list, and each
+    converted term's lemma-group chips move under that spelling — where the new
+    renderer looks for a sense's meanings."""
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO terms (id, lemma, hanja) VALUES (1, '제일', '第一'), (2, '입다', '')"
+    )
+    conn.execute(
+        "INSERT INTO term_back_items (term_id, group_key, kind, text, korean_def) "
+        "VALUES (1, '', 'dict', 'the most', '가장'), (1, '별개', 'manual', 'aside', '')"
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_db(db_path)
+    db.init_db(db_path)  # a second pass must not re-wrap the JSON it just wrote
+
+    conn = sqlite3.connect(db_path)
+    hanja = dict(conn.execute("SELECT id, hanja FROM terms"))
+    groups = sorted(
+        row[0] for row in conn.execute("SELECT group_key FROM term_back_items WHERE term_id = 1")
+    )
+    conn.close()
+
+    assert hanja == {1: '["第一"]', 2: "[]"}
+    assert groups == sorted(["第一", "별개"])
+
+
 def test_init_db_is_idempotent(tmp_path):
     db_path = tmp_path / "test.db"
     db.init_db(db_path)

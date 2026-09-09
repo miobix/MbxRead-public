@@ -33,41 +33,72 @@ def test_create_term_defaults(client):
 
 def test_create_term_defaults_hanja_empty(client):
     resp = _create(client)
-    assert resp.json()["hanja"] == ""
+    assert resp.json()["hanja"] == []
 
 
 def test_create_and_patch_round_trip_hanja(client):
-    term_id = _create(client, lemma="제일", hanja=" 第一 ").json()["id"]
+    term_id = _create(client, lemma="제일", hanja=[" 第一 "]).json()["id"]
     resp = client.get("/api/terms")
-    assert [t["hanja"] for t in resp.json() if t["id"] == term_id] == ["第一"]
+    assert [t["hanja"] for t in resp.json() if t["id"] == term_id] == [["第一"]]
 
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": " 祭日 "})
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": [" 祭日 "]})
     assert resp.status_code == 200
-    assert resp.json()["hanja"] == "祭日"
+    assert resp.json()["hanja"] == ["祭日"]
+
+
+def test_hanja_list_keeps_order_and_drops_blanks_and_dupes(client):
+    """Epic 26: one lemma, several senses (시장 = 市場 market + 市長 mayor)."""
+    resp = _create(client, lemma="시장", hanja=["市場", " ", "市長", "市場"])
+    assert resp.json()["hanja"] == ["市場", "市長"]
+
+
+def test_append_a_hanja_sense_to_an_existing_term(client):
+    term_id = _create(client, lemma="시장", hanja=["市場"]).json()["id"]
+    resp = client.patch(
+        f"/api/terms/{term_id}",
+        json={
+            "hanja": ["市場", "市長"],
+            "back_items": [_back("市場", "dict", "market"), _back("市長", "dict", "mayor")],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["hanja"] == ["市場", "市長"]
+    assert resp.json()["translation"] == "market; mayor"
+
+
+def test_get_term_by_lemma(client):
+    term_id = _create(client, lemma="시장", hanja=["市場"]).json()["id"]
+    resp = client.get("/api/terms/by-lemma", params={"lemma": " 시장 "})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == term_id
+
+
+def test_get_term_by_lemma_404_when_unsaved(client):
+    assert client.get("/api/terms/by-lemma", params={"lemma": "시장"}).status_code == 404
 
 
 def test_patch_hanja_after_sync_marks_dirty(client, db_path):
-    term_id = _create(client, hanja="第一").json()["id"]
+    term_id = _create(client, hanja=["第一"]).json()["id"]
 
     conn = sqlite3.connect(db_path)
     conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
     conn.commit()
     conn.close()
 
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": "祭日"})
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": ["祭日"]})
     assert resp.status_code == 200
     assert resp.json()["anki_dirty"] is True
 
 
 def test_patch_same_hanja_after_sync_does_not_mark_dirty(client, db_path):
-    term_id = _create(client, hanja="第一").json()["id"]
+    term_id = _create(client, hanja=["第一"]).json()["id"]
 
     conn = sqlite3.connect(db_path)
     conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
     conn.commit()
     conn.close()
 
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": "第一"})
+    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": ["第一"]})
     assert resp.status_code == 200
     assert resp.json()["anki_dirty"] is False
 

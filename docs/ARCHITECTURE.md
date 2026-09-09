@@ -126,7 +126,8 @@ CREATE TABLE IF NOT EXISTS terms (
   source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
   source_page INTEGER,                           -- Epic 16: page it was first saved from
   examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence, shown on the Anki card back only
-  anki_model TEXT                                -- Epic 21: NULL/'Basic' = legacy note, else the custom two-way model name
+  anki_model TEXT,                               -- Epic 21: NULL/'Basic' = legacy note, else the custom two-way model name
+  hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25, list since Epic 26: JSON list of hanja spellings, one per sense (시장 = 市場 + 市長); '[]' = a plain reading-flow term
 );
 -- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
 -- Highlights in the reader (matched alongside the lemma in get_page) and renders on the
@@ -142,6 +143,8 @@ CREATE TABLE IF NOT EXISTS term_forms (
 -- Epic 22: the popover's structured Front/Back card builder — one row per Back chip.
 -- `group_key` '' = the lemma's own group, else a term_forms.form value — a stable id,
 -- not a live join on lemma text, so editing the lemma never orphans its back items.
+-- Epic 26: on a hanja term the group is instead the hanja spelling of the sense the
+-- chip belongs to, which is what pairs each meaning with its spelling on the card.
 -- `korean_def` (kind='dict' only) is krdict's Korean definition with any example
 -- glued directly onto the end (no separator); feeds the Anki `Examples` field only.
 CREATE TABLE IF NOT EXISTS term_back_items (
@@ -261,8 +264,9 @@ position without sharing a pagination.
 | GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)**; no longer used by the reader as of Epic 24, kept for scoring/tests |
 | GET `/api/books/{id}/text?offset=&window=` | – | `{offset, total_chars, content, tokens, terms}` — the reader's own source of text as of **Epic 24**. A character-addressed slice; both ends snap **outward** to a sentence/newline boundary, so `offset` in the response may precede the one requested. Token offsets are relative to `content` (absolute = `offset + token.s`). `window` defaults to 20k chars and is capped at 50k. Stamps `last_opened` (moved here from the pages endpoint) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists); `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists — since Epic 26 the popover answers that by offering to append onto the existing term rather than surfacing the error); `hanja` (Epic 25, a list since Epic 26) = one spelling per sense; `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
 | PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3, back_items Epic 22)** |
+| GET `/api/terms/by-lemma` | `?lemma=` | the term with exactly that lemma, or 404 — the "is this word already saved?" check behind Epic 26's append-instead-of-409 flow (the list endpoint's `q` is a LIKE across three columns and can't answer it) — **implemented (Epic 26)** |
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call) — **implemented (Epic 3, examples Epic 21)** |

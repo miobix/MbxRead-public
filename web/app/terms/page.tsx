@@ -180,7 +180,9 @@ export default function TermsPage() {
             <div className="flex items-center justify-between">
               <span className="font-medium">
                 {term.lemma}
-                {term.hanja && <span className="text-muted font-normal"> {term.hanja}</span>}
+                {term.hanja.length > 0 && (
+                  <span className="text-muted font-normal"> {term.hanja.join(" · ")}</span>
+                )}
               </span>
               <span className="text-xs text-muted">
                 {term.status}

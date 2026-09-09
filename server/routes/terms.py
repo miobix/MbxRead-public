@@ -49,9 +49,10 @@ class TermCreate(BaseModel):
     # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
     source_book_id: int | None = None
     source_page: int | None = None
-    # Epic 25: hanja spelling for on-demand Sino-Korean word saves. Empty for every
-    # reading-flow term.
-    hanja: str = ""
+    # Epic 25/26: hanja spellings for on-demand Sino-Korean word saves, one per
+    # sense (시장 = 市場 market + 市長 mayor), ordered. Empty for every reading-flow
+    # term. Each sense's meanings are the back_items whose `group` is that spelling.
+    hanja: list[str] = []
 
 
 class TermPatch(BaseModel):
@@ -64,7 +65,7 @@ class TermPatch(BaseModel):
     forms: list[FormIn] | None = None
     examples: list[str] | None = None
     back_items: list[BackItemIn] | None = None
-    hanja: str | None = None
+    hanja: list[str] | None = None
 
 
 def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
@@ -87,6 +88,27 @@ def _normalize_examples(examples: list[str]) -> list[str]:
         if ex:
             seen.setdefault(ex, None)
     return list(seen)
+
+
+def _normalize_hanja(hanja: list[str]) -> list[str]:
+    """Trim, drop blanks, and dedupe while keeping order — the sense list."""
+    seen: dict[str, None] = {}
+    for raw in hanja:
+        text = raw.strip()
+        if text:
+            seen.setdefault(text, None)
+    return list(seen)
+
+
+def hanja_list(value: str | None) -> list[str]:
+    """Parse the stored column. Tolerates a pre-Epic-26 bare spelling and a NULL so
+    a caller never has to care whether _backfill_hanja_json has run yet."""
+    text = (value or "").strip()
+    if not text:
+        return []
+    if not text.startswith("["):
+        return [text]
+    return json.loads(text)
 
 
 def _normalize_back_items(items: list[dict]) -> list[dict]:
@@ -169,7 +191,7 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "updated": row["updated"],
         "source_book_id": row["source_book_id"],
         "source_page": row["source_page"],
-        "hanja": row["hanja"],
+        "hanja": hanja_list(row["hanja"]),
     }
 
 
@@ -205,6 +227,17 @@ def list_terms(
     return [_term_dict(conn, row) for row in rows]
 
 
+@router.get("/by-lemma")
+def get_term_by_lemma(lemma: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
+    """Exact-lemma lookup. The list endpoint's `q` is a LIKE across three columns,
+    which can't answer "is this word already saved?" — the question the popover asks
+    before it offers to append a hanja sense to an existing term (Epic 26)."""
+    row = conn.execute("SELECT * FROM terms WHERE lemma = ?", (lemma.strip(),)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="term not found")
+    return _term_dict(conn, row)
+
+
 @router.post("", status_code=201)
 def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
     back_items = _normalize_back_items([it.model_dump() for it in body.back_items])
@@ -229,7 +262,7 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 json.dumps(_normalize_examples(body.examples)),
                 body.source_book_id,
                 body.source_page,
-                body.hanja.strip(),
+                json.dumps(_normalize_hanja(body.hanja), ensure_ascii=False),
             ),
         )
     except sqlite3.IntegrityError:
@@ -278,8 +311,10 @@ def patch_term(
     if "examples" in fields:
         fields["examples"] = json.dumps(_normalize_examples(fields["examples"] or []))
 
+    # Same treatment as `examples`: a real column whose value arrives as a list, so
+    # re-encode it here and the generic UPDATE + dirty check below both just work.
     if "hanja" in fields:
-        fields["hanja"] = (fields["hanja"] or "").strip()
+        fields["hanja"] = json.dumps(_normalize_hanja(fields["hanja"] or []), ensure_ascii=False)
 
     if not fields and not forms_provided and not back_items_provided:
         return _term_dict(conn, row)

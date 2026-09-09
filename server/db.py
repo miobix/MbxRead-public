@@ -1,5 +1,6 @@
 """SQLite connection and schema management for reader.db."""
 import csv
+import json
 import sqlite3
 from pathlib import Path
 from typing import Generator
@@ -125,8 +126,11 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "examples": "TEXT NOT NULL DEFAULT '[]'",
         "anki_model": "TEXT",
         # Epic 25: hanja spelling for on-demand Sino-Korean word saves (separate deck
-        # + note type). Empty for every reading-flow term.
-        "hanja": "TEXT NOT NULL DEFAULT ''",
+        # + note type). Empty for every reading-flow term. Epic 26: a JSON list of
+        # spellings, one per sense (시장 is 市場 *and* 市長), ordered — same
+        # list-in-a-column shape as `examples`. _backfill_hanja_json converts the
+        # Epic 25 single-string values in place.
+        "hanja": "TEXT NOT NULL DEFAULT '[]'",
     },
     "books": {
         "coverage": "REAL",
@@ -232,6 +236,28 @@ def _backfill_current_offset(conn: sqlite3.Connection) -> None:
     )
 
 
+def _backfill_hanja_json(conn: sqlite3.Connection) -> None:
+    """Epic 26: terms.hanja went from one spelling to a JSON list of them. Rewrites
+    the Epic 25 values in place ('' -> [], '第一' -> ["第一"]) and leaves anything
+    already JSON alone, so it is safe to run on every init. Each converted term's
+    Back chips move from the lemma group ('') into that hanja's group, which is
+    where the new renderer looks for a sense's meanings."""
+    rows = conn.execute("SELECT id, hanja FROM terms").fetchall()
+    for row in rows:
+        value = (row["hanja"] or "").strip()
+        if value.startswith("["):
+            continue
+        conn.execute(
+            "UPDATE terms SET hanja = ? WHERE id = ?",
+            (json.dumps([value] if value else [], ensure_ascii=False), row["id"]),
+        )
+        if value:
+            conn.execute(
+                "UPDATE term_back_items SET group_key = ? WHERE term_id = ? AND group_key = ''",
+                (value, row["id"]),
+            )
+
+
 def _migrate_page_reads_to_read_days(conn: sqlite3.Connection) -> None:
     """Epic 24 stage 2: fold the old per-page read log into the per-day one, then
     drop it. Existing history is preserved rather than discarded — every distinct
@@ -270,6 +296,7 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE books DROP COLUMN current_page")
 
     _migrate_page_reads_to_read_days(conn)
+    _backfill_hanja_json(conn)
 
     # Settings are stored as rows and merged *over* DEFAULTS, so deleting a key from
     # DEFAULTS isn't enough — a previously-written row keeps surfacing in GET
