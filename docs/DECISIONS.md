@@ -1113,3 +1113,46 @@ already did for the save-target select.
 The one stuck term (근본, wrong model) was deleted from the app DB; its stray Anki note was
 left for the user to remove by hand — this app has no note-delete path to Anki, deliberately
 (sync only ever adds/updates).
+
+## 2026-09-09 — Epic 26: one lemma, many hanja — why the term row stayed unique
+
+Sino-Korean homographs share a 한글 lemma (시장 = 市場 market *and* 市長 mayor), and Epic 25
+stored exactly one `hanja` string per term against a `UNIQUE` lemma, so the second sense was
+refused with a 409 that the popover rendered as a dead red error.
+
+Two shapes were on the table. **Rejected:** relax the constraint to `UNIQUE(lemma, hanja)`,
+one term row and one Anki note per sense. It reads clean but costs three things — SQLite
+cannot drop a column-level `UNIQUE` (it is an implicit autoindex), so it needs a full table
+rebuild of the live `terms` table; `books._terms_for_lemmas` keys the reader's highlight map
+*by lemma*, so two rows sharing one would need an arbitrary tie-break; and Anki dedups on a
+note type's first field, so a second 시장 note needs `allowDuplicate`, giving up the guard
+that stops real accidental duplicates.
+
+**Chosen:** one row and one note per lemma, holding an ordered list of senses. It sidesteps
+all three, and it means appending a sense to a word that already synced *updates* that note
+instead of adding one, so its SRS scheduling history survives — which matters more here than
+per-sense scheduling, since the two senses of a homograph are exactly the pair you want to
+be tested on together.
+
+Storage followed the `terms.examples` precedent (Epic 21): `hanja` became a JSON list in the
+same column, a value-level backfill (`'第一'` → `["第一"]`), no new table and no rebuild. The
+meanings needed no new structure at all — `term_back_items.group_key` already groups Back
+chips by front entry, so on a hanja term the group *is* the hanja spelling. That let the Anki
+renderer reuse `_label_items` unchanged: the sense list runs through `_render_korean` for the
+Hanja field, and the English labels come out numbered to match (`1. 市場 / 2. 市長` against
+`1. market / 2. mayor`). The one thing generalized was `_front_entries`, whose entries now
+carry their own `group` rather than `_group_key` hardcoding index 0 → `''`.
+
+The migration also moves each converted term's lemma-group chips into its hanja's group, so
+an Epic 25 term arrives in the new shape with its meanings already attached to its sense; a
+chip whose group names no sense is folded into the first sense at render time, so nothing can
+silently drop off a card. Verified on a copy of the live `reader.db`: 38 hanja terms
+converted, chips regrouped, second pass a no-op.
+
+**UX decision (user's framing):** a collision should not be a denial. The popover now asks
+"is this saved?" on the same Enter that fires the dictionary lookup, via a new exact-lemma
+endpoint (`GET /api/terms/by-lemma` — the list endpoint's `q` is a LIKE across three columns
+and cannot answer it), and on a hit folds that term in, banners it, and relabels its primary
+button "Append to <lemma>". The 409 path stays as a fallback for a cold Save and lands in the
+identical state, so both routes end at the same button. Merging is client-side by design: the
+popover already holds both halves, so an append is a plain PATCH and needed no merge endpoint.

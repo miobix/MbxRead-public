@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .. import anki
 from .. import db as db_module
-from .terms import _back_items_for, _forms_for
+from .terms import _back_items_for, _forms_for, hanja_list
 
 router = APIRouter(prefix="/api/anki", tags=["anki"])
 
@@ -38,13 +38,14 @@ def _front_entries(conn: sqlite3.Connection, term_id: int, lemma: str) -> list[d
     (Epic 20), in save order. Each entry's `text` doubles as the group key used to
     look up its term_back_items — except the lemma, whose group key is the ''
     sentinel, so editing the lemma text never orphans its back items (Epic 22)."""
-    return [{"text": lemma, "kind": "lemma"}] + [
-        {"text": f["text"], "kind": f["kind"]} for f in _forms_for(conn, term_id)
+    return [{"text": lemma, "kind": "lemma", "group": ""}] + [
+        {"text": f["text"], "kind": f["kind"], "group": f["text"]}
+        for f in _forms_for(conn, term_id)
     ]
 
 
 def _group_key(front_entries: list[dict], index: int) -> str:
-    return "" if index == 0 else front_entries[index]["text"]
+    return front_entries[index]["group"]
 
 
 def _render_korean(front_entries: list[dict]) -> str:
@@ -131,21 +132,42 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
     return korean, english, examples
 
 
-def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str]:
-    """Korean/English/KoreanDef for the hanja model. Same building blocks as the
+def _sense_entries(senses: list[str]) -> list[dict]:
+    """Epic 26: the hanja card's label axis is the sense list, not the Front stack —
+    each spelling is its own entry, keyed by itself so its Back chips group under it."""
+    return [{"text": h, "kind": "hanja", "group": h} for h in senses]
+
+
+def _regroup_to_senses(back_items: list[dict], senses: list[str]) -> list[dict]:
+    """Fold any chip whose group names no sense (the pre-Epic-26 '' lemma group that
+    escaped the backfill, or a form's group on a hanja term) into the first sense, so
+    a meaning is never silently dropped from the card."""
+    known = set(senses)
+    return [
+        item if item["group"] in known else {**item, "group": senses[0]}
+        for item in back_items
+    ]
+
+
+def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str, str]:
+    """Korean/Hanja/English/KoreanDef for the hanja model. Same building blocks as the
     two-way model's rendering, but there's no captured sentence to fold in — these
-    are on-demand saves, not reading-flow ones."""
-    front_entries = _front_entries(conn, row["id"], row["lemma"])
-    korean = _render_korean(front_entries)
+    are on-demand saves, not reading-flow ones. Epic 26: a word with several hanja
+    senses renders them as a numbered stack in the Hanja field, and the English labels
+    line up with those numbers (one sense still renders bare, as it did in Epic 25)."""
+    korean = _render_korean(_front_entries(conn, row["id"], row["lemma"]))
+    senses = hanja_list(row["hanja"])
+    sense_entries = _sense_entries(senses)
+    hanja = _render_korean(sense_entries)
     back_items = _back_items_for(conn, row["id"])
     if not back_items:
         english = row["translation"]
         korean_def = row["notes"]
     else:
-        labeled = _label_items(front_entries, back_items)
+        labeled = _label_items(sense_entries, _regroup_to_senses(back_items, senses))
         english = _render_english(labeled)
         korean_def = _render_examples_field("", labeled, row["notes"])
-    return korean, english, korean_def
+    return korean, hanja, english, korean_def
 
 
 @router.post("/sync")
@@ -187,10 +209,10 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     # the model name so later edits update it in place rather than the legacy path.
     for row in new_terms:
         try:
-            if row["hanja"]:
-                korean, english, korean_def = _render_hanja(conn, row)
+            if hanja_list(row["hanja"]):
+                korean, hanja, english, korean_def = _render_hanja(conn, row)
                 note_id = anki.add_note_hanja(
-                    row["deck"] or DEFAULT_DECK, korean, row["hanja"], english, korean_def
+                    row["deck"] or DEFAULT_DECK, korean, hanja, english, korean_def
                 )
                 model_name = anki.HANJA_MODEL_NAME
             else:
@@ -211,9 +233,9 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     for row in dirty_terms:
         try:
             if row["anki_model"] == anki.HANJA_MODEL_NAME:
-                korean, english, korean_def = _render_hanja(conn, row)
+                korean, hanja, english, korean_def = _render_hanja(conn, row)
                 anki.update_note_hanja(
-                    row["anki_note_id"], korean, row["hanja"], english, korean_def
+                    row["anki_note_id"], korean, hanja, english, korean_def
                 )
             elif row["anki_model"] == anki.MODEL_NAME:
                 korean, english, examples = _render_two_way(conn, row)

@@ -466,6 +466,91 @@ the `Korean Reader Hanja` type with all four fields populated, in the hanja deck
 reading-flow save still syncs to the two-way model exactly as before. Live smoke against
 Anki desktop at the end (the note type lands once, templates then editable in Anki).
 
+### Epic 26 — Multi-hanja terms: one lemma, N senses, append-on-collision
+
+Scoped 2026-09-09 in a planning session with the user.
+
+**Motivation:** Sino-Korean homographs share a 한글 lemma. 시장 is 市場 (market) *and* 市長
+(mayor); 제일 is 第一 *and* 祭日. Epic 25 stored one `hanja` string per term and `terms.lemma`
+is `UNIQUE`, so the second one was refused outright with a 409 the popover rendered as a
+dead red error. The user wants **one entry per lemma that accumulates hanja senses** (not
+capped at two), and wants the collision to be an *offer to append*, not a denial.
+
+**Decisions from the planning session:**
+
+- **One term row and one Anki note per lemma**, holding an ordered list of hanja senses.
+  Rejected the alternative (relax `UNIQUE(lemma)` to `(lemma, hanja)`, one note per sense):
+  it needs a full SQLite table rebuild to drop an implicit autoindex, forces a tie-break in
+  the reader's lemma→term map (`books._terms_for_lemmas` keys by lemma), and needs
+  `allowDuplicate` on the Anki side because Anki dedupes on the first field. One note per
+  lemma sidesteps all three, and appending a sense to an already-synced word *updates* that
+  note, so its SRS history survives.
+- **`terms.hanja` becomes a JSON list**, following `terms.examples` (Epic 21) rather than
+  introducing a `term_senses` table. Order is the sense order; no table rebuild, just a
+  value-level backfill.
+- **A sense's meanings are its `term_back_items` group.** `group_key` already groups Back
+  chips by front entry (`''` = the lemma, else a form's text); for a hanja term the group
+  key is the hanja spelling. That reuses the whole Epic 22 chip builder and the Anki label
+  renderer instead of building a parallel structure.
+- **Collision is detected before the save**, on the same Enter that fires the dictionary
+  lookup, via a new exact-lemma endpoint. The 409 path stays as a fallback for a cold Save,
+  and lands in the identical append state — so both routes end at the same button.
+- **Preview before, check after.** The popover's Front→Back preview already promises to be
+  a true WYSIWYG of the Anki render; it renders the *merged* card (existing senses + the one
+  being added) before you commit. After saving, `/terms` rows list every sense.
+
+**Scope:**
+
+1. **`server/db.py`** — `_ADDED_COLUMNS["terms"]["hanja"]` default becomes `'[]'` (fresh
+   DBs). New `_backfill_hanja_json`, run from `_apply_migrations`, idempotent and
+   value-level (no table rebuild): `''` → `[]`, `'第一'` → `["第一"]`, anything already
+   JSON left alone. It also moves each migrated term's lemma-group Back chips
+   (`term_back_items.group_key = ''`) into that single hanja's group, so an Epic 25 term
+   comes out in the new shape with its meanings attached to its sense.
+2. **`server/routes/terms.py`** — `hanja: list[str]` on `TermCreate`/`TermPatch` and in the
+   term dict. `_normalize_hanja` trims, drops blanks and dedupes while keeping order (same
+   contract as `_normalize_examples`). Stored as its JSON string, so the existing generic
+   UPDATE and the `_DIRTY_TRIGGER_FIELDS` comparison both keep working unchanged (exactly
+   how `examples` is handled). New `GET /api/terms/by-lemma?lemma=…` → the full term dict
+   or 404, the exact-match lookup the append flow needs (the list endpoint only does LIKE).
+3. **`server/routes/anki_sync.py`** — `_front_entries` entries carry their own `group`, and
+   `_group_key` reads it instead of hardcoding index 0 → `''`; behaviour for the two-way
+   model is identical. `_render_hanja` now returns the Hanja *field* too: the sense list
+   runs through `_render_korean`, so one sense renders bare (Epic 25 behaviour preserved)
+   and several render as a numbered stack. Back chips are grouped by sense, with any chip
+   whose group matches no sense folded into the first (lossless, defensive), then labeled
+   by the existing `_label_items` — so Hanja `1. 市場 / 2. 市長` and English `1. market /
+   2. mayor` always line up. Model routing switches on the parsed list being non-empty.
+4. **`web/lib/api.ts`** — `Term`/`TermSummary.hanja` and the create/patch payloads become
+   `string[]`; new `termByLemma(lemma)` returning `Term | null` (404 → null).
+5. **`web/app/read/TokenPopover.tsx`** — `hanjaList` (senses committed so far) alongside the
+   existing single `hanja` input (the sense being built). In hanja mode a dictionary
+   definition click groups its chip under that entry's `origin`, so picking senses from two
+   homograph entries builds two groups. `lookupDictionary` also checks for an existing term
+   by lemma; a hit seeds the popover from it (senses, chips, forms, notes, deck — merged,
+   never clobbering what's already typed), shows an "already saved" banner listing the
+   existing senses, and relabels the primary button "Append to <lemma>". Save PATCHes the
+   existing id in that state, POSTs otherwise; a 409 from the POST path fetches the term and
+   drops into the same state instead of erroring. The preview renders one row per sense.
+6. **`web/app/terms/page.tsx`** — a row shows every sense (`市場 · 市長`).
+
+**Tests** (offline/mocked per section 9 conventions):
+
+- `test_terms.py`: hanja list roundtrip on create/patch/GET; normalization (blank/dupe/
+  whitespace); dirty-flag on a changed list and no dirty on an identical one; `by-lemma`
+  hit and 404.
+- `test_db.py` (or wherever migrations are covered): a pre-Epic-26 row with `hanja='第一'`
+  backfills to `["第一"]` with its `''`-group back items regrouped under `第一`; `''`
+  backfills to `[]`; running init twice changes nothing.
+- `test_anki_sync.py`: two-sense term → `add_note_hanja` gets the numbered Hanja stack and
+  matching labeled English; one-sense term still renders bare (Epic 25 regression);
+  hanja-less term still routes to the two-way model.
+
+**Accept:** `pytest` + `npm run build`/`npm run lint` green; on `/terms`, Add word → 시장 →
+Enter shows "already saved, 市場 (market)" with an Append button, picking 市長's definition
+adds a second sense, the preview shows both rows, and Append writes one term whose sync
+updates the existing note to the two-numbered-stack card.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

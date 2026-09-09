@@ -73,8 +73,15 @@ export function TokenPopover({
   const [forms, setForms] = useState<FormEntry[]>(target.existing?.forms ?? []);
   const [backItems, setBackItems] = useState<BackItem[]>(target.existing?.back_items ?? []);
   const [notes, setNotes] = useState(target.existing?.notes ?? "");
-  const [hanja, setHanja] = useState(target.existing?.hanja ?? "");
-  const showHanja = hanjaMode || !!target.existing?.hanja;
+  // Epic 26: a hanja term carries an ordered list of senses (시장 = 市場 market +
+  // 市長 mayor). `hanjaList` is the senses committed so far, `hanja` the one being
+  // built in the input; a sense's meanings are the Back chips grouped under it.
+  const [hanjaList, setHanjaList] = useState<string[]>(target.existing?.hanja ?? []);
+  const [hanja, setHanja] = useState("");
+  // An existing term found by lemma while adding a new word — the save turns into
+  // an append onto it rather than a create that the UNIQUE lemma would refuse.
+  const [appendTo, setAppendTo] = useState<Term | null>(null);
+  const showHanja = hanjaMode || hanjaList.length > 0;
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [manualFront, setManualFront] = useState("");
   const [manualBack, setManualBack] = useState("");
@@ -88,6 +95,50 @@ export function TokenPopover({
     (target.existing?.back_items.length ?? 0) === 0 ? target.existing?.translation || "" : "";
 
   const groupKeyFor = (text: string) => (text === lemma.trim() ? LEMMA_GROUP : text);
+
+  // The sense list as it stands: committed senses plus whatever is in the input.
+  const senses = [...new Set([...hanjaList, hanja.trim()].filter(Boolean))];
+  // The term this save will write to: the tapped/edited one, or one found by lemma.
+  const targetTerm: TermSummary | Term | null = target.existing ?? appendTo;
+
+  // In hanja mode a Back chip belongs to a *sense*, not to the lemma or a form —
+  // that grouping is what pairs each meaning with its hanja on the Anki card.
+  const senseGroupFor = (origin: string) => origin.trim() || hanja.trim() || LEMMA_GROUP;
+
+  const addSense = (text: string) => {
+    const value = text.trim();
+    if (!value) return;
+    setHanjaList((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    setHanja(value);
+  };
+
+  const removeSense = (text: string) => {
+    setHanjaList((prev) => prev.filter((h) => h !== text));
+    setBackItems((prev) => prev.filter((b) => b.group !== text));
+    setHanja((prev) => (prev.trim() === text ? "" : prev));
+  };
+
+  // Fold an already-saved term into this popover so the save becomes an append.
+  // Merges rather than replaces: anything already typed here survives.
+  const adoptExisting = (term: Term) => {
+    setAppendTo(term);
+    setHanjaList((prev) => [...new Set([...term.hanja, ...prev])]);
+    setForms((prev) => [
+      ...term.forms,
+      ...prev.filter((f) => !term.forms.some((e) => e.text === f.text)),
+    ]);
+    setBackItems((prev) => [
+      ...term.back_items,
+      ...prev.filter(
+        (b) =>
+          !term.back_items.some(
+            (e) => e.group === b.group && e.kind === b.kind && e.text === b.text
+          )
+      ),
+    ]);
+    setNotes((prev) => prev || term.notes);
+    if (term.deck) setDeck(term.deck);
+  };
 
   const removeForm = (index: number) => {
     const removed = forms[index];
@@ -117,6 +168,14 @@ export function TokenPopover({
   const addDictHeadword = (entry: DictEntry) => {
     const text = entry.word.trim();
     if (!text) return;
+    // On a hanja term the headword is the lemma itself; what this click picks is
+    // which *sense* (which hanja) the definition belongs to.
+    if (showHanja) {
+      const group = senseGroupFor(entry.origin);
+      if (entry.origin) addSense(entry.origin);
+      if (entry.definitions[0]) addDictSense(group, entry.definitions[0], entry.examples[0]);
+      return;
+    }
     const group = groupKeyFor(text);
     if (group !== LEMMA_GROUP && !forms.some((f) => f.text === group)) {
       setForms((prev) => [...prev, { text: group, kind: "dict" }]);
@@ -146,14 +205,14 @@ export function TokenPopover({
     setManualError(null);
   };
 
-  const addPhraseBackText = (text: string) => {
+  const addBackText = (text: string, group: string) => {
     const value = text.trim();
     if (!value) return;
     setBackItems((prev) => {
-      if (prev.some((b) => b.group === LEMMA_GROUP && b.kind === "manual" && b.text === value)) {
+      if (prev.some((b) => b.group === group && b.kind === "manual" && b.text === value)) {
         return prev;
       }
-      return [...prev, { group: LEMMA_GROUP, kind: "manual", text: value, korean_def: "" }];
+      return [...prev, { group, kind: "manual", text: value, korean_def: "" }];
     });
   };
 
@@ -163,11 +222,12 @@ export function TokenPopover({
     setError(null);
     try {
       const { translation: result } = await api.translate(lemma.trim(), translatorBackend);
+      const group = showHanja ? senseGroupFor("") : LEMMA_GROUP;
       setBackItems((prev) => {
-        if (prev.some((b) => b.group === LEMMA_GROUP && b.kind === "translate" && b.text === result)) {
+        if (prev.some((b) => b.group === group && b.kind === "translate" && b.text === result)) {
           return prev;
         }
-        return [...prev, { group: LEMMA_GROUP, kind: "translate", text: result, korean_def: "" }];
+        return [...prev, { group, kind: "translate", text: result, korean_def: "" }];
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Translation failed.");
@@ -181,6 +241,12 @@ export function TokenPopover({
     setBusy("dict");
     setError(null);
     try {
+      // Epic 26: the same keystroke answers "is this word already saved?", so a
+      // homograph shows the append offer before any chips are picked.
+      if (hanjaMode && !targetTerm) {
+        const found = await api.termByLemma(lemma.trim());
+        if (found) adoptExisting(found);
+      }
       setDictEntries(await api.dictLookup(lemma.trim()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dictionary lookup failed.");
@@ -198,7 +264,7 @@ export function TokenPopover({
     // hanjaMode is /terms' "Add word" entry point — its whole point is capturing
     // the hanja spelling, so a blank field here would silently fall back to the
     // plain two-way Anki model instead of the Hanja one.
-    if (hanjaMode && !hanja.trim()) {
+    if (hanjaMode && senses.length === 0) {
       setError("Hanja can't be empty — look it up or type it in.");
       return;
     }
@@ -210,13 +276,15 @@ export function TokenPopover({
     const backItemsPayload = backItems.length > 0 ? backItems : undefined;
     // Never send hanja from a plain reading-flow save — only /terms' hanjaMode
     // (or editing a term that already has one) touches this field.
-    const hanjaPayload = showHanja ? hanja.trim() : undefined;
+    const hanjaPayload = showHanja ? senses : undefined;
     try {
-      const term = target.existing
-        ? await api.patchTerm(target.existing.id, {
+      const term = targetTerm
+        ? await api.patchTerm(targetTerm.id, {
             lemma: trimmedLemma,
             deck,
-            sentence: target.sentence,
+            // Appending from /terms carries no sentence; don't let that blank out
+            // the one an existing reading-flow term already captured.
+            sentence: target.sentence || undefined,
             notes,
             forms,
             back_items: backItemsPayload,
@@ -239,7 +307,16 @@ export function TokenPopover({
       onSaved(term);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save.");
+      // The create path's one expected failure is the UNIQUE lemma (Epic 26): the
+      // word is already saved. Don't dead-end on it — pull that term in and turn
+      // this into the same append offer the lemma lookup would have shown.
+      const clash = targetTerm ? null : await api.termByLemma(trimmedLemma);
+      if (clash) {
+        adoptExisting(clash);
+        setError(`${trimmedLemma} is already saved — press Append to add to it.`);
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to save.");
+      }
       setBusy(null);
     }
   };
@@ -290,6 +367,39 @@ export function TokenPopover({
   const backItemsFor = (group: string) => backItems.filter((b) => b.group === group);
   const backIndexOf = (item: BackItem) => backItems.indexOf(item);
 
+  // The "→ meaning meaning" run of one preview row, shared by the front-entry rows
+  // and Epic 26's per-sense rows.
+  const backRow = (group: string) => {
+    const items = backItemsFor(group);
+    return (
+      <>
+        {items.length > 0 && <span className="text-muted">→</span>}
+        {items.map((item) => {
+          const bi = backIndexOf(item);
+          return (
+            <span
+              key={bi}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+                item.kind,
+                backShade[bi]
+              )}`}
+            >
+              {item.text}
+              <button
+                type="button"
+                onClick={() => removeBackItem(bi)}
+                aria-label={`Remove ${item.text}`}
+                className="opacity-80 hover:opacity-100"
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+      </>
+    );
+  };
+
   return (
     <div
       className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
@@ -304,15 +414,31 @@ export function TokenPopover({
         <input
           value={lemma}
           onChange={(e) => setLemma(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isPhrase && busy === null) {
+              e.preventDefault();
+              lookupDictionary();
+            }
+          }}
+          autoFocus={hanjaMode && !isEditing}
           placeholder="Dictionary form (lemma)"
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
         />
+
+        {appendTo && (
+          <p className="rounded-lg bg-paper border border-border px-3 py-2 text-xs">
+            <b>{appendTo.lemma}</b> is already saved
+            {appendTo.hanja.length > 0 && <> as {appendTo.hanja.join(" · ")}</>}
+            {appendTo.translation && <> ({appendTo.translation})</>}. Saving appends to it.
+          </p>
+        )}
 
         {showHanja && (
           <input
             value={hanja}
             onChange={(e) => setHanja(e.target.value)}
-            placeholder="Hanja"
+            onBlur={(e) => addSense(e.target.value)}
+            placeholder={senses.length > 0 ? "Hanja — another sense" : "Hanja"}
             className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
           />
         )}
@@ -347,7 +473,6 @@ export function TokenPopover({
           )}
           {frontEntries.map((entry, i) => {
             const group = i === 0 ? LEMMA_GROUP : entry.text;
-            const items = backItemsFor(group);
             return (
               <div key={i} className="py-1.5 flex flex-wrap items-center gap-1.5">
                 <span
@@ -368,32 +493,29 @@ export function TokenPopover({
                     </button>
                   )}
                 </span>
-                {items.length > 0 && <span className="text-muted">→</span>}
-                {items.map((item) => {
-                  const bi = backIndexOf(item);
-                  return (
-                    <span
-                      key={bi}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
-                        item.kind,
-                        backShade[bi]
-                      )}`}
-                    >
-                      {item.text}
-                      <button
-                        type="button"
-                        onClick={() => removeBackItem(bi)}
-                        aria-label={`Remove ${item.text}`}
-                        className="opacity-80 hover:opacity-100"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
+                {backRow(group)}
               </div>
             );
           })}
+          {/* Epic 26: one row per hanja sense — the Hanja field's numbered stack and
+              the meanings that will be labeled with the same numbers on the Back. */}
+          {showHanja &&
+            senses.map((sense) => (
+              <div key={`sense-${sense}`} className="py-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 bg-manual text-manual-ink">
+                  {sense}
+                  <button
+                    type="button"
+                    onClick={() => removeSense(sense)}
+                    aria-label={`Remove ${sense}`}
+                    className="opacity-80 hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                </span>
+                {backRow(sense)}
+              </div>
+            ))}
         </div>
 
         {!isPhrase && dictEntries && (
@@ -419,11 +541,14 @@ export function TokenPopover({
                       <button
                         type="button"
                         onClick={() => {
-                          addDictSense(groupKeyFor(entry.word.trim()), d, entry.examples[0]);
+                          const group = showHanja
+                            ? senseGroupFor(entry.origin)
+                            : groupKeyFor(entry.word.trim());
+                          addDictSense(group, d, entry.examples[0]);
                           // Picking a sense is the homograph disambiguation just as much
                           // as clicking the headword itself — don't require that extra
                           // click for the hanja spelling to come along.
-                          if (entry.origin) setHanja(entry.origin);
+                          if (entry.origin && showHanja) addSense(entry.origin);
                         }}
                         className="text-left text-muted hover:text-ink transition-colors"
                         title="Add this definition to Back"
@@ -471,18 +596,20 @@ export function TokenPopover({
             Always its own independent group (front), never merged into the lemma. */}
         <div className="flex flex-col gap-1.5 border-t border-border pt-2">
           <span className="text-[11px] uppercase tracking-wide text-muted">Add entry</span>
-          {isPhrase ? (
+          {/* A hanja term's Back chips hang off a *sense*, so here the single input
+              adds a meaning to the sense being built rather than a new front form. */}
+          {isPhrase || showHanja ? (
             <div className="flex gap-1.5">
               <input
                 value={manualBack}
                 onChange={(e) => setManualBack(e.target.value)}
-                placeholder="Add a translation"
+                placeholder={showHanja ? "Add a meaning" : "Add a translation"}
                 className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
               />
               <button
                 type="button"
                 onClick={() => {
-                  addPhraseBackText(manualBack);
+                  addBackText(manualBack, showHanja ? senseGroupFor("") : LEMMA_GROUP);
                   setManualBack("");
                 }}
                 className="px-3 py-1.5 text-xs rounded-full border border-border hover:border-accent transition-colors"
@@ -586,7 +713,7 @@ export function TokenPopover({
             disabled={busy !== null}
             className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {busy === "save" ? "Saving…" : "Save"}
+            {busy === "save" ? "Saving…" : appendTo ? `Append to ${appendTo.lemma}` : "Save"}
           </button>
         </div>
       </div>

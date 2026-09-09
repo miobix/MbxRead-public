@@ -19,7 +19,7 @@ files/article) and an automated feed roster that fetches candidates into a revie
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 278 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 285 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -79,6 +79,17 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   note type also deliberately ships with only one card direction (Korean+Hanja→English);
   a reverse card is a manual add in Anki desktop, safe because `ensure_hanja_model()` never
   touches an existing model.
+- [x] **26** — Multi-hanja terms (2026-09-09): a lemma now holds an *ordered list* of hanja
+  senses (시장 = 市場 market + 市長 mayor), not one spelling. `terms.hanja` is a JSON list
+  (backfilled in place, no table rebuild), a sense's meanings are its `term_back_items`
+  group, and the card renders both as numbered stacks that line up (`1. 市場 / 2. 市長`
+  against `1. market / 2. mayor`). Still **one row and one Anki note per lemma**, so
+  appending a sense updates the existing note and keeps its SRS history. A lemma that's
+  already saved no longer dead-ends on the 409: the popover checks on the Enter that fires
+  the dictionary lookup (`GET /api/terms/by-lemma`), banners what's already there, and turns
+  Save into "Append to <lemma>"; the preview shows the merged card before you commit and
+  `/terms` lists every sense after. See `docs/DECISIONS.md` for why the alternative
+  (`UNIQUE(lemma, hanja)`, one note per sense) was rejected.
 
 ## Live operational facts
 

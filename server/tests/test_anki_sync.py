@@ -238,8 +238,8 @@ def test_sync_adds_new_hanja_term(client, monkeypatch):
         client,
         lemma="제일",
         deck="한자어",
-        hanja="第一",
-        back_items=[{"group": "", "kind": "dict", "text": "the most", "korean_def": "가장"}],
+        hanja=["第一"],
+        back_items=[{"group": "第一", "kind": "dict", "text": "the most", "korean_def": "가장"}],
         notes="homograph of 祭日",
     )
     resp = client.post("/api/anki/sync")
@@ -262,11 +262,11 @@ def test_sync_updates_dirty_hanja_term(client, monkeypatch):
     monkeypatch.setattr(anki, "create_deck", lambda deck: None)
     monkeypatch.setattr(anki, "add_note_hanja", lambda *a: 9001)
 
-    term = _create(client, lemma="제일", translation="the most", deck="한자어", hanja="第一")
+    term = _create(client, lemma="제일", translation="the most", deck="한자어", hanja=["第一"])
     first = client.post("/api/anki/sync")
     assert first.json() == {"added": 1, "updated": 0, "failed": []}
 
-    client.patch(f"/api/terms/{term['id']}", json={"hanja": "祭日"})
+    client.patch(f"/api/terms/{term['id']}", json={"hanja": ["祭日"]})
 
     hanja_update_calls = []
     monkeypatch.setattr(
@@ -283,6 +283,63 @@ def test_sync_updates_dirty_hanja_term(client, monkeypatch):
     assert model_update_calls == []
 
     assert client.get("/api/terms").json()[0]["anki_dirty"] is False
+
+
+def test_sync_renders_multi_sense_hanja_term(client, monkeypatch):
+    """Epic 26: one lemma, several hanja. The Hanja field is a numbered stack and
+    the English labels use the same numbers, so each meaning names its spelling."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    hanja_add_calls = []
+    monkeypatch.setattr(
+        anki,
+        "add_note_hanja",
+        lambda *a: (hanja_add_calls.append(a), 7)[1],
+    )
+
+    _create(
+        client,
+        lemma="시장",
+        deck="한자어",
+        hanja=["市場", "市長"],
+        back_items=[
+            {"group": "市場", "kind": "dict", "text": "market", "korean_def": "물건을 사고파는 곳"},
+            {"group": "市長", "kind": "dict", "text": "mayor", "korean_def": "시의 우두머리"},
+        ],
+    )
+    client.post("/api/anki/sync")
+
+    assert hanja_add_calls == [
+        (
+            "한자어",
+            "시장",
+            "1. 市場<br>2. 市長",
+            "1. market<br>2. mayor",
+            "1. 물건을 사고파는 곳<br>2. 시의 우두머리",
+        )
+    ]
+
+
+def test_sync_folds_senseless_back_items_into_the_first_sense(client, monkeypatch):
+    """A chip whose group names no sense (a pre-Epic-26 lemma group that escaped the
+    backfill) still reaches the card rather than vanishing from it."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    hanja_add_calls = []
+    monkeypatch.setattr(anki, "add_note_hanja", lambda *a: (hanja_add_calls.append(a), 7)[1])
+
+    _create(
+        client,
+        lemma="제일",
+        deck="한자어",
+        hanja=["第一"],
+        back_items=[{"group": "", "kind": "dict", "text": "the most", "korean_def": "가장"}],
+    )
+    client.post("/api/anki/sync")
+
+    assert hanja_add_calls == [("한자어", "제일", "第一", "the most", "가장")]
 
 
 def test_sync_hanja_less_term_still_routes_through_two_way_model(client, monkeypatch):
@@ -305,7 +362,7 @@ def test_sync_hanja_less_term_still_routes_through_two_way_model(client, monkeyp
 
     saved = client.get("/api/terms").json()[0]
     assert saved["id"] == term["id"]
-    assert saved["hanja"] == ""
+    assert saved["hanja"] == []
 
 
 def test_new_model_templates_keep_examples_off_both_fronts(monkeypatch):
