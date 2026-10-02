@@ -568,3 +568,32 @@ def test_invoke_wraps_transport_errors(monkeypatch):
         assert False, "expected AnkiError"
     except anki.AnkiError as e:
         assert "Anki is not running" in str(e)
+
+
+def test_sync_converted_reading_term_adds_a_hanja_note_carrying_the_sentence(client, monkeypatch):
+    """Epic 27: a term converted from a reading save is new to Anki again, routes to the
+    hanja model, and its book sentence lands in KoreanDef."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    calls = []
+
+    def fake_add_note_hanja(deck, korean, hanja, english, korean_def):
+        calls.append((deck, korean, hanja, english, korean_def))
+        return 5150
+
+    monkeypatch.setattr(anki, "add_note_hanja", fake_add_note_hanja)
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: calls.append("two-way"))
+
+    term = _create(client, lemma="입다", deck="Korean", sentence="그는 옷을 입었다.")
+    resp = client.post(
+        f"/api/terms/{term['id']}/convert-to-hanja",
+        json={
+            "hanja": "着用",
+            "deck": "한자어",
+            "back_items": [{"group": "", "kind": "dict", "text": "wear", "korean_def": "옷을 걸치다."}],
+        },
+    )
+    assert resp.status_code == 200
+    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": []}
+    assert calls == [("한자어", "입다", "着用", "wear", "그는 옷을 입었다.<br><br>옷을 걸치다.")]

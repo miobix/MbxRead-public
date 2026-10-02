@@ -1217,3 +1217,34 @@ substring count (경기 also matches 경기도), so it ranks but does not measur
 (성격 "character; character"), 8 with a Korean suffix in the hanja field (明白하다) and some
 `A/B` variant spellings; `trim_gloss` and `clean_origin` prevent new ones, a cleanup of the
 existing rows was not done.
+
+## 2026-10-02 — Epic 27 follow-up: a reading-saved word found via its hanja is converted in place
+
+All 128 reading-saved terms are synced two-way notes in the `Korean` deck. Finding one again
+through its hanja hit a gap: the popover and `save_word` appended hanja to it, but the sync
+chooses the card layout from the existing note's `anki_model`, so the hanja was stored and
+never shown. The user wanted the reading card gone and the hanja card kept.
+
+**Convert in place, not delete and recreate.** `terms.lemma` is unique and the reader
+highlights words through the saved term, so deleting the row would un-highlight the word in
+the books and drop its source and sentence. `POST /api/terms/{id}/convert-to-hanja` instead
+rewrites the same row (deck, hanja, Back chips, `status = learning`) and clears
+`anki_note_id`/`anki_model`, so the next sync adds a fresh Hanja-model note. `DELETE` was left
+as it was; it never touched Anki.
+
+**The old Anki note is left alone (the user's call).** It sits in the `Korean` deck with its
+review history and "doesn't hurt"; the response and the CLI name its id so it is easy to find.
+The user also chose to keep the book sentence and examples, so `_render_hanja` now folds the
+sentence into KoreanDef (it passed an empty one before, correct only while every hanja term
+was an on-demand save). The krdict `examples` stay stored but are not rendered on the Hanja
+card.
+
+**Explicit, previewable.** `save` writes nothing for a reading-saved word until `--convert`,
+reporting `reading_term` first so the skill asks. `char` returns `in_db.from_reading` rather
+than a truthy string; the old shape made the skill skip exactly these words. `save
+--dry-run` now reads the live term and reports `created`/`appended`/`exists`/`converted`.
+`status` is forced to `learning` on convert, since a `known` term is never selected for sync
+and the user converting it means they want the card; the prior status is returned.
+
+**Not checked live.** The running server predates the endpoint, so `--convert` needs a
+restart from the tray. Verified by tests and by `--dry-run` against `자연계`.

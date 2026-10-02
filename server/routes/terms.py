@@ -353,6 +353,50 @@ def patch_term(
     return _term_dict(conn, _get_term_or_404(conn, term_id))
 
 
+class HanjaConvert(BaseModel):
+    hanja: str
+    back_items: list[BackItemIn]
+    deck: str
+
+
+@router.post("/{term_id}/convert-to-hanja")
+def convert_to_hanja(
+    term_id: int, body: HanjaConvert, conn: sqlite3.Connection = Depends(db_module.get_db)
+):
+    """Turn a reading-saved term into a hanja term in place (Epic 27). Same row, so the
+    reader still highlights it and its sentence/examples/source survive; sync state is
+    reset so the next sync adds a fresh Hanja-model note. The old Anki note is not
+    touched (the response names it)."""
+    row = _get_term_or_404(conn, term_id)
+    if hanja_list(row["hanja"]):
+        raise HTTPException(status_code=409, detail="term already has hanja; append a sense")
+    senses = _normalize_hanja([body.hanja])
+    if not senses:
+        raise HTTPException(status_code=422, detail="hanja can't be empty")
+    items = _normalize_back_items([{**it.model_dump(), "group": senses[0]} for it in body.back_items])
+    conn.execute(
+        "UPDATE terms SET deck = ?, hanja = ?, translation = ?, status = 'learning', "
+        "anki_note_id = NULL, anki_model = NULL, anki_dirty = 0, updated = CURRENT_TIMESTAMP "
+        "WHERE id = ?",
+        (
+            body.deck,
+            json.dumps(senses, ensure_ascii=False),
+            "; ".join(it["text"] for it in items),
+            term_id,
+        ),
+    )
+    _set_back_items(conn, term_id, items)
+    conn.commit()
+    return {
+        **_term_dict(conn, _get_term_or_404(conn, term_id)),
+        "previous": {
+            "anki_note_id": row["anki_note_id"],
+            "deck": row["deck"],
+            "status": row["status"],
+        },
+    }
+
+
 @router.delete("/{term_id}", status_code=204)
 def delete_term(term_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
     _get_term_or_404(conn, term_id)

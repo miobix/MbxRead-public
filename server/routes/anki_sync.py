@@ -151,8 +151,8 @@ def _regroup_to_senses(back_items: list[dict], senses: list[str]) -> list[dict]:
 
 def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str, str]:
     """Korean/Hanja/English/KoreanDef for the hanja model. Same building blocks as the
-    two-way model's rendering, but there's no captured sentence to fold in — these
-    are on-demand saves, not reading-flow ones. Epic 26: a word with several hanja
+    two-way model's rendering. On-demand saves have no sentence; a term converted from
+    a reading save (Epic 27) carries its book sentence into KoreanDef. Epic 26: a word with several hanja
     senses renders them as a numbered stack in the Hanja field, and the English labels
     line up with those numbers (one sense still renders bare, as it did in Epic 25)."""
     korean = _render_korean(_front_entries(conn, row["id"], row["lemma"]))
@@ -166,7 +166,7 @@ def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str,
     else:
         labeled = _label_items(sense_entries, _regroup_to_senses(back_items, senses))
         english = _render_english(labeled)
-        korean_def = _render_examples_field("", labeled, row["notes"])
+        korean_def = _render_examples_field(row["sentence"] or "", labeled, row["notes"])
     return korean, hanja, english, korean_def
 
 
