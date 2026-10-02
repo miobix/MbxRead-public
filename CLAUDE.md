@@ -22,6 +22,10 @@ frontend (static export), phone access via Tailscale.
    **and** `npm run lint` in `web/` green (Epic ≥ 4 — `tsc` alone missed a real
    react-hooks bug in Epic 4), one commit `Epic N: <summary>` that includes the docs
    updates.
+5. **Hanja study: run `/hanja [字]`** (`.claude/skills/hanja/SKILL.md`, scope in SPEC
+   Epic 27) to analyse one character from the user's Anki deck and save picked words. It
+   reads the user's `Hanja::*` Anki decks and **never writes to them**; use `save --dry-run`
+   to test, a real `save` changes the live DB.
 
 ## Hard rules
 

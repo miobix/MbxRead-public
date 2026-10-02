@@ -551,6 +551,58 @@ Enter shows "already saved, 市場 (market)" with an Append button, picking 市�
 adds a second sense, the preview shows both rows, and Append writes one term whose sync
 updates the existing note to the two-numbered-stack card.
 
+### Epic 27 — `/hanja` study skill: one character at a time, from analysis to saved terms
+
+Scoped 2026-10-02, after a live trial on 競 in the same session.
+
+**Motivation:** the user studies a new hanja character in Anki each day (goal: reading
+characters; learning words is the bonus). The loop around it ran through Gemini, namu.wiki
+and one-at-a-time entry on `/terms`, and pulled them out of the Anki run. The judgment
+(formation, usage tiers, flags) is an LLM conversation, so it is a **skill**; the
+deterministic parts live in a small tested module the skill calls.
+
+**Decisions from the trial:**
+
+- **krdict first.** Candidates come from krdict's origin search (every word is real, with a
+  verified `origin`), never from the LLM. The LLM may add words krdict lacks, saved as
+  `manual` and marked unverified.
+- **Filter by rule, rank by measurement.** Drop modifier derivatives (하다/되다/적/률/화/자/
+  장/력/심/성/사/국/의식…) *only when the stem is also in the pool*, multi-word phrases and
+  non-hanja origins; the dropped list is always shown so any can be asked back. Survivors
+  carry krdict grade, NIKL grade/rank (`vocab_levels`), a corpus count over `pages.content`
+  (substring, approximate) and an `in_db` flag.
+- **Top 3 per usage category**, not a difficulty filter (krdict grade is learner difficulty,
+  unrelated to worth): everyday, news/official, up to 3 each (fewer if thin), ranked within
+  category by corpus count then NIKL. The flagged tier (archaic / sounds odd aloud) is a
+  one-line skip list. Grade stays a displayed column only.
+- **Homographs surface from krdict** (경기 = 競技/景氣/驚氣) so a pick can append a sense.
+- **Anki card check is read-only.** Compare the card's `name` field to the dataset 훈음 and
+  report any disagreement (and an empty `Formation` field) with both values. The user's
+  `Hanja::*` decks are never modified by this tooling, names included; any edit is made by
+  the user, in Anki, when they see fit. No write helper exists in the module.
+
+**Scope:**
+
+1. **`translate_svc/krdict.py`** — `search_by_origin(char)`: advanced origin search,
+   length-bucketed when the unbucketed query is truncated.
+2. **`server/data/hanja_grade.csv`** — copy of `hanja/hanja_grade_dataset.csv` (source and
+   known gaps 率/椄 in DECISIONS).
+3. **`server/hanja_study.py`** — dataset load + 훈음, candidate filter/dedupe/annotate,
+   `trim_gloss` (dedupe, cap 3), `clean_origin` (strip 하다/히 suffix, first of `A/B`),
+   per-character breakdown, read-only Anki queue/card/name-comparison helpers, `save_word`
+   (create, or append a sense through `by-lemma` + PATCH, idempotent).
+4. **`scripts/hanja_study.py`** — thin JSON CLI: `char`, `defs`, `save`, `anki-queue`.
+5. **`.claude/skills/hanja/SKILL.md`** — the conversation; indexed from `CLAUDE.md`.
+
+**Tests** (offline, mocked HTTP/AnkiConnect, temp sqlite): dataset parse; filter keeps a
+stem-less word (경매) and drops a derived one (경쟁력) only when 경쟁 is present; trim_gloss;
+clean_origin; name comparison; `save_word` create vs append vs idempotent repeat; every
+AnkiConnect action the module sends is a read (`findNotes`/`findCards`/`notesInfo`/
+`cardsInfo`), asserted by a test.
+
+**Accept:** pytest green; `char 競` returns the dataset row, the Anki card comparison,
+candidates and dropped list; `save` of a homograph appends instead of 409.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.
