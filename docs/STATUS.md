@@ -19,7 +19,7 @@ files/article) and an automated feed roster that fetches candidates into a revie
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 306 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 311 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -94,7 +94,8 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   Anki queue to saved terms. krdict origin search supplies real candidates (modifier
   derivatives dropped by rule, shown on request), annotated with a corpus count over the
   user's books, NIKL rank and homographs; the skill shows up to 3 per usage category and
-  appends senses through `save`. The `Hanja::*` Anki decks are read-only to it. Logic is
+  appends senses through `save`, or converts a reading-saved word in place (`--convert`).
+  The `Hanja::*` Anki decks are read-only to it. Logic is
   `server/hanja_study.py` + `scripts/hanja_study.py`; rationale in `docs/DECISIONS.md`.
 
 ## Live operational facts

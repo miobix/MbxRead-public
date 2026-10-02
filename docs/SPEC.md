@@ -603,6 +603,20 @@ AnkiConnect action the module sends is a read (`findNotes`/`findCards`/`notesInf
 **Accept:** pytest green; `char 競` returns the dataset row, the Anki card comparison,
 candidates and dropped list; `save` of a homograph appends instead of 409.
 
+**Same-day follow-up: convert a reading-saved term.** A lemma saved while reading (Korean
+deck, 2-way note, no hanja) that is later found via its hanja used to dead-end: appending hanja
+left it a 2-way note, because the sync picks the card layout from `anki_model`. New
+`POST /api/terms/{id}/convert-to-hanja {hanja, back_items, deck}` converts the row in place
+(409 if it already has hanja): deck, hanja and Back chips replaced, `status` set to
+`learning`, `anki_note_id`/`anki_model` cleared so the next sync adds a Hanja-model note.
+Sentence, examples, notes, forms and book source are kept, and `_render_hanja` now folds the
+sentence into KoreanDef. The old Anki note is left untouched and its id is returned. In the
+tooling, `save` reports `reading_term` and writes nothing until run with `--convert`;
+`char` marks such words `in_db.from_reading` instead of hiding them; `save --dry-run` now
+reports what it would do. Tests: convert keeps context and resets sync state, forces
+`learning`, 409/404, `save` without `--convert` is a no-op, and a sync of a converted term
+adds a hanja note carrying the sentence.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.
