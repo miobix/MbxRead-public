@@ -97,3 +97,60 @@ def _view_examples(target_code: str, max_examples: int = 5) -> list[str]:
         if len(examples) >= max_examples:
             break
     return examples
+
+
+def search_by_origin(char: str, max_length: int = 6) -> list[dict]:
+    """Every headword whose 원어 (hanja) field contains `char`:
+    [{word, origin, grade, definition}] or [].
+
+    The advanced origin search only returns items on page 1 (later pages report the
+    right <total> but no <item>), so a truncated result is re-queried one syllable
+    count at a time, each bucket getting its own page-1 allowance."""
+    words, total = _origin_query(char)
+    if len(words) >= total:
+        return words
+    seen = {(w["word"], w["origin"], w["definition"]) for w in words}
+    for length in range(1, max_length + 1):
+        bucket, _ = _origin_query(char, length)
+        for w in bucket:
+            key = (w["word"], w["origin"], w["definition"])
+            if key not in seen:
+                seen.add(key)
+                words.append(w)
+    return words
+
+
+def _origin_query(char: str, length: int | None = None) -> tuple[list[dict], int]:
+    if not KRDICT_API_KEY:
+        return [], 0
+    params = {
+        "key": KRDICT_API_KEY,
+        "q": char,
+        "advanced": "y",
+        "target": 4,
+        "method": "include",
+        "start": 1,
+        "num": 100,
+    }
+    if length is not None:
+        params["letter_s"] = length
+        params["letter_e"] = length
+    try:
+        r = httpx.get(API_URL, params=params, timeout=10)
+        root = ET.fromstring(r.text)
+    except Exception:
+        return [], 0
+    try:
+        total = int(root.findtext("total", "0"))
+    except ValueError:
+        total = 0
+    words = [
+        {
+            "word": item.findtext("word", "").strip(),
+            "origin": item.findtext("origin", "").strip(),
+            "grade": item.findtext("word_grade", "").strip(),
+            "definition": item.findtext("sense/definition", "").strip(),
+        }
+        for item in root.findall(".//item")
+    ]
+    return words, total

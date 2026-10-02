@@ -1156,3 +1156,64 @@ and cannot answer it), and on a hit folds that term in, banners it, and relabels
 button "Append to <lemma>". The 409 path stays as a fallback for a cold Save and lands in the
 identical state, so both routes end at the same button. Merging is client-side by design: the
 popover already holds both halves, so an append is a plain PATCH and needed no merge endpoint.
+
+## 2026-10-02 — Epic 27: the hanja study loop is a skill over a tested module, not a site feature
+
+The user's daily loop (a new character in Anki, then Gemini for analysis, namu.wiki to check
+the name, then one-at-a-time entry on `/terms`) pulled them out of the Anki run. The costly
+part is judgment: how the character is formed, which words are used in conversation vs. news
+vs. not at all. That is an LLM conversation, so it became the `/hanja` skill
+(`.claude/skills/hanja/SKILL.md`). Everything deterministic went into `server/hanja_study.py`
+behind a thin JSON CLI (`scripts/hanja_study.py`), so nothing depends on the model following
+steps: dataset lookup, candidate filtering, definition trimming, and the create-or-append
+save. A `/terms` batch panel was considered and deferred until the skill has run on a few
+characters; it would call the same module.
+
+**krdict first.** Candidates come from krdict's origin search, so every word is real and
+carries a verified `origin`. The pick-then-verify order the user described would let an
+LLM-invented word reach the verify step; inverting it removes that failure. Words krdict lacks
+are saved on request as `manual` and reported unverified, with a per-character 훈음
+breakdown so the user can check the pieces against the meaning.
+
+**Top 3 per usage category, not a difficulty filter.** krdict's 초/중급/고급 is learner
+difficulty and says nothing about what is worth learning (see `hanja/DECISIONS.md`). The
+skill assigns words to everyday and news/official by judgment, up to 3 each (fewer when a
+category is thin, so junk is never promoted to fill it), ranked within a category by
+measured signals: a substring count over the user's own books, then NIKL rank. krdict grade
+stays a displayed column. Reveal-style words (여행 = 旅行) arrive through the everyday tier.
+The corpus count is the check on the judgment: on the first run, 경선 appeared 51 times in the
+user's books and 경매 once, against a tier order made without that data.
+
+**Modifier derivatives dropped by rule, never silently.** 하다/되다/적/률/화/자/장/력/심/성/
+사/국/의식/품/번 words are removed only when their stem is also in the pool (so 경매 stays,
+경쟁력 goes), and the dropped list is always shown so any can be asked back. This follows
+the user's preference for a short list without modifiers, small exceptions allowed.
+
+**The user's `Hanja::*` Anki decks are read-only to this tooling.** The user stated it in
+session: those decks stay as they are and every edit, name changes included, is theirs.
+The module therefore has no write path to them: `_anki()` refuses any action outside
+`findNotes`/`findCards`/`notesInfo`/`cardsInfo`, and a test asserts it. A card whose name
+disagrees with the dataset, or whose Formation is empty, is reported and left alone. The
+app's own `한자어` deck and `Korean Reader Hanja` note type are a separate thing, written
+through the normal sync.
+
+**Dataset.** `hanja/hanja_grade_dataset.csv` (official 어문회 급수, from
+github.com/rycont/hanja-grade-dataset, 5,978 characters, missing 率 and 椄) was copied to
+`server/data/hanja_grade.csv` rather than imported from `hanja/`, so a live tool does not
+depend on the abandoned exploration folder. Unlike the old build scripts it carries no variant
+table (奬/獎, 絕/絶, 姊/姉); a character the dataset lacks falls back to the namu.wiki
+배정한자 page, named as the source.
+
+**Hardening pass (Epic 27).** Checked: the save path never overwrites (`save_word` creates,
+appends a sense, or reports `exists`; a repeat is a no-op, tested); a first run needs no DB
+migration; Anki unreachable degrades to `null`, tested. Found: one hardening miss of my own.
+While checking the CLI I chained a real `save` into a command meant as a look, which appended
+a bogus 景氣 sense (gloss "x") to the live 경기 term. It had no Anki note yet, so nothing
+synced; I restored the term to its single 競技 sense by PATCH and added `save --dry-run`,
+which the skill now names for any test of `save`. Not checked: the corpus count is a plain
+substring count (경기 also matches 경기도), so it ranks but does not measure.
+
+**Known data left as-is.** The 416 existing hanja terms include ~10 with repeated meanings
+(성격 "character; character"), 8 with a Korean suffix in the hanja field (明白하다) and some
+`A/B` variant spellings; `trim_gloss` and `clean_origin` prevent new ones, a cleanup of the
+existing rows was not done.
