@@ -1248,3 +1248,21 @@ and the user converting it means they want the card; the prior status is returne
 
 **Not checked live.** The running server predates the endpoint, so `--convert` needs a
 restart from the tray. Verified by tests and by `--dry-run` against `자연계`.
+
+## 2026-10-02 — Epic 27: krdict outages fail loudly, and one gloss line keeps every sense
+
+krdict timed out for the rest of a session, and `krdict.lookup` swallows every exception, so
+the CLI reported "krdict has no 구조". An outage reads as a missing word, and `char` would
+have returned an empty candidate list that looks like a character with no words. The CLI now
+probes krdict when an entry or the whole result is missing and says it is unreachable; a
+save in that state writes nothing, and the skill is told not to fall back to `--manual`,
+since that would store the word without krdict's Korean definition. `lookup` itself keeps
+swallowing errors, as the reader's tooltip depends on that.
+
+The user's rule for a correct hanja is to keep every krdict sense, collapsed into one line of
+concatenated meanings. `save --all-senses` does that and lifts `trim_gloss`'s cap of 3 (which
+`save_word` takes as `gloss_cap`), still deduplicating repeats; the Korean definitions are
+joined with " / ". The default stays capped for one-sense saves.
+
+Not exercised live: `--all-senses` was only tested offline and by dry-run, the outage began
+before it could save the first words with it.
