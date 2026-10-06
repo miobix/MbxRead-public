@@ -63,6 +63,18 @@ def create_deck(deck: str) -> None:
     _invoke("createDeck", deck=deck)
 
 
+def move_note_to_deck(note_id: int, deck: str) -> None:
+    """Move the note's cards into `deck`, leaving any already in it or one of its subdecks."""
+    cards = _invoke("cardsInfo", cards=_invoke("findCards", query=f"nid:{note_id}"))
+    stray = [
+        c["cardId"]
+        for c in cards
+        if c["deckName"] != deck and not c["deckName"].startswith(deck + "::")
+    ]
+    if stray:
+        _invoke("changeDeck", cards=stray, deck=deck)
+
+
 def add_note(deck: str, front: str, back: str) -> int:
     note = {
         "deckName": deck,

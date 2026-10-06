@@ -19,7 +19,7 @@ files/article) and an automated feed roster that fetches candidates into a revie
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 312 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 316 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist

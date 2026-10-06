@@ -1266,3 +1266,29 @@ joined with " / ". The default stays capped for one-sense saves.
 
 Not exercised live: `--all-senses` was only tested offline and by dry-run, the outage began
 before it could save the first words with it.
+
+## 2026-10-06 — A deck change in the popover now reaches Anki
+
+The user moved reading-saved words (풍경, 세월, 망원경, ...) to `한자어` in the popover and
+added their hanja; Anki never changed. The dirty-sync path only rewrote fields on the existing
+note: it never moved cards between decks and kept the 2-way note type, so the hanja was stored
+but never shown. `convert-to-hanja` (2026-10-02) did this right but only the `/hanja` CLI calls
+it; the page had no way to reach it.
+
+**The sync now repairs the state instead of waiting for a button.** Every sync, a `learning`
+term in the hanja deck with hanja, whose note is not a Hanja-model note, gets its sync state
+cleared and is re-added as a Hanja note, same outcome as `convert-to-hanja`. This also catches
+terms already "converted" this way before the fix, with no migration. A term with hanja that
+stays in another deck (자연계 in `Korean`) keeps its 2-way note: the deck move is the signal.
+The old 2-way note is left alone, as on 2026-10-02.
+
+**Plain deck changes move the cards.** A dirty term's note cards are moved to its deck with
+`changeDeck`, skipping cards already in that deck or one of its subdecks so the user's own
+subdeck organisation in Anki survives.
+
+**Live audit before the fix (759 synced terms):** 세월, 망원경, 풍경 in `한자어` in the DB but a
+2-way note in `Korean`; 사정, 정성, 교훈 in `한자어` with their 2-way note missing from Anki
+(deleted there); 자연계 has hanja but is in `Korean`, left as is.
+
+Tests now point `ANKICONNECT_URL` at a dead port (autouse fixture) because Anki is usually open
+on this machine and an unmocked call would have edited the real collection.
