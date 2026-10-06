@@ -14,6 +14,7 @@ def _mock_model(monkeypatch):
     AnkiConnect for either."""
     monkeypatch.setattr(anki, "ensure_model", lambda: None)
     monkeypatch.setattr(anki, "ensure_hanja_model", lambda: None)
+    monkeypatch.setattr(anki, "move_note_to_deck", lambda note_id, deck: None)
 
 
 def test_sync_down_returns_503_and_touches_nothing(client, monkeypatch):
@@ -597,3 +598,81 @@ def test_sync_converted_reading_term_adds_a_hanja_note_carrying_the_sentence(cli
     assert resp.status_code == 200
     assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": []}
     assert calls == [("한자어", "입다", "着用", "wear", "그는 옷을 입었다.<br><br>옷을 걸치다.")]
+
+
+def test_sync_moves_a_dirty_terms_cards_to_its_deck(client, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: 4242)
+    monkeypatch.setattr(anki, "update_note_model", lambda *a: None)
+    moves = []
+    monkeypatch.setattr(anki, "move_note_to_deck", lambda note_id, deck: moves.append((note_id, deck)))
+
+    term = _create(client)
+    client.post("/api/anki/sync")
+    assert moves == []
+
+    client.patch(f"/api/terms/{term['id']}", json={"deck": "Other"})
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": []}
+    assert moves == [(4242, "Other")]
+
+
+def test_sync_readds_a_reading_term_moved_to_the_hanja_deck_as_a_hanja_note(client, monkeypatch):
+    """The popover path: deck changed to 한자어 and hanja added on a synced 2-way term."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: 4242)
+    term = _create(client, lemma="풍경", translation="scenery")
+    client.post("/api/anki/sync")
+
+    client.patch(f"/api/terms/{term['id']}", json={"deck": "한자어", "hanja": ["風景"]})
+    hanja_adds = []
+    monkeypatch.setattr(anki, "add_note_hanja", lambda *a: (hanja_adds.append(a), 9001)[1])
+    model_updates = []
+    monkeypatch.setattr(anki, "update_note_model", lambda *a: model_updates.append(a))
+
+    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": []}
+    assert hanja_adds == [("한자어", "풍경", "風景", "scenery", "")]
+    assert model_updates == []
+    saved = client.get("/api/terms").json()[0]
+    assert saved["anki_note_id"] == 9001
+    assert saved["anki_dirty"] is False
+
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 0, "failed": []}
+
+
+def test_sync_leaves_a_hanja_bearing_term_outside_the_hanja_deck_on_its_note(client, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: 4242)
+    term = _create(client, lemma="자연계", translation="nature")
+    client.post("/api/anki/sync")
+    client.patch(f"/api/terms/{term['id']}", json={"hanja": ["自然界"]})
+    monkeypatch.setattr(anki, "update_note_model", lambda *a: None)
+    monkeypatch.setattr(anki, "add_note_hanja", lambda *a: 1 / 0)
+
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": []}
+    assert client.get("/api/terms").json()[0]["anki_note_id"] == 4242
+
+
+def test_move_note_to_deck_skips_cards_already_in_the_deck_or_a_subdeck(monkeypatch):
+    calls = []
+
+    def fake_invoke(action, **params):
+        calls.append((action, params))
+        if action == "findCards":
+            return [1, 2, 3]
+        if action == "cardsInfo":
+            return [
+                {"cardId": 1, "deckName": "Korean"},
+                {"cardId": 2, "deckName": "한자어"},
+                {"cardId": 3, "deckName": "한자어::Sub"},
+            ]
+
+    monkeypatch.setattr(anki, "_invoke", fake_invoke)
+    anki.move_note_to_deck(77, "한자어")
+    assert calls[0] == ("findCards", {"query": "nid:77"})
+    assert calls[-1] == ("changeDeck", {"cards": [1], "deck": "한자어"})

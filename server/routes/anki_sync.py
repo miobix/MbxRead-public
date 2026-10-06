@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .. import anki
 from .. import db as db_module
+from . import settings as settings_routes
 from .terms import _back_items_for, _forms_for, hanja_list
 
 router = APIRouter(prefix="/api/anki", tags=["anki"])
@@ -188,6 +189,21 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     except anki.AnkiError:
         pass
 
+    # A synced reading term moved to the hanja deck with hanja added still has a
+    # 2-way note; re-add it as a Hanja note, as convert-to-hanja does.
+    hanja_deck = settings_routes._read(conn)["hanja_deck"]
+    for row in conn.execute(
+        "SELECT id, hanja FROM terms WHERE deck = ? AND status = 'learning' "
+        "AND anki_note_id IS NOT NULL AND anki_model IS NOT ?",
+        (hanja_deck, anki.HANJA_MODEL_NAME),
+    ).fetchall():
+        if hanja_list(row["hanja"]):
+            conn.execute(
+                "UPDATE terms SET anki_note_id = NULL, anki_model = NULL, anki_dirty = 0 "
+                "WHERE id = ?",
+                (row["id"],),
+            )
+
     new_terms = conn.execute(
         "SELECT * FROM terms WHERE status = 'learning' AND anki_note_id IS NULL"
     ).fetchall()
@@ -247,6 +263,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
                 korean = _render_korean(front_entries)
                 back = _render_back(row["translation"], row["sentence"])
                 anki.update_note_fields(row["anki_note_id"], korean, back)
+            anki.move_note_to_deck(row["anki_note_id"], row["deck"] or DEFAULT_DECK)
             conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = ?", (row["id"],))
             updated += 1
         except anki.AnkiError as e:
