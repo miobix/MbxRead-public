@@ -1267,6 +1267,29 @@ joined with " / ". The default stays capped for one-sense saves.
 Not exercised live: `--all-senses` was only tested offline and by dry-run, the outage began
 before it could save the first words with it.
 
+## 2026-10-02 — krdict flood: /hanja locked until its request logic is reworked
+
+The "outage" above was not an outage. krdict loaded fine from the user's phone on mobile data
+and not from this PC, so the PC's IP was blocked for excess requests. Cause: one `char` run
+sends up to 7 origin queries (`search_by_origin` length buckets) plus one `krdict.lookup` per
+kept candidate for homographs (`hanja_study.search`), with no delay, no cache and no stop on
+failure. A common character means 50 to 100+ requests in seconds, and the session repeated
+runs while testing and retrying during the "outage". Block duration is undocumented.
+
+The user paused the skill and asked for a hard failsafe that forces the request logic to be
+touched before it runs again. `server/hanja_study.py` has `KRDICT_LOCKED = True`: the CLI exits
+on every command and `search`/`homographs` raise before any request; a test pins this. It is a
+code constant, not a flag or setting, so unlocking takes a deliberate commit. The skill file
+and `CLAUDE.md` tell Claude not to run `/hanja` while locked, nor to flip the lock itself
+without being asked to do the rework.
+
+Before unlocking, at minimum: cache krdict responses in SQLite (one fetch per character/word,
+ever), look up homographs only for picked words or throttle them, and abort the run on the
+first failed request. Better option discussed: import krdict's full dictionary download
+(사전 내려받기) into SQLite and make the origin search local, leaving the live API as a
+fallback. `/api/dict` (one lookup per tap in the reader) was left unlocked: low volume, and
+the reader depends on it.
+
 ## 2026-10-06 — A deck change in the popover now reaches Anki
 
 The user moved reading-saved words (풍경, 세월, 망원경, ...) to `한자어` in the popover and
@@ -1292,3 +1315,11 @@ subdeck organisation in Anki survives.
 
 Tests now point `ANKICONNECT_URL` at a dead port (autouse fixture) because Anki is usually open
 on this machine and an unmocked call would have edited the real collection.
+
+## 2026-10-06 — The /hanja lock above was dropped before it was committed
+
+The user called the lock an overreaction and removed it; `KRDICT_LOCKED`, its test and the
+lock notes in `CLAUDE.md`, the skill and STATUS were never committed. The entry above stays
+for its cause analysis, which still holds: the request logic is unchanged (no cache, no
+throttle, no stop on failure), so a run on a common character can flood krdict again. The
+rework listed there is still the fix.
