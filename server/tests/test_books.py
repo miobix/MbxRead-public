@@ -77,6 +77,7 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
             "forms": [],
             "examples": [],
             "back_items": [],
+            "hanja": [],
         }
     }
 
@@ -469,6 +470,26 @@ def test_get_text_highlights_saved_terms(client):
     assert lemma in body["terms"]
     # identical highlighting to the page endpoint it was extracted from
     assert set(body["terms"]) == set(client.get(f"/api/books/{book_id}/pages/1").json()["terms"])
+
+
+def test_get_text_terms_carry_every_hanja_sense(client):
+    """The reader popover rebuilds a hanja term's sense rows from this summary, so all
+    senses must come through, in order, whether matched by lemma or by an extra form."""
+    book_id = client.post(
+        "/api/books", json={"title": "Short", "text": SHORT_STORY}
+    ).json()["id"]
+    tokens = client.get(f"/api/books/{book_id}/pages/1").json()["tokens"]
+    lemma, form = tokens[0]["lemma"], tokens[1]["lemma"]
+    senses = ["市場", "市長"]
+    client.post("/api/terms", json={"lemma": lemma, "translation": "x", "hanja": senses})
+    client.post(
+        "/api/terms",
+        json={"lemma": "다른말", "translation": "y", "hanja": ["風景"], "forms": [{"text": form, "kind": "manual"}]},
+    )
+
+    terms = client.get(f"/api/books/{book_id}/text").json()["terms"]
+    assert terms[lemma]["hanja"] == senses
+    assert terms[form]["hanja"] == ["風景"]
 
 
 def test_get_text_404s_for_unknown_book(client):
