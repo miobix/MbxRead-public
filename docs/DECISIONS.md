@@ -1389,3 +1389,23 @@ The summary now includes the full ordered `hanja` list, for lemma and form match
 needed no new design: the list is the Epic 26 data model, and the popover already draws
 one row per sense with that sense's meanings, which is the same view `/terms` shows.
 
+
+## 2026-10-07 — Hardening pass after Epic 28
+
+Checked `scripts/server.log` (10,647 lines, 1.0 MB, appended since go-live), the running
+server after the tray restart, and today's changes. No tracebacks and no 500s in the log.
+Found, none fixed (all noise or slow growth, no failures):
+
+- **`server.log` never rotates.** `tray_app.py` opens it in append mode on every start.
+  About 1 MB in 2.5 months, so no pressure yet; a size check at tray start would bound it.
+- **926 × 404 on `GET /api/terms/by-lemma`.** By design (404 means "not saved yet", the
+  popover's normal case on a new word), but it is 58% of all 404s and buries real ones.
+  Returning 200 with `null` would make the log readable.
+- **~660 × 404 on `/<route>/__next.<route>.__PAGE__.txt`.** The Next client router
+  prefetches RSC payloads that this static export (`trailingSlash: true`) doesn't serve
+  under those names, so client-side navigation falls back to a full page load. Harmless
+  today; worth a look if navigation feels slow, and it may explain why the browser kept
+  showing stale pages after a rebuild during Epic 28.
+- **Epic 28 font:** `next/font/google` fetches Noto Sans KR at build time, unpinned to a
+  font revision (Google serves the current one). Accepted in the Epic 28 entry; a clean
+  build without network fails.
