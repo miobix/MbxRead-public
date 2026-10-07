@@ -1,5 +1,5 @@
 // Epic 18: one colored chip per source type on the Queue. Kept within the existing
-// warm "paper" theme tokens (accent/border/muted) rather than introducing new hues,
+// theme tokens (accent/border/muted) rather than introducing new hues,
 // so it stays theme-aware in both light and dark without adding to app/globals.css.
 const SOURCE_CHIPS: Record<string, { label: string; className: string }> = {
   yt: {
@@ -19,7 +19,7 @@ export function SourceChip({ source }: { source: string }) {
   };
   return (
     <span
-      className={`inline-block shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${chip.className}`}
+      className={`inline-block shrink-0 text-xs font-medium px-2 py-0.5 rounded ${chip.className}`}
     >
       {chip.label}
     </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/lib/back-link";
 import { useEffect, useState } from "react";
 import { api, type Settings } from "@/lib/api";
 import {
@@ -57,11 +57,9 @@ export default function SettingsPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Library
-      </Link>
+      <BackLink />
 
-      <h1 className="text-2xl font-semibold font-serif">Settings</h1>
+      <h1 className="page-title">Settings</h1>
 
       {error && <p className="text-danger text-sm">{error}</p>}
 
@@ -102,12 +100,12 @@ export default function SettingsPage() {
                   if (e.key === "Enter") addDeck();
                 }}
                 placeholder="New deck name"
-                className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                className="flex-1 field"
               />
               <button
                 onClick={addDeck}
                 disabled={saving || !newDeck.trim()}
-                className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
+                className="btn-secondary"
               >
                 Add
               </button>
@@ -120,7 +118,7 @@ export default function SettingsPage() {
               value={settings.default_deck}
               onChange={(e) => save({ ...settings, default_deck: e.target.value })}
               disabled={saving || settings.decks.length === 0}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+              className="field"
             >
               {settings.decks.map((deck) => (
                 <option key={deck} value={deck}>
@@ -141,7 +139,7 @@ export default function SettingsPage() {
               onChange={(e) => setSettings({ ...settings, hanja_deck: e.target.value })}
               onBlur={() => save(settings)}
               disabled={saving}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+              className="field"
             />
           </section>
 
@@ -153,7 +151,7 @@ export default function SettingsPage() {
                 save({ ...settings, translator_backend: e.target.value as Settings["translator_backend"] })
               }
               disabled={saving}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+              className="field"
             >
               <option value="deepl">DeepL</option>
               <option value="claude">Claude</option>
@@ -179,7 +177,7 @@ export default function SettingsPage() {
                 max={MAX_LINES}
                 value={lines}
                 onChange={(e) => setReaderLines(Number(e.target.value))}
-                className="w-20 rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                className="w-20 field"
               />
             </label>
           </section>
@@ -203,7 +201,7 @@ export default function SettingsPage() {
                   }
                 }}
                 disabled={saving}
-                className="w-20 rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                className="w-20 field"
               />
               <span className="text-sm text-muted">days</span>
             </div>

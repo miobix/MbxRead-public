@@ -97,6 +97,10 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   appends senses through `save`, or converts a reading-saved word in place (`--convert`).
   The `Hanja::*` Anki decks are read-only to it. Logic is
   `server/hanja_study.py` + `scripts/hanja_study.py`; rationale in `docs/DECISIONS.md`.
+- [x] **28** — Visual redesign (2026-10-07): indigo palette (light + dark), Noto Sans KR,
+  full-line-height learning highlights, progress as metro stations (one per 10%), a
+  lemma-first word card, and one button language app-wide (solid primary per screen).
+  Frontend only; spec in SPEC Epic 28.
 
 ## Live operational facts
 
@@ -138,8 +142,11 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   environment. Worth confirming once, on a real sync, that a multi-sense word's card
   matches the popover preview and that pre-Epic-21 `Basic` notes still update in place
   without losing SRS history.
-- A **fuller per-screen UI makeover** was always wanted "later" — current styling
-  (warm-paper palette, the go-live contrast bump) is a baseline, not final.
+- **Reader popover misses hanja:** `GET /api/books/{id}/text` term summaries carry no
+  `hanja`, so tapping a hanja term in the reader (풍경) shows neither its hanja nor its
+  sense-grouped meaning chips. Found during Epic 28; pre-existing.
+- **Epic 28 light mode** was built from the same tokens but only checked in dark mode
+  (the machine runs dark); worth one look on a light-mode device.
 
 ## Gotcha for future dev sessions
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/lib/back-link";
 import { useEffect, useState } from "react";
 import { api, type Book, type BookSort, type FeedFetchResult } from "@/lib/api";
 import { SourceChip } from "@/lib/chips";
@@ -164,20 +165,18 @@ export default function QueuePage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Link href="/" className="text-sm text-muted hover:text-ink transition-colors">
-          ← Library
-        </Link>
+        <BackLink />
         <Link href="/feeds" className="text-sm text-muted hover:text-ink transition-colors">
           Manage feeds
         </Link>
       </div>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold font-serif">Queue</h1>
+        <h1 className="page-title">Queue</h1>
         <button
           onClick={fetchNew}
           disabled={fetching}
-          className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="btn-primary"
         >
           {fetching ? "Fetching…" : "Fetch new candidates"}
         </button>
@@ -192,7 +191,7 @@ export default function QueuePage() {
         <select
           value={topicFilter}
           onChange={(e) => setTopicFilter(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+          className="field px-2 py-1"
         >
           <option value="">All</option>
           {TOPICS.map((t) => (
@@ -205,7 +204,7 @@ export default function QueuePage() {
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+          className="field px-2 py-1"
         >
           <option value="">All</option>
           {SOURCES.map((s) => (
@@ -219,7 +218,7 @@ export default function QueuePage() {
       {fetchError && <p className="text-danger text-sm">{fetchError}</p>}
 
       {fetchResult && (
-        <div className="rounded-xl border border-border bg-surface shadow-sm p-4 text-sm flex flex-col gap-1">
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm flex flex-col gap-1">
           <p>
             Checked <b>{fetchResult.checked_feeds}</b> feed(s), created{" "}
             <b>{fetchResult.candidates_created}</b> new candidate(s)
@@ -268,7 +267,7 @@ export default function QueuePage() {
                 onClick={() => setViewMode(mode)}
                 className={`rounded-md px-3 py-1 capitalize transition-colors ${
                   viewMode === mode
-                    ? "bg-surface shadow-sm text-ink font-medium"
+                    ? "bg-surface text-ink font-medium"
                     : "text-muted hover:text-ink"
                 }`}
               >
@@ -281,7 +280,7 @@ export default function QueuePage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
+              className="field px-2 py-1"
             >
               <option value="newest">Newest fetched</option>
               <option value="easiest">Easiest first</option>
@@ -303,7 +302,7 @@ export default function QueuePage() {
           return (
             <li
               key={book.id}
-              className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-2"
+              className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-2"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
@@ -346,14 +345,14 @@ export default function QueuePage() {
                 <button
                   onClick={() => decide(book.id, "discarded")}
                   disabled={busyId === book.id}
-                  className="px-3 py-1.5 text-sm rounded-full border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm rounded border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
                 >
                   Discard
                 </button>
                 <button
                   onClick={() => decide(book.id, "library")}
                   disabled={busyId === book.id}
-                  className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="btn-primary"
                 >
                   Promote
                 </button>

@@ -537,7 +537,7 @@ parameter), and the CLI `__main__`. `books` gained two additive columns:
 source, so every path — paste, all four importers, the feed fetcher — gets it
 for free) and `duration_seconds` (NULL except for `source='yt'`). Frontend:
 `web/lib/chips.tsx` (`SourceChip`) maps `source` → a small colored badge
-(`yt`/`article` today, extendable), styled from the existing warm-palette
+(`yt`/`article` today, extendable), styled from the existing palette
 tokens (`accent`/`border`/`muted`) rather than new hues, so it stays
 theme-aware without touching `globals.css`. `web/lib/length.ts` exposes
 `formatLength()` (exact word count or exact duration, whichever field is
@@ -654,7 +654,10 @@ the spec's prose implies — verified directly against 입고 (`VV-R`), 들어�
 ## Frontend spec (`web/`, Epic 4+)
 
 Next.js 16.2.10, React 19, App Router, TypeScript, Tailwind v4. **Mobile-first** —
-primary device is a phone. Clean, modern, uncluttered. Config: `output: 'export'`,
+primary device is a phone. Visual design (Epic 28): indigo palette tokens in
+`app/globals.css` (light + dark), Noto Sans KR via `next/font/google`, and one button
+language (`.btn-primary` / `.btn-secondary` / `.btn-link` / `.btn-quiet` / `.field`
+component classes in `globals.css`). Config: `output: 'export'`,
 `images: { unoptimized: true }`, `trailingSlash: true` (required — see below); dev
 uses `next.config` rewrites `/api/* → http://localhost:8002/api/*` (build-time
 no-op for the static export, ignored with a warning; only takes effect under `next
@@ -662,18 +665,22 @@ dev`, where FastAPI must be separately running on 8002).
 
 Routes:
 - `/` — **implemented (Epic 4).** Book list (title, progress as a percentage of
-  `current_offset/total_chars` — Epic 24; page numbers are per-device now), a
-  per-card action column (score / read / archive, moved off the card body in
-  Epic 24 follow-up so Archive isn't hit by accident), a mobile-only hamburger
+  `current_offset/total_chars` — Epic 24; page numbers are per-device now) drawn
+  as a thin bar, a ruled list (no cards since Epic 28) with the score / read /
+  archive / edit actions on their own row under the meta, away from the title so
+  Archive isn't hit by accident, a solid "Add text" button, a mobile-only hamburger
   for the nav links, "Add book" modal: title + paste-textarea or `.txt`
   upload → `POST /api/books`. `app/page.tsx`, both the list and the modal in one
   file (single small component, no separate `components/` dir yet).
 - `/read/?id=<bookId>` — **implemented (Epic 4 rendering, Epic 5 tooltip flow).**
   `app/read/page.tsx`. Renders `content` as spans using `tokens` offsets; only
   tokens whose lemma is in `terms` with status `learning` get a highlight
-  (`bg-amber-200/70 dark:bg-amber-300/25`). Prev/next moves one CSS column and
-  `PATCH`es `current_offset` (best-effort — a failed PATCH doesn't block
-  navigation); the footer shows a percentage, not a page number (Epic 24).
+  (`bg-highlight` with vertical padding, so it fills the line height without moving
+  text; the tapped token turns solid accent while its popover is open, Epic 28).
+  Prev/next moves one CSS column and `PATCH`es `current_offset` (best-effort — a
+  failed PATCH doesn't block navigation). Progress is a percentage, not a page
+  number (Epic 24), shown since Epic 28 as `ProgressStations` under the header: a
+  stop at every 10%, the reader on the nearest one, exact % under it.
   **Not `/read/[bookId]` as SPEC literally names it** — see "Deviations" below.
 
   **Tap/selection handling (Epic 5):** one delegated `onClick` on the `<article>`
@@ -771,6 +778,8 @@ reasoning in `docs/DECISIONS.md` 2026-07-21):**
 3. **Removed `next/font/google` (Geist) from the default scaffold.** It fetches
    font files from Google Fonts at build time; kept the layout on the system font
    stack instead to avoid an unnecessary external-network build dependency.
+   **Reversed in Epic 28** for Noto Sans KR (see `docs/DECISIONS.md` 2026-10-07):
+   `next build` now needs network unless the font is already in `.next/cache`.
 4. **(Epic 5) Deck select is hardcoded to `["Korean"]`**, not sourced from
    `GET /api/settings` — that route is Epic 7 scope and doesn't exist yet. See
    `docs/DECISIONS.md` 2026-07-21.
