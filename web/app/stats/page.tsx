@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/lib/back-link";
 import { useEffect, useMemo, useState } from "react";
 import { api, type CurationCounts, type Stats } from "@/lib/api";
 
@@ -18,10 +18,8 @@ export default function StatsPage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <Link href="/" className="text-sm text-muted hover:text-ink transition-colors">
-          ← Library
-        </Link>
-        <h1 className="text-2xl font-semibold font-serif">Stats</h1>
+        <BackLink />
+        <h1 className="page-title">Stats</h1>
       </div>
 
       {error && <p className="text-danger text-sm">{error}</p>}
@@ -58,8 +56,8 @@ function HeroRow({ stats }: { stats: Stats }) {
   return (
     <section className="grid grid-cols-2 gap-3">
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <div className="text-3xl font-semibold font-serif text-ink tabular-nums">{t.value}</div>
+        <div key={t.label} className="rounded-lg border border-border bg-surface p-4">
+          <div className="text-3xl font-bold text-ink tabular-nums">{t.value}</div>
           <div className="text-sm text-muted mt-0.5">{t.label}</div>
           {t.hint && <div className="text-xs text-muted mt-0.5">{t.hint}</div>}
         </div>
@@ -183,7 +181,7 @@ function NewWordsPerBook({ stats }: { stats: Stats }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium text-muted">New words per item</h2>
-      <div className="rounded-xl border border-border bg-surface p-3 shadow-sm">
+      <div className="rounded-lg border border-border bg-surface p-3">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="New words per item">
           <polyline
             points={points}
@@ -228,7 +226,7 @@ function VocabDepth({ stats }: { stats: Stats }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium text-muted">Vocabulary depth</h2>
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
+      <div className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-3">
         {beginner_pct !== null && (
           <div className="text-sm text-ink">
             You know{" "}
@@ -336,16 +334,16 @@ function CurationBreakdown({ stats }: { stats: Stats }) {
           ))}
         </div>
       </div>
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-medium text-muted uppercase tracking-wide">By topic</h3>
+          <h3 className="text-xs font-medium text-muted">By topic</h3>
           {by_topic.map((row) => (
             <CurationRow key={row.topic || "(untagged)"} label={row.topic || "(untagged)"} counts={row} />
           ))}
         </div>
         {by_feed.length > 0 && (
           <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-medium text-muted uppercase tracking-wide">By feed</h3>
+            <h3 className="text-xs font-medium text-muted">By feed</h3>
             {by_feed.map((row) => (
               <CurationRow key={row.feed_id} label={row.feed_name} counts={row} />
             ))}
@@ -385,7 +383,7 @@ function Milestones({ stats }: { stats: Stats }) {
         {badges.map((b) => (
           <span
             key={b.label}
-            className={`rounded-full px-3 py-1 text-xs border transition-colors ${
+            className={`rounded px-3 py-1 text-xs border transition-colors ${
               b.done
                 ? "bg-accent text-accent-ink border-accent"
                 : "border-border text-muted opacity-60"

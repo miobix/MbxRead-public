@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/lib/back-link";
 import { useEffect, useState } from "react";
 import { api, type AnkiSyncResult, type Settings, type Term, type TermStatus } from "@/lib/api";
 import { TokenPopover } from "../read/TokenPopover";
@@ -76,23 +76,21 @@ export default function TermsPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Library
-      </Link>
+      <BackLink />
 
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold font-serif">Terms</h1>
+        <h1 className="page-title">Terms</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setAddingWord(true)}
-            className="rounded-full border border-border px-4 py-2 text-sm font-medium hover:border-accent transition-colors"
+            className="btn-secondary"
           >
             Add word
           </button>
           <button
             onClick={sync}
             disabled={syncing}
-            className="rounded-full bg-accent text-accent-ink px-4 py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="btn-primary"
           >
             {syncing ? "Syncing…" : "Sync to Anki"}
           </button>
@@ -102,7 +100,7 @@ export default function TermsPage() {
       {syncError && <p className="text-danger text-sm">{syncError}</p>}
 
       {syncResult && (
-        <div className="rounded-xl border border-border bg-surface shadow-sm p-4 text-sm flex flex-col gap-2">
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm flex flex-col gap-2">
           <p>
             Added <b>{syncResult.added}</b>, updated <b>{syncResult.updated}</b>
             {syncResult.failed.length > 0 && (
@@ -128,7 +126,7 @@ export default function TermsPage() {
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as TermStatus | "")}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          className="field"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -141,7 +139,7 @@ export default function TermsPage() {
         <select
           value={deck}
           onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          className="field"
         >
           <option value="">All decks</option>
           {/* settings.decks is a plain user-edited list — it doesn't automatically
@@ -160,7 +158,7 @@ export default function TermsPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search lemma / translation…"
-          className="flex-1 min-w-[10rem] rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+          className="flex-1 min-w-[10rem] field"
         />
       </div>
 
@@ -175,7 +173,7 @@ export default function TermsPage() {
           <li
             key={term.id}
             onClick={() => setEditingTerm(term)}
-            className="rounded-xl border border-border bg-surface shadow-sm p-3 text-sm cursor-pointer hover:border-accent transition-colors"
+            className="rounded-lg border border-border bg-surface p-3 text-sm cursor-pointer hover:border-accent transition-colors"
           >
             <div className="flex items-center justify-between">
               <span className="font-medium">

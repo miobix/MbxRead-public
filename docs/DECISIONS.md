@@ -1323,3 +1323,38 @@ lock notes in `CLAUDE.md`, the skill and STATUS were never committed. The entry 
 for its cause analysis, which still holds: the request logic is unchanged (no cache, no
 throttle, no stop on failure), so a run on a common character can flood krdict again. The
 rework listed there is still the fix.
+
+## 2026-10-07 — Epic 28: visual redesign (indigo, Noto Sans KR, metro progress)
+
+The user found the UI "default". The warm-paper palette (cream, brown, rust accent) is
+the look most generated interfaces fall back on, and the rest was stock Tailwind
+(system font, pill buttons, tiny all-caps labels). Three directions were mocked up with
+real reader content in a private artifact: Indigo (쪽빛), Celadon (청자) and Seoul Metro
+(지하철). The user picked Indigo's palette, structure and word card, and took two pieces
+from Metro: full-line-height highlights and progress as subway stations (one stop per
+10%, rounded to the nearest stop). Full spec in SPEC Epic 28.
+
+**Font: Noto Sans KR over a serif.** The user asked which is easier on the eyes. For a
+learner reading on a phone, a gothic face: serif (바탕/명조) thin strokes and brush ends
+make similar jamo harder to tell apart, worst in dark mode. Noto Sans KR shares its
+Hangul with Pretendard, the de facto Korean UI face, and is on Google Fonts.
+
+**`next/font/google` is back, reversing the Epic 4 deviation.** Epic 4 removed it to
+keep the build off the network. The Korean font changes the trade-off: Google's CSS
+splits Noto Sans KR into ~120 unicode-range slices, and next/font self-hosts all of
+them, so a phone over Tailscale downloads only the slices a page uses (a few hundred KB)
+instead of a multi-MB file. Serving stays fully local; only `next build` needs network,
+and only when the font isn't in `.next/cache`. Vendoring a single woff2 with
+`next/font/local` was the alternative, rejected for that download size.
+
+**The reader highlight uses vertical padding on the inline span.** Padding on an inline
+element paints the full line box without changing layout, so the CSS-column page breaks
+measured in Epic 24 are unaffected. No horizontal padding for the same reason.
+
+**Library actions moved from a side column to a row under the meta.** The side column
+existed so Archive wasn't hit by accident (Epic 24 follow-up); a row of small text
+buttons below the progress bar and score keeps that distance from the title.
+
+Found while checking the result, not fixed (pre-existing): the reader's term summaries
+(`GET /api/books/{id}/text` → `terms`) carry no `hanja`, so tapping a hanja term in the
+reader (풍경, 風景) shows neither its hanja nor its sense-grouped meaning chips.

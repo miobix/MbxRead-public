@@ -27,6 +27,11 @@ const dictShade = (i: number) => DICT_SHADES[Math.min(i, DICT_SHADES.length - 1)
 
 const LEMMA_GROUP = "";
 
+// Rough rendered width in em, so the lemma input hugs its text and the hanja field
+// can sit beside it: Hangul/Hanja are about 1em wide, everything else about 0.6em.
+const textEm = (text: string) =>
+  [...text].reduce((w, ch) => w + (/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af]/.test(ch) ? 1 : 0.6), 0);
+
 export function TokenPopover({
   target,
   bookId,
@@ -313,7 +318,7 @@ export function TokenPopover({
       const clash = targetTerm ? null : await api.termByLemma(trimmedLemma);
       if (clash) {
         adoptExisting(clash);
-        setError(`${trimmedLemma} is already saved — press Append to add to it.`);
+        setError(`${trimmedLemma} is already saved. Press "Add to ${trimmedLemma}" to add to it.`);
       } else {
         setError(e instanceof Error ? e.message : "Failed to save.");
       }
@@ -379,7 +384,7 @@ export function TokenPopover({
           return (
             <span
               key={bi}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${chipClass(
+              className={`inline-flex items-center gap-1 rounded px-2 py-0.5 ${chipClass(
                 item.kind,
                 backShade[bi]
               )}`}
@@ -402,81 +407,83 @@ export function TokenPopover({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+      className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-3 max-h-[90vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface border-t border-border sm:border sm:rounded-lg shadow-[0_-8px_30px_rgb(0_0_0/0.12)] px-6 pt-5 pb-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-sm text-muted">{target.surface}</div>
-
-        <input
-          value={lemma}
-          onChange={(e) => setLemma(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !isPhrase && busy === null) {
-              e.preventDefault();
-              lookupDictionary();
-            }
-          }}
-          autoFocus={hanjaMode && !isEditing}
-          placeholder="Dictionary form (lemma)"
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        />
+        <div className="flex flex-col gap-1">
+          {target.surface !== lemma && (
+            <span className="text-sm text-muted">{target.surface}</span>
+          )}
+          <div className="flex items-baseline gap-3">
+            <input
+              value={lemma}
+              onChange={(e) => setLemma(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isPhrase && busy === null) {
+                  e.preventDefault();
+                  lookupDictionary();
+                }
+              }}
+              autoFocus={hanjaMode && !isEditing}
+              placeholder="Dictionary form"
+              aria-label="Dictionary form (lemma)"
+              style={{ width: `${Math.max(3, textEm(lemma)) + 0.5}em` }}
+              className={`min-w-0 max-w-full bg-transparent font-bold leading-tight border-b border-transparent hover:border-border focus:border-accent focus:outline-none focus-visible:outline-none transition-colors ${
+                isPhrase ? "text-xl" : "text-[32px]"
+              }`}
+            />
+            {showHanja && (
+              <input
+                value={hanja}
+                onChange={(e) => setHanja(e.target.value)}
+                onBlur={(e) => addSense(e.target.value)}
+                placeholder={senses.length > 0 ? "Another hanja" : "Hanja"}
+                aria-label="Hanja"
+                className="min-w-0 flex-1 bg-transparent text-xl text-muted border-b border-border focus:border-accent focus:text-ink focus:outline-none focus-visible:outline-none transition-colors"
+              />
+            )}
+          </div>
+        </div>
 
         {appendTo && (
-          <p className="rounded-lg bg-paper border border-border px-3 py-2 text-xs">
+          <p className="rounded border border-border bg-paper px-3 py-2 text-sm">
             <b>{appendTo.lemma}</b> is already saved
-            {appendTo.hanja.length > 0 && <> as {appendTo.hanja.join(" · ")}</>}
-            {appendTo.translation && <> ({appendTo.translation})</>}. Saving appends to it.
+            {appendTo.hanja.length > 0 && <> as {appendTo.hanja.join(", ")}</>}
+            {appendTo.translation && <> ({appendTo.translation})</>}. Saving adds to it.
           </p>
         )}
 
-        {showHanja && (
-          <input
-            value={hanja}
-            onChange={(e) => setHanja(e.target.value)}
-            onBlur={(e) => addSense(e.target.value)}
-            placeholder={senses.length > 0 ? "Hanja — another sense" : "Hanja"}
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-          />
+        {target.sentence && (
+          <p className="text-sm leading-relaxed text-muted">{target.sentence}</p>
         )}
 
-        <div className="flex gap-3 flex-wrap justify-center">
-          <button
-            onClick={translateWord}
-            disabled={busy !== null}
-            className="px-5 py-2.5 text-base rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-          >
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          <button onClick={translateWord} disabled={busy !== null} className="btn-link">
             {busy === "translate" ? "Translating…" : "Translate"}
           </button>
           {!isPhrase && (
-            <button
-              onClick={lookupDictionary}
-              disabled={busy !== null}
-              className="px-5 py-2.5 text-base rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-            >
+            <button onClick={lookupDictionary} disabled={busy !== null} className="btn-link">
               {busy === "dict" ? "Looking up…" : "Dictionary"}
             </button>
           )}
         </div>
 
-        {target.sentence && <p className="text-xs text-muted italic">{target.sentence}</p>}
-
-        {/* Front → Back preview — a true WYSIWYG of what syncs to Anki. One row
-            per front entry so it's immediately visible which word each Back chip
-            belongs to, instead of two same-height-assuming parallel columns. */}
-        <div className="flex flex-col divide-y divide-border border-t border-b border-border text-xs">
+        {/* Front → Back preview, a WYSIWYG of what syncs to Anki: one row per front
+            entry, so each Back chip sits next to the word it belongs to. */}
+        <div className="flex flex-col divide-y divide-border border-y border-border text-sm">
           {legacyTranslation && (
-            <div className="py-1.5 text-muted italic">(legacy) {legacyTranslation}</div>
+            <div className="py-2 text-muted">Old translation: {legacyTranslation}</div>
           )}
           {frontEntries.map((entry, i) => {
             const group = i === 0 ? LEMMA_GROUP : entry.text;
             return (
-              <div key={i} className="py-1.5 flex flex-wrap items-center gap-1.5">
+              <div key={i} className="py-2 flex flex-wrap items-center gap-1.5">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 ${chipClass(
+                  className={`inline-flex items-center gap-1 rounded px-2 py-0.5 shrink-0 ${chipClass(
                     entry.kind === "lemma" ? "lemma" : entry.kind,
                     i === 0 ? "" : formShade[i - 1]
                   )}`}
@@ -497,12 +504,11 @@ export function TokenPopover({
               </div>
             );
           })}
-          {/* Epic 26: one row per hanja sense — the Hanja field's numbered stack and
-              the meanings that will be labeled with the same numbers on the Back. */}
+          {/* Epic 26: one row per hanja sense, numbered the same on the card's Back. */}
           {showHanja &&
             senses.map((sense) => (
-              <div key={`sense-${sense}`} className="py-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 bg-manual text-manual-ink">
+              <div key={`sense-${sense}`} className="py-2 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 shrink-0 bg-manual text-manual-ink">
                   {sense}
                   <button
                     type="button"
@@ -519,23 +525,23 @@ export function TokenPopover({
         </div>
 
         {!isPhrase && dictEntries && (
-          <div className="flex flex-col gap-2 max-h-52 overflow-y-auto border-t border-border pt-2">
+          <div className="flex flex-col gap-3 max-h-56 overflow-y-auto rounded border border-border bg-paper p-3">
             {dictEntries.length === 0 && (
-              <p className="text-xs text-muted">No dictionary entries found.</p>
+              <p className="text-sm text-muted">No dictionary entries found.</p>
             )}
             {dictEntries.map((entry, i) => (
-              <div key={i} className="text-xs">
+              <div key={i} className="text-sm">
                 <button
                   type="button"
                   onClick={() => addDictHeadword(entry)}
-                  className="font-medium text-accent hover:underline"
+                  className="font-semibold text-accent hover:underline"
                   title="Add as a highlighted form + first definition"
                 >
                   {entry.word}
                 </button>{" "}
                 {entry.origin && <span className="text-muted">{entry.origin}</span>}{" "}
-                <span className="text-muted">{entry.pos}</span>
-                <ul className="mt-0.5 flex flex-col gap-0.5">
+                <span className="text-xs text-muted">{entry.pos}</span>
+                <ul className="mt-1 flex flex-col gap-1">
                   {entry.definitions.map((d, j) => (
                     <li key={j}>
                       <button
@@ -545,16 +551,15 @@ export function TokenPopover({
                             ? senseGroupFor(entry.origin)
                             : groupKeyFor(entry.word.trim());
                           addDictSense(group, d, entry.examples[0]);
-                          // Picking a sense is the homograph disambiguation just as much
-                          // as clicking the headword itself — don't require that extra
-                          // click for the hanja spelling to come along.
+                          // Picking a sense disambiguates the homograph as much as
+                          // clicking the headword, so the hanja comes along too.
                           if (entry.origin && showHanja) addSense(entry.origin);
                         }}
                         className="text-left text-muted hover:text-ink transition-colors"
                         title="Add this definition to Back"
                       >
-                        <b>{d.en_word}</b>
-                        {d.en_def ? ` — ${d.en_def}` : ""}
+                        <b className="text-ink font-medium">{d.en_word}</b>
+                        {d.en_def ? `: ${d.en_def}` : ""}
                       </button>
                     </li>
                   ))}
@@ -564,14 +569,14 @@ export function TokenPopover({
           </div>
         )}
 
-        {/* Examples — the literal content of the Anki "Examples" field. */}
-        <div className="flex flex-col gap-1 border-t border-border pt-2">
-          <span className="text-[11px] uppercase tracking-wide text-muted">Examples</span>
+        {/* Examples: the literal content of the Anki "Examples" field. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Examples</span>
           {backItems
             .map((item, i) => ({ item, i }))
             .filter(({ item }) => item.kind === "dict" && item.korean_def)
             .map(({ item, i }) => (
-              <div key={i} className="flex items-start gap-1 text-xs">
+              <div key={i} className="flex items-start gap-1.5 text-sm">
                 <button
                   type="button"
                   onClick={() => removeBackItem(i)}
@@ -586,25 +591,25 @@ export function TokenPopover({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes…"
+            placeholder="Notes"
             rows={2}
-            className="mt-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+            className="field resize-none"
           />
         </div>
 
-        {/* Add entry — hand-typed content that never came from Translate/Dictionary.
-            Always its own independent group (front), never merged into the lemma. */}
-        <div className="flex flex-col gap-1.5 border-t border-border pt-2">
-          <span className="text-[11px] uppercase tracking-wide text-muted">Add entry</span>
-          {/* A hanja term's Back chips hang off a *sense*, so here the single input
-              adds a meaning to the sense being built rather than a new front form. */}
+        {/* Hand-typed content that never came from Translate/Dictionary. Always its
+            own front group, never merged into the lemma. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Add your own</span>
+          {/* On a hanja term, Back chips hang off a sense, so the single input adds a
+              meaning to the sense being built instead of a new front form. */}
           {isPhrase || showHanja ? (
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={manualBack}
                 onChange={(e) => setManualBack(e.target.value)}
-                placeholder={showHanja ? "Add a meaning" : "Add a translation"}
-                className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                placeholder={showHanja ? "A meaning" : "A translation"}
+                className="field flex-1 min-w-0"
               />
               <button
                 type="button"
@@ -612,14 +617,14 @@ export function TokenPopover({
                   addBackText(manualBack, showHanja ? senseGroupFor("") : LEMMA_GROUP);
                   setManualBack("");
                 }}
-                className="px-3 py-1.5 text-xs rounded-full border border-border hover:border-accent transition-colors"
+                className="btn-secondary"
               >
                 Add
               </button>
             </div>
           ) : (
             <>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <input
                   value={manualFront}
                   onChange={(e) => {
@@ -627,93 +632,70 @@ export function TokenPopover({
                     setManualError(null);
                   }}
                   placeholder="Front"
-                  className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                  className="field flex-1 min-w-0"
                 />
                 <input
                   value={manualBack}
                   onChange={(e) => setManualBack(e.target.value)}
                   placeholder="Back"
-                  className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                  className="field flex-1 min-w-0"
                 />
-                <button
-                  type="button"
-                  onClick={addManualEntry}
-                  className="px-3 py-1.5 text-xs rounded-full border border-border hover:border-accent transition-colors"
-                >
+                <button type="button" onClick={addManualEntry} className="btn-secondary">
                   Add
                 </button>
               </div>
-              {manualError && <p className="text-danger text-xs">{manualError}</p>}
+              {manualError && <p className="text-danger text-sm">{manualError}</p>}
             </>
           )}
         </div>
 
-        <select
-          value={deck}
-          onChange={(e) => setDeck(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
-        >
-          {deckOptions.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-
         {error && <p className="text-danger text-sm">{error}</p>}
 
         {isEditing && (
-          <div className="flex gap-2 flex-wrap text-sm">
+          <div className="flex gap-x-5 gap-y-2 flex-wrap">
             {target.existing?.status !== "learning" && (
-              <button
-                onClick={() => setStatus("learning")}
-                disabled={busy !== null}
-                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-              >
+              <button onClick={() => setStatus("learning")} disabled={busy !== null} className="btn-quiet">
                 Mark learning
               </button>
             )}
             {target.existing?.status !== "known" && (
-              <button
-                onClick={() => setStatus("known")}
-                disabled={busy !== null}
-                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-              >
+              <button onClick={() => setStatus("known")} disabled={busy !== null} className="btn-quiet">
                 Mark known
               </button>
             )}
             {target.existing?.status !== "ignored" && (
-              <button
-                onClick={() => setStatus("ignored")}
-                disabled={busy !== null}
-                className="px-3 py-1.5 rounded-full border border-border hover:border-accent transition-colors disabled:opacity-50"
-              >
+              <button onClick={() => setStatus("ignored")} disabled={busy !== null} className="btn-quiet">
                 Ignore
               </button>
             )}
             <button
               onClick={remove}
               disabled={busy !== null}
-              className="px-3 py-1.5 rounded-full border border-danger-soft text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+              className="text-sm text-danger hover:underline underline-offset-4 disabled:opacity-50"
             >
               Delete
             </button>
           </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
+        <div className="flex items-center gap-3">
+          <select
+            value={deck}
+            onChange={(e) => setDeck(e.target.value)}
+            aria-label="Deck"
+            className="field flex-1 min-w-0"
           >
+            {deckOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <button onClick={onClose} className="btn-quiet px-1">
             Cancel
           </button>
-          <button
-            onClick={save}
-            disabled={busy !== null}
-            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {busy === "save" ? "Saving…" : appendTo ? `Append to ${appendTo.lemma}` : "Save"}
+          <button onClick={save} disabled={busy !== null} className="btn-primary">
+            {busy === "save" ? "Saving…" : appendTo ? `Add to ${appendTo.lemma}` : "Save"}
           </button>
         </div>
       </div>

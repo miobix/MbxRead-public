@@ -17,6 +17,12 @@ import { SOURCES, TOPICS } from "@/lib/topics";
 // compatible with every existing caller that omits limit/offset entirely.
 const PAGE_SIZE = 30;
 
+const SORTS: { key: BookSort; label: string }[] = [
+  { key: "opened", label: "Recently opened" },
+  { key: "recent", label: "Added" },
+  { key: "easiest", label: "Easiest unread" },
+];
+
 const NAV_LINKS = [
   { href: "/queue", label: "Queue" },
   { href: "/stats", label: "Stats" },
@@ -39,7 +45,7 @@ function MobileNav() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Menu"
         aria-expanded={open}
-        className="flex flex-col justify-center gap-1 rounded-md border border-border px-2.5 py-2 text-muted hover:text-ink hover:border-accent transition-colors"
+        className="flex flex-col justify-center gap-1 rounded border border-border px-2.5 py-2.5 text-muted hover:text-ink hover:border-accent transition-colors"
       >
         <span className="block h-0.5 w-4 rounded-full bg-current" />
         <span className="block h-0.5 w-4 rounded-full bg-current" />
@@ -53,7 +59,7 @@ function MobileNav() {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <nav className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+          <nav className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded border border-border bg-surface shadow-lg">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -149,11 +155,9 @@ export default function HomePage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold font-serif">MbxAndria</h1>
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Desktop keeps the inline links exactly as they were — the hamburger is
-              a mobile-only addition, where five links plus "+ Add" no longer fit. */}
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <h1 className="page-title">Library</h1>
+        <div className="flex items-center gap-3">
           <nav className="hidden sm:flex items-center gap-3">
             {NAV_LINKS.map((link) => (
               <Link
@@ -165,11 +169,8 @@ export default function HomePage() {
               </Link>
             ))}
           </nav>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="rounded-md bg-accent text-accent-ink px-2.5 py-1.5 sm:px-4 sm:py-2 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity"
-          >
-            + Add
+          <button onClick={() => setModalOpen(true)} className="btn-primary">
+            Add text
           </button>
           <MobileNav />
         </div>
@@ -177,38 +178,43 @@ export default function HomePage() {
 
       {error && <p className="text-danger text-sm mb-4">{error}</p>}
 
-      <div className="flex items-center flex-wrap gap-2 mb-3 text-sm">
-        <span className="text-muted">Topic:</span>
-        <select
-          value={topicFilter}
-          onChange={(e) => setTopicFilter(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">All</option>
-          {TOPICS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-        <span className="text-muted">Source:</span>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">All</option>
-          {SOURCES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-1 text-muted">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-4 text-sm">
+        <label className="flex items-center gap-1.5 text-muted">
+          Topic
+          <select
+            value={topicFilter}
+            onChange={(e) => setTopicFilter(e.target.value)}
+            className="field px-2 py-1"
+          >
+            <option value="">All</option>
+            {TOPICS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-muted">
+          Source
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="field px-2 py-1"
+          >
+            <option value="">All</option>
+            {SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-muted">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
+            className="accent-accent"
           />
           Show archived
         </label>
@@ -217,134 +223,111 @@ export default function HomePage() {
       {books === null && !error && <p className="text-muted">Loading…</p>}
 
       {books?.length === 0 && (
-        <p className="text-muted">Nothing matches. Add something or adjust the filters.</p>
+        <p className="text-muted">Nothing matches. Add a text or change the filters.</p>
       )}
 
       {books && books.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 text-sm">
-          <span className="text-muted">Sort:</span>
-          <button
-            onClick={() => setSort("opened")}
-            className={sort === "opened" ? "text-ink font-medium" : "text-muted hover:text-ink"}
-          >
-            Recently opened
-          </button>
-          <span className="text-border">·</span>
-          <button
-            onClick={() => setSort("recent")}
-            className={sort === "recent" ? "text-ink font-medium" : "text-muted hover:text-ink"}
-          >
-            Recently added
-          </button>
-          <span className="text-border">·</span>
-          <button
-            onClick={() => setSort("easiest")}
-            className={sort === "easiest" ? "text-ink font-medium" : "text-muted hover:text-ink"}
-          >
-            Easiest unread
-          </button>
+        <div className="flex items-center gap-5 pb-3 text-sm border-b border-border">
+          {SORTS.map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setSort(o.key)}
+              className={
+                sort === o.key
+                  ? "text-ink font-medium underline decoration-2 decoration-accent underline-offset-[6px]"
+                  : "text-muted hover:text-ink transition-colors"
+              }
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
 
-      <ul className="flex flex-col gap-3">
-        {books?.map((book) => (
-          <li
-            key={book.id}
-            className="flex gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm"
-          >
-            {/* Actions live in their own column, off to the side of the card body:
-                they used to sit inline under the title, where Archive was easy to
-                hit by accident when reaching for the book itself. */}
-            <div className="flex w-14 shrink-0 flex-col gap-1 text-center text-[10px] leading-tight">
-              <button
-                onClick={() => score(book.id)}
-                disabled={scoring === book.id}
-                title={book.scored_at ? "Re-score difficulty" : "Score difficulty"}
-                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors disabled:opacity-50"
-              >
-                {scoring === book.id ? "…" : book.scored_at ? "rescore" : "score"}
-              </button>
-              <button
-                onClick={() => toggle(book.id, "read", !book.read)}
-                title={book.read ? "Mark unread" : "Mark read"}
-                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
-              >
-                {book.read ? "unread" : "read"}
-              </button>
-              <button
-                onClick={() => toggle(book.id, "archived", !book.archived)}
-                title={book.archived ? "Restore from archive" : "Archive"}
-                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
-              >
-                {book.archived ? "restore" : "archive"}
-              </button>
-              <button
-                onClick={() => setEditing(book)}
-                title="Edit title, topic and tags"
-                className="rounded border border-border px-1 py-1.5 text-muted hover:text-ink hover:border-accent transition-colors"
-              >
-                edit
-              </button>
-            </div>
-
-            <div className="min-w-0 flex-1">
+      <ul className="flex flex-col">
+        {books?.map((book) => {
+          const pct =
+            book.current_offset > 0 && book.total_chars > 0
+              ? Math.min(100, Math.round((book.current_offset / book.total_chars) * 100))
+              : 0;
+          return (
+            <li key={book.id} className="flex flex-col gap-2 py-4 border-b border-border">
               <Link
                 href={`/read/?id=${book.id}`}
-                className="block hover:text-accent transition-colors"
+                className="group flex flex-col gap-2"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{book.title}</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-semibold leading-snug [word-break:keep-all] group-hover:text-accent transition-colors">
+                    {book.title}
+                  </span>
                   {(book.source === "pdf" || book.source === "epub") && (
-                    <span className="text-xs text-muted border border-border rounded-full px-1.5">
-                      Book
-                    </span>
+                    <span className="shrink-0 text-xs text-muted">Book</span>
                   )}
                   {book.source === "subs" && (
-                    <span className="text-xs text-muted border border-border rounded-full px-1.5">
-                      Subs
-                    </span>
+                    <span className="shrink-0 text-xs text-muted">Subtitles</span>
                   )}
-                  {book.read && <span className="text-xs text-accent">✓ read</span>}
                 </div>
                 {/* Progress as a percentage of the text, not a page number: pages are
                     per-device since Epic 24, and current_page no longer moves. */}
-                <div className="text-sm text-muted">
-                  {book.current_offset > 0 && book.total_chars > 0
-                    ? `${Math.min(100, Math.round((book.current_offset / book.total_chars) * 100))}% read`
-                    : "not started"}
+                <div className="h-1 rounded-full bg-line">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
                 </div>
-                {(book.topic || book.tags.length > 0) && (
-                  <div className="text-xs text-muted mt-0.5">
-                    {[book.topic, ...book.tags].filter(Boolean).join(" · ")}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-muted tabular-nums">
+                  <span className={book.read ? "text-accent font-medium" : undefined}>
+                    {book.read ? "Read" : pct > 0 ? `${pct}% read` : "Not started"}
+                  </span>
+                  {[book.topic, ...book.tags].filter(Boolean).map((t) => (
+                    <span key={t}>{t}</span>
+                  ))}
+                </div>
               </Link>
-              <div className="mt-2 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <ScoreLine book={book} />
                 <GeneralScoreLine book={book} />
+              </div>
+              {/* Kept on their own row, away from the title, so Archive is hard to
+                  hit by accident when reaching for the text itself. */}
+              <div className="flex items-center gap-4 flex-wrap text-xs">
+                <button
+                  onClick={() => score(book.id)}
+                  disabled={scoring === book.id}
+                  className="btn-quiet text-xs"
+                >
+                  {scoring === book.id ? "Scoring…" : book.scored_at ? "Rescore" : "Score"}
+                </button>
+                <button
+                  onClick={() => toggle(book.id, "read", !book.read)}
+                  className="btn-quiet text-xs"
+                >
+                  {book.read ? "Mark unread" : "Mark read"}
+                </button>
+                <button
+                  onClick={() => toggle(book.id, "archived", !book.archived)}
+                  className="btn-quiet text-xs"
+                >
+                  {book.archived ? "Restore" : "Archive"}
+                </button>
+                <button onClick={() => setEditing(book)} className="btn-quiet text-xs">
+                  Edit
+                </button>
                 {book.source_url && (
                   <a
                     href={book.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-muted hover:text-accent transition-colors"
-                    title="Open source"
+                    className="btn-quiet text-xs"
                   >
-                    ↗ source
+                    Source ↗
                   </a>
                 )}
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
 
       {hasMore && (
-        <button
-          onClick={loadMore}
-          disabled={loadingMore}
-          className="mt-4 w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-ink hover:bg-paper transition-colors disabled:opacity-50"
-        >
+        <button onClick={loadMore} disabled={loadingMore} className="btn-secondary mt-4 w-full">
           {loadingMore ? "Loading…" : "Load more"}
         </button>
       )}
@@ -384,8 +367,7 @@ const MODES: { key: Mode; label: string }[] = [
   { key: "article", label: "Article URL" },
 ];
 
-const inputClass =
-  "rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors";
+const inputClass = "field";
 
 function AddBookModal({
   onClose,
@@ -541,17 +523,17 @@ function AddBookModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+      className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface border-t border-border sm:border shadow-xl sm:rounded-lg p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold font-serif">Add to Library</h2>
+        <h2 className="text-xl font-bold">Add to Library</h2>
 
         {subsResult && (
-          <div className="rounded-lg border border-border bg-paper p-3 text-sm flex flex-col gap-1">
+          <div className="rounded border border-border bg-paper p-3 text-sm flex flex-col gap-1">
             <p className="font-medium">
               Imported {subsResult.imported.length} of{" "}
               {subsResult.imported.length +
@@ -572,7 +554,7 @@ function AddBookModal({
           </div>
         )}
 
-        <div className="flex gap-1 rounded-lg bg-paper p-1 text-sm">
+        <div className="flex flex-wrap gap-1 rounded bg-paper p-1 text-sm">
           {MODES.map((m) => (
             <button
               key={m.key}
@@ -580,7 +562,7 @@ function AddBookModal({
                 setMode(m.key);
                 setError(null);
               }}
-              className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+              className={`flex-1 rounded px-2 py-1.5 whitespace-nowrap transition-colors ${
                 mode === m.key
                   ? "bg-surface shadow-sm text-ink font-medium"
                   : "text-muted hover:text-ink"
@@ -626,7 +608,7 @@ function AddBookModal({
               <button
                 onClick={checkDifficulty}
                 disabled={checking || !text.trim()}
-                className="text-muted hover:text-ink transition-colors disabled:opacity-50"
+                className="btn-link"
               >
                 {checking ? "Checking…" : "Check difficulty"}
               </button>
@@ -748,7 +730,7 @@ function AddBookModal({
           <select
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-2 text-sm flex-1"
+            className="field flex-1 min-w-0"
           >
             <option value="">No topic</option>
             {TOPICS.map((t) => (
@@ -761,7 +743,7 @@ function AddBookModal({
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="tags, comma, separated"
-            className={`${inputClass} flex-1`}
+            className={`${inputClass} flex-1 min-w-0`}
           />
         </div>
 
@@ -772,14 +754,14 @@ function AddBookModal({
             // A partial batch leaves the modal open on its summary, so closing
             // still has to refresh the Library for whatever did import.
             onClick={subsResult?.imported.length ? onCreated : onClose}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
+            className="btn-secondary"
           >
             {subsResult ? "Close" : "Cancel"}
           </button>
           <button
             onClick={submit}
             disabled={submitting}
-            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="btn-primary"
           >
             {submitting ? "Adding…" : "Add"}
           </button>
@@ -833,14 +815,14 @@ function EditBookModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+      className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-surface shadow-xl rounded-t-2xl sm:rounded-2xl p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface border-t border-border sm:border shadow-xl sm:rounded-lg p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold font-serif">Edit details</h2>
+        <h2 className="text-xl font-bold">Edit details</h2>
 
         <label className="text-sm text-muted flex flex-col gap-1">
           Title
@@ -858,7 +840,7 @@ function EditBookModal({
             <select
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              className="rounded-lg border border-border bg-transparent px-2 py-2 text-sm text-ink"
+              className="field"
             >
               <option value="">No topic</option>
               {TOPICS.map((t) => (
@@ -884,14 +866,14 @@ function EditBookModal({
         <div className="flex gap-2 justify-end mt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:bg-paper transition-colors"
+            className="btn-secondary"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="btn-primary"
           >
             {saving ? "Saving…" : "Save"}
           </button>

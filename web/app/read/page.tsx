@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Suspense,
@@ -18,8 +17,10 @@ import {
   type Token,
   type TermSummary,
 } from "@/lib/api";
+import { BackLink } from "@/lib/back-link";
 import { useReaderLines } from "@/lib/reader-lines";
 import { capSelection, extractSentence } from "@/lib/sentence";
+import { ProgressStations } from "./ProgressStations";
 import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 
 // Below this, a press-and-release is a tap, not a drag, and there's nothing to
@@ -59,6 +60,9 @@ function ReadPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [target, setTarget] = useState<PopoverTarget | null>(null);
+  // The tapped token stays marked while its popover is open.
+  const [tapped, setTapped] = useState<number | null>(null);
+  const [title, setTitle] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null);
 
   const lines = useReaderLines();
@@ -102,7 +106,10 @@ function ReadPageContent() {
     if (bookId === null) return;
     api
       .getBook(bookId)
-      .then((book) => loadWindow(bookId, book.current_offset))
+      .then((book) => {
+        setTitle(book.title);
+        loadWindow(bookId, book.current_offset);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load item."));
   }, [bookId, loadWindow]);
 
@@ -355,8 +362,10 @@ function ReadPageContent() {
 
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-token-index]");
     if (!el) return;
-    const token = win.tokens[Number(el.dataset.tokenIndex)];
+    const index = Number(el.dataset.tokenIndex);
+    const token = win.tokens[index];
     if (!token) return;
+    setTapped(index);
     setTarget({
       surface: token.surface,
       lemma: token.lemma,
@@ -412,10 +421,14 @@ function ReadPageContent() {
       : 0;
 
   return (
-    <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Library
-      </Link>
+    <main className="flex-1 mx-auto w-full max-w-lg px-4 py-5 flex flex-col gap-4">
+      <div className="flex shrink-0 flex-col gap-3">
+        <div className="flex items-center justify-between gap-4">
+          <BackLink />
+          {title && <span className="min-w-0 truncate text-sm font-medium">{title}</span>}
+        </div>
+        {win && <ProgressStations percent={percent} />}
+      </div>
 
       {bookId === null && (
         <p className="text-danger text-sm">No item selected.</p>
@@ -459,30 +472,18 @@ function ReadPageContent() {
               columnFill: "auto",
             }}
           >
-            {renderContent(win.content, win.tokens, win.terms)}
+            {renderContent(win.content, win.tokens, win.terms, target ? tapped : null)}
           </article>
         )}
       </div>
 
       {win && (
-        <div className="flex shrink-0 items-center justify-between mt-4 pt-4 border-t border-border">
-          <button
-            onClick={goPrev}
-            disabled={atStart || loading}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
-          >
-            ← Prev
+        <div className="flex shrink-0 items-center justify-between gap-3 mt-2 pt-4 border-t border-border">
+          <button onClick={goPrev} disabled={atStart || loading} className="btn-secondary min-w-24">
+            Previous
           </button>
-          {/* Percentage rather than "7 / 150": page numbers are per-device now (a
-              phone fits fewer lines' worth of text than a laptop), but a percentage
-              derives from the character offset, so it reads the same on both. */}
-          <span className="text-sm text-muted">{percent}%</span>
-          <button
-            onClick={goNext}
-            disabled={atEnd || loading}
-            className="px-4 py-2 text-sm rounded-full border border-border hover:border-accent transition-colors disabled:opacity-40"
-          >
-            Next →
+          <button onClick={goNext} disabled={atEnd || loading} className="btn-secondary min-w-24">
+            Next
           </button>
         </div>
       )}
@@ -495,7 +496,10 @@ function ReadPageContent() {
           decks={settings?.decks ?? ["Korean"]}
           defaultDeck={settings?.default_deck ?? "Korean"}
           translatorBackend={settings?.translator_backend}
-          onClose={() => setTarget(null)}
+          onClose={() => {
+            setTarget(null);
+            setTapped(null);
+          }}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
         />
@@ -507,7 +511,8 @@ function ReadPageContent() {
 function renderContent(
   content: string,
   tokens: Token[],
-  terms: Record<string, TermSummary>
+  terms: Record<string, TermSummary>,
+  tapped: number | null
 ) {
   const nodes: React.ReactNode[] = [];
   let cursor = 0;
@@ -516,12 +521,16 @@ function renderContent(
     if (tok.s > cursor) nodes.push(content.slice(cursor, tok.s));
 
     const isLearning = terms[tok.lemma]?.status === "learning";
+    // Vertical padding on an inline span paints the full line-box height without
+    // moving any text, so the column breaks measured above are unaffected.
+    const mark =
+      i === tapped
+        ? "bg-accent text-accent-ink rounded-[2px] py-0.5"
+        : isLearning
+          ? "bg-highlight rounded-[2px] py-0.5"
+          : undefined;
     nodes.push(
-      <span
-        key={i}
-        data-token-index={i}
-        className={isLearning ? "bg-highlight/70 rounded-sm" : undefined}
-      >
+      <span key={i} data-token-index={i} className={mark}>
         {content.slice(tok.s, tok.e)}
       </span>
     );

@@ -617,6 +617,36 @@ reports what it would do. Tests: convert keeps context and resets sync state, fo
 `learning`, 409/404, `save` without `--convert` is a no-op, and a sync of a converted term
 adds a hanja note carrying the sentence.
 
+### Epic 28 — Visual redesign: indigo palette, Noto Sans KR, metro-line progress
+
+Scoped 2026-10-07 from three mockups (Indigo, Celadon, Seoul Metro) the user compared
+in a published artifact. The old warm-paper palette (cream, brown, rust accent) read as
+a generic default.
+
+**Decisions from the mockups:**
+
+- **Indigo base:** cool grey paper, indigo ink and accent, in light and dark. Page
+  structure is ruled lists, not cards.
+- **Noto Sans KR** for everything. A gothic face suits a learner on screen better than a
+  serif (thin strokes blur similar jamo, ㅈ/ㅊ, ㅇ/ㅎ, ㅐ/ㅔ). Same Hangul as Pretendard.
+- **From Metro:** learning-word highlight fills the whole line height; reading progress
+  is a line of stations, one every 10%, the reader on the nearest, exact % under it.
+- **Word card:** the lemma is the largest element (hanja beside it when shown),
+  Translate/Dictionary are underlined text actions, Save is the one solid button.
+- **Buttons:** each screen's main action is a solid primary button (Add text, Save,
+  Sync to Anki, Promote, ...). Alternatives are outlined, in-flow actions are links.
+- **Back link** to the Library carries a chevron on every page.
+- No all-caps labels; chip provenance colors stay distinct (indigo dictionary, green
+  translate, plum hand-typed).
+
+**Scope:** `web/` only. `globals.css` tokens + component classes, `layout.tsx` font,
+`lib/back-link.tsx`, `app/read/ProgressStations.tsx`, reader, `TokenPopover`, Library
+and its modals, and the shared classes applied to terms/queue/feeds/stats/settings.
+No API or behavior changes.
+
+**Accept:** pytest green (no backend change), `npm run build` and `npm run lint` clean,
+every page checked at phone width in dark mode.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

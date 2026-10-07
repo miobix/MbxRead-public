@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BackLink } from "@/lib/back-link";
 import { useEffect, useState } from "react";
 import { api, type Feed, type FeedType } from "@/lib/api";
 import { FEED_TYPES, TOPICS } from "@/lib/topics";
@@ -87,16 +88,14 @@ export default function FeedsPage() {
   };
 
   const inputCls =
-    "rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors";
+    "field";
 
   return (
     <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
-      <Link href="/" className="text-sm text-muted hover:text-ink transition-colors self-start">
-        ← Library
-      </Link>
+      <BackLink />
 
       <div>
-        <h1 className="text-2xl font-semibold font-serif">Feeds</h1>
+        <h1 className="page-title">Feeds</h1>
         <p className="text-sm text-muted mt-1">
           Content sources the fetch job pulls into the{" "}
           <Link href="/queue" className="underline hover:text-ink">
@@ -114,7 +113,7 @@ export default function FeedsPage() {
           editingId === feed.id ? (
             <li
               key={feed.id}
-              className="rounded-xl border border-accent bg-surface p-3 shadow-sm flex flex-col gap-2"
+              className="rounded-lg border border-accent bg-surface p-3 flex flex-col gap-2"
             >
               <input
                 className={inputCls}
@@ -155,14 +154,14 @@ export default function FeedsPage() {
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setEditingId(null)}
-                  className="px-3 py-1.5 text-sm rounded-full border border-border hover:border-accent transition-colors"
+                  className="btn-secondary px-3 py-1.5"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => saveEdit(feed.id)}
                   disabled={busyId === feed.id}
-                  className="px-4 py-1.5 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="btn-primary py-1.5"
                 >
                   Save
                 </button>
@@ -171,7 +170,7 @@ export default function FeedsPage() {
           ) : (
             <li
               key={feed.id}
-              className={`rounded-xl border border-border bg-surface p-3 shadow-sm flex items-center justify-between gap-3 ${
+              className={`rounded-lg border border-border bg-surface p-3 flex items-center justify-between gap-3 ${
                 feed.enabled ? "" : "opacity-60"
               }`}
             >
@@ -186,7 +185,7 @@ export default function FeedsPage() {
                 <button
                   onClick={() => toggle(feed)}
                   disabled={busyId === feed.id}
-                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors disabled:opacity-50 ${
+                  className={`px-2.5 py-1 text-xs rounded border transition-colors disabled:opacity-50 ${
                     feed.enabled
                       ? "border-accent text-ink"
                       : "border-border text-muted hover:border-accent"
@@ -216,7 +215,7 @@ export default function FeedsPage() {
         )}
       </ul>
 
-      <section className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 mt-2">
+      <section className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3 mt-2">
         <h2 className="text-sm font-medium text-muted">Add a feed</h2>
         <input
           className={inputCls}
@@ -257,7 +256,7 @@ export default function FeedsPage() {
         <button
           onClick={add}
           disabled={adding || !newFeed.name.trim() || !newFeed.url_or_channel_id.trim()}
-          className="self-end px-4 py-2 text-sm rounded-full bg-accent text-accent-ink shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="self-end btn-primary"
         >
           {adding ? "Adding…" : "Add feed"}
         </button>

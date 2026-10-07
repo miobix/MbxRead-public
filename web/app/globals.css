@@ -1,40 +1,33 @@
 @import "tailwindcss";
 
-/* Warm "paper" reading palette. Values are plain CSS custom properties, so the
-   dark-mode block below can override them in place — every utility built from
-   these (bg-, text-, border-, ...) tracks the swap automatically, no dark:
-   variants needed at the call site.
-   2026-07-24: bumped paper/surface separation and border strength (the flat,
-   near-identical values here were the "dull" look reported) and told the browser
-   which native palette to use via `color-scheme` — without it, a native <select>'s
-   open dropdown list renders with the browser's default (light) chrome no matter
-   what colors the page uses, which is what made every select unreadable
-   (white popup background, light `--color-ink` text) under the dark branch below. */
+/* Indigo palette (Epic 28). Plain custom properties, so the dark block below swaps
+   them in place and every utility built from them follows, no dark: variants. */
 @theme {
-  --color-paper: #f3ecdf;
-  --color-surface: #ffffff;
-  --color-ink: #2b2420;
-  --color-muted: #8a7d6f;
-  --color-border: #ddcdb2;
-  --color-accent: #a8481f;
-  --color-accent-ink: #fff8f0;
-  --color-highlight: #f6d67a;
-  --color-danger: #b3261e;
-  --color-danger-soft: #e7c6bd;
+  --font-sans: var(--font-noto-kr), system-ui, sans-serif;
 
-  /* Epic 22: popover chip provenance colors. Dictionary-derived chips (front forms
-     + back definitions) run strong→pale across the "blue family" in add order;
-     Translate results are green; hand-typed ("Add entry") chips are orange, sharing
-     the warm accent hue rather than inventing a new one. */
-  --color-dict-1: #1d5fae;
-  --color-dict-2: #2f6dbd;
-  --color-dict-3: #4f83c9;
-  --color-dict-4: #7699d1;
-  --color-dict-ink: #fff8f0;
-  --color-translate: #2e7d4f;
-  --color-translate-ink: #fff8f0;
-  --color-manual: #a8481f;
-  --color-manual-ink: #fff8f0;
+  --color-paper: #edf0f3;
+  --color-surface: #f8f9fb;
+  --color-ink: #1a2232;
+  --color-muted: #66708a;
+  --color-border: #cdd3de;
+  --color-line: #c3cad8;
+  --color-accent: #2b3b8c;
+  --color-accent-ink: #f3f5ff;
+  --color-highlight: #cdd5f3;
+  --color-danger: #b3261e;
+  --color-danger-soft: #ecc9c5;
+
+  /* Popover chip provenance: dictionary chips run strong to pale through the
+     indigo family in add order, Translate is green, hand-typed is plum. */
+  --color-dict-1: #2b3b8c;
+  --color-dict-2: #3d4fa3;
+  --color-dict-3: #5161b2;
+  --color-dict-4: #6474bd;
+  --color-dict-ink: #f3f5ff;
+  --color-translate: #3f7a63;
+  --color-translate-ink: #f2fbf6;
+  --color-manual: #8a4d72;
+  --color-manual-ink: #fdf3f9;
 }
 
 :root {
@@ -45,26 +38,50 @@
   :root {
     color-scheme: dark;
 
-    --color-paper: #17130f;
-    --color-surface: #2b241a;
-    --color-ink: #f1e9dd;
-    --color-muted: #b0a190;
-    --color-border: #4d422f;
-    --color-accent: #e88f56;
-    --color-accent-ink: #1b1712;
-    --color-highlight: #6b5323;
-    --color-danger: #e2665c;
-    --color-danger-soft: #5c3a35;
+    --color-paper: #11151f;
+    --color-surface: #1a2030;
+    --color-ink: #dde2ee;
+    --color-muted: #8c96ad;
+    --color-border: #2c3448;
+    --color-line: #343d55;
+    --color-accent: #9aabff;
+    --color-accent-ink: #11151f;
+    --color-highlight: #2b3766;
+    --color-danger: #f07b72;
+    --color-danger-soft: #5a2f33;
 
-    --color-dict-1: #5b9bd5;
-    --color-dict-2: #6ea3d8;
-    --color-dict-3: #85b0dc;
-    --color-dict-4: #9ec0e2;
-    --color-dict-ink: #0d1b2a;
-    --color-translate: #4caf72;
-    --color-translate-ink: #0d1b0f;
-    --color-manual: #e88f56;
-    --color-manual-ink: #1b1712;
+    --color-dict-1: #9aabff;
+    --color-dict-2: #a9b7ff;
+    --color-dict-3: #b9c4ff;
+    --color-dict-4: #c9d2ff;
+    --color-dict-ink: #11151f;
+    --color-translate: #7fc2a5;
+    --color-translate-ink: #0f1d17;
+    --color-manual: #d39cc0;
+    --color-manual-ink: #241320;
+  }
+}
+
+/* One button language app-wide: each screen's main action is .btn-primary,
+   alternatives are .btn-secondary, in-flow actions (Translate, Dictionary) are .btn-link. */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded border border-border bg-surface px-4 py-2 text-sm text-ink transition-colors hover:border-accent disabled:opacity-40;
+  }
+  .btn-link {
+    @apply text-sm font-medium text-accent underline decoration-1 underline-offset-4 transition-colors hover:decoration-2 disabled:opacity-50;
+  }
+  .btn-quiet {
+    @apply text-sm text-muted transition-colors hover:text-ink disabled:opacity-50;
+  }
+  .field {
+    @apply rounded border border-border bg-paper px-3 py-2 text-sm text-ink transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none focus-visible:outline-none;
+  }
+  .page-title {
+    @apply text-[28px] leading-none font-bold tracking-tight;
   }
 }
 
@@ -72,11 +89,17 @@
   background: var(--color-highlight);
 }
 
-/* Baseline for every <select>/<option> — belt-and-suspenders alongside
-   `color-scheme` above, since a couple of browsers do honor the element's own
-   resolved colors for the popup list. */
+/* `color-scheme` above handles most browsers' native <select> popup; a few honor the
+   element's own colors instead, hence this baseline. */
 select,
 option {
   background-color: var(--color-surface);
   color: var(--color-ink);
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
