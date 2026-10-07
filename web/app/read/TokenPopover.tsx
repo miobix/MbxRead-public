@@ -83,6 +83,7 @@ export function TokenPopover({
   // built in the input; a sense's meanings are the Back chips grouped under it.
   const [hanjaList, setHanjaList] = useState<string[]>(target.existing?.hanja ?? []);
   const [hanja, setHanja] = useState("");
+  const [addingHanja, setAddingHanja] = useState(false);
   // An existing term found by lemma while adding a new word — the save turns into
   // an append onto it rather than a create that the UNIQUE lemma would refuse.
   const [appendTo, setAppendTo] = useState<Term | null>(null);
@@ -436,16 +437,31 @@ export function TokenPopover({
                 isPhrase ? "text-xl" : "text-[32px]"
               }`}
             />
-            {showHanja && (
-              <input
-                value={hanja}
-                onChange={(e) => setHanja(e.target.value)}
-                onBlur={(e) => addSense(e.target.value)}
-                placeholder={senses.length > 0 ? "Another hanja" : "Hanja"}
-                aria-label="Hanja"
-                className="min-w-0 flex-1 bg-transparent text-xl text-muted border-b border-border focus:border-accent focus:text-ink focus:outline-none focus-visible:outline-none transition-colors"
-              />
-            )}
+            {/* Once a sense exists its row shows it below, so an empty field here
+                would read as a missing value: offer a link until it's wanted. */}
+            {showHanja &&
+              (hanjaList.length === 0 || addingHanja || hanja ? (
+                <input
+                  value={hanja}
+                  onChange={(e) => setHanja(e.target.value)}
+                  onBlur={(e) => {
+                    addSense(e.target.value);
+                    if (!e.target.value.trim()) setAddingHanja(false);
+                  }}
+                  autoFocus={addingHanja}
+                  placeholder={senses.length > 0 ? "Another hanja" : "Hanja"}
+                  aria-label="Hanja"
+                  className="min-w-0 flex-1 bg-transparent text-xl text-muted border-b border-border focus:border-accent focus:text-ink focus:outline-none focus-visible:outline-none transition-colors"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingHanja(true)}
+                  className="btn-link shrink-0 self-center text-xs"
+                >
+                  + Add hanja
+                </button>
+              ))}
           </div>
         </div>
 
