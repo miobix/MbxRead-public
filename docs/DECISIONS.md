@@ -1358,3 +1358,20 @@ buttons below the progress bar and score keeps that distance from the title.
 Found while checking the result, not fixed (pre-existing): the reader's term summaries
 (`GET /api/books/{id}/text` → `terms`) carry no `hanja`, so tapping a hanja term in the
 reader (풍경, 風景) shows neither its hanja nor its sense-grouped meaning chips.
+
+## 2026-10-07 — Epic 28 follow-up: Library back to cards, sheets for its forms
+
+Reviewed on the phone the same day. The ruled-list Library from the mockup looked
+cluttered at the top (title row, a filter row, a sort row) and its items left uneven
+gaps (bar, % line, an empty score row, an action row). The user pointed at the Queue as
+the organized one, so the Library now uses the Queue's card layout. This reverses the
+"ruled lists, not cards" line in SPEC Epic 28 for the Library only.
+
+**Item actions went into a "⋯" menu.** Four text actions plus a Start/Continue button
+don't fit one row at phone width, and the menu keeps Archive a deliberate two-tap action,
+which is what the old side column (Epic 24 follow-up) was protecting.
+
+**Topic is chips in the sheets, still a select in the filters.** The topic list is short
+and fixed, so chips show every option with one tap where a form is filled in; in the
+filter panel a select stays compact. No behavior change: same fields, same API calls.
+

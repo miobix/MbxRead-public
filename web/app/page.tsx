@@ -2,15 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  api,
-  type Book,
-  type BookSort,
-  type ScoreResult,
-  type SubtitleImportResult,
-} from "@/lib/api";
-import { GeneralScoreLine, ScoreLine, coverageClass } from "@/lib/score-display";
+import { api, type Book, type BookSort } from "@/lib/api";
+import { SourceChip } from "@/lib/chips";
+import { GeneralScoreLine, ScoreLine } from "@/lib/score-display";
 import { SOURCES, TOPICS } from "@/lib/topics";
+import { AddBookSheet, EditBookSheet } from "./LibrarySheets";
 
 // 2026-07-24: fetch one extra row beyond the page size to detect "there's more"
 // without a separate count endpoint — a plain array response stays backward
@@ -19,7 +15,7 @@ const PAGE_SIZE = 30;
 
 const SORTS: { key: BookSort; label: string }[] = [
   { key: "opened", label: "Recently opened" },
-  { key: "recent", label: "Added" },
+  { key: "recent", label: "Recently added" },
   { key: "easiest", label: "Easiest unread" },
 ];
 
@@ -88,7 +84,11 @@ export default function HomePage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<number | null>(null);
   const [editing, setEditing] = useState<Book | null>(null);
+
+  const activeFilters = [topicFilter, sourceFilter, showArchived].filter(Boolean).length;
 
   const refresh = () => {
     api
@@ -154,8 +154,8 @@ export default function HomePage() {
   };
 
   return (
-    <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6">
-      <div className="flex items-center justify-between gap-3 mb-5">
+    <main className="flex-1 mx-auto w-full max-w-lg px-4 py-6 flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="page-title">Library</h1>
         <div className="flex items-center gap-3">
           <nav className="hidden sm:flex items-center gap-3">
@@ -176,49 +176,78 @@ export default function HomePage() {
         </div>
       </div>
 
-      {error && <p className="text-danger text-sm mb-4">{error}</p>}
-
-      <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-4 text-sm">
-        <label className="flex items-center gap-1.5 text-muted">
-          Topic
-          <select
-            value={topicFilter}
-            onChange={(e) => setTopicFilter(e.target.value)}
-            className="field px-2 py-1"
-          >
-            <option value="">All</option>
-            {TOPICS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-muted">
-          Source
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="field px-2 py-1"
-          >
-            <option value="">All</option>
-            {SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-muted">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="accent-accent"
-          />
-          Show archived
-        </label>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as BookSort)}
+          aria-label="Sort"
+          className="field py-1.5"
+        >
+          {SORTS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => setFiltersOpen((o) => !o)}
+          aria-expanded={filtersOpen}
+          className={`btn-secondary py-1.5 ${activeFilters ? "border-accent" : ""}`}
+        >
+          Filters
+          {activeFilters > 0 && (
+            <span className="rounded bg-accent px-1.5 text-xs font-semibold text-accent-ink tabular-nums">
+              {activeFilters}
+            </span>
+          )}
+        </button>
       </div>
+
+      {filtersOpen && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border bg-surface p-4 text-sm">
+          <label className="flex items-center gap-2 text-muted">
+            Topic
+            <select
+              value={topicFilter}
+              onChange={(e) => setTopicFilter(e.target.value)}
+              className="field px-2 py-1"
+            >
+              <option value="">All</option>
+              {TOPICS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-muted">
+            Source
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="field px-2 py-1"
+            >
+              <option value="">All</option>
+              {SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-muted">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="accent-accent"
+            />
+            Show archived
+          </label>
+        </div>
+      )}
+
+      {error && <p className="text-danger text-sm">{error}</p>}
 
       {books === null && !error && <p className="text-muted">Loading…</p>}
 
@@ -226,100 +255,88 @@ export default function HomePage() {
         <p className="text-muted">Nothing matches. Add a text or change the filters.</p>
       )}
 
-      {books && books.length > 0 && (
-        <div className="flex items-center gap-5 pb-3 text-sm border-b border-border">
-          {SORTS.map((o) => (
-            <button
-              key={o.key}
-              onClick={() => setSort(o.key)}
-              className={
-                sort === o.key
-                  ? "text-ink font-medium underline decoration-2 decoration-accent underline-offset-[6px]"
-                  : "text-muted hover:text-ink transition-colors"
-              }
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <ul className="flex flex-col">
+      <ul className="flex flex-col gap-3">
         {books?.map((book) => {
           const pct =
             book.current_offset > 0 && book.total_chars > 0
               ? Math.min(100, Math.round((book.current_offset / book.total_chars) * 100))
               : 0;
+          const href = `/read/?id=${book.id}`;
           return (
-            <li key={book.id} className="flex flex-col gap-2 py-4 border-b border-border">
-              <Link
-                href={`/read/?id=${book.id}`}
-                className="group flex flex-col gap-2"
-              >
-                <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-semibold leading-snug [word-break:keep-all] group-hover:text-accent transition-colors">
-                    {book.title}
-                  </span>
-                  {(book.source === "pdf" || book.source === "epub") && (
-                    <span className="shrink-0 text-xs text-muted">Book</span>
-                  )}
-                  {book.source === "subs" && (
-                    <span className="shrink-0 text-xs text-muted">Subtitles</span>
-                  )}
-                </div>
-                {/* Progress as a percentage of the text, not a page number: pages are
-                    per-device since Epic 24, and current_page no longer moves. */}
-                <div className="h-1 rounded-full bg-line">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-muted tabular-nums">
-                  <span className={book.read ? "text-accent font-medium" : undefined}>
-                    {book.read ? "Read" : pct > 0 ? `${pct}% read` : "Not started"}
-                  </span>
+            <li
+              key={book.id}
+              className="rounded-lg border border-border bg-surface p-4 flex flex-col gap-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted">
+                  <SourceChip source={book.source} />
                   {[book.topic, ...book.tags].filter(Boolean).map((t) => (
                     <span key={t}>{t}</span>
                   ))}
                 </div>
-              </Link>
-              <div className="flex items-center gap-3 flex-wrap">
-                <ScoreLine book={book} />
-                <GeneralScoreLine book={book} />
+                <BookMenu
+                  open={menuFor === book.id}
+                  onToggle={() => setMenuFor((id) => (id === book.id ? null : book.id))}
+                  onClose={() => setMenuFor(null)}
+                  items={[
+                    {
+                      label: book.scored_at ? "Rescore difficulty" : "Score difficulty",
+                      onSelect: () => score(book.id),
+                    },
+                    {
+                      label: book.read ? "Mark unread" : "Mark read",
+                      onSelect: () => toggle(book.id, "read", !book.read),
+                    },
+                    { label: "Edit details", onSelect: () => setEditing(book) },
+                    ...(book.source_url
+                      ? [{ label: "Open source ↗", href: book.source_url }]
+                      : []),
+                    {
+                      label: book.archived ? "Restore" : "Archive",
+                      onSelect: () => toggle(book.id, "archived", !book.archived),
+                    },
+                  ]}
+                />
               </div>
-              {/* Kept on their own row, away from the title, so Archive is hard to
-                  hit by accident when reaching for the text itself. */}
-              <div className="flex items-center gap-4 flex-wrap text-xs">
-                <button
-                  onClick={() => score(book.id)}
-                  disabled={scoring === book.id}
-                  className="btn-quiet text-xs"
-                >
-                  {scoring === book.id ? "Scoring…" : book.scored_at ? "Rescore" : "Score"}
-                </button>
-                <button
-                  onClick={() => toggle(book.id, "read", !book.read)}
-                  className="btn-quiet text-xs"
-                >
-                  {book.read ? "Mark unread" : "Mark read"}
-                </button>
-                <button
-                  onClick={() => toggle(book.id, "archived", !book.archived)}
-                  className="btn-quiet text-xs"
-                >
-                  {book.archived ? "Restore" : "Archive"}
-                </button>
-                <button onClick={() => setEditing(book)} className="btn-quiet text-xs">
-                  Edit
-                </button>
-                {book.source_url && (
-                  <a
-                    href={book.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-quiet text-xs"
-                  >
-                    Source ↗
-                  </a>
-                )}
+
+              <Link
+                href={href}
+                className="-mt-1 text-[17px] font-semibold leading-snug [word-break:keep-all] hover:text-accent transition-colors"
+              >
+                {book.title}
+              </Link>
+
+              {/* A percentage of the text, not a page number: pages are per-device
+                  since Epic 24. */}
+              <div className="flex items-center gap-3">
+                <div className="h-1 flex-1 rounded-full bg-line">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="w-20 text-right text-xs text-muted tabular-nums">
+                  {book.read ? "Finished" : pct > 0 ? `${pct}% read` : "Not started"}
+                </span>
+              </div>
+
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  {book.scored_at ? (
+                    <>
+                      <ScoreLine book={book} />
+                      <GeneralScoreLine book={book} />
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => score(book.id)}
+                      disabled={scoring === book.id}
+                      className="btn-link self-start text-xs"
+                    >
+                      {scoring === book.id ? "Scoring…" : "Score difficulty"}
+                    </button>
+                  )}
+                </div>
+                <Link href={href} className="btn-primary shrink-0 py-1.5">
+                  {book.read ? "Read again" : pct > 0 ? "Continue" : "Start"}
+                </Link>
               </div>
             </li>
           );
@@ -327,13 +344,13 @@ export default function HomePage() {
       </ul>
 
       {hasMore && (
-        <button onClick={loadMore} disabled={loadingMore} className="btn-secondary mt-4 w-full">
+        <button onClick={loadMore} disabled={loadingMore} className="btn-secondary w-full">
           {loadingMore ? "Loading…" : "Load more"}
         </button>
       )}
 
       {modalOpen && (
-        <AddBookModal
+        <AddBookSheet
           onClose={() => setModalOpen(false)}
           onCreated={() => {
             setModalOpen(false);
@@ -343,7 +360,7 @@ export default function HomePage() {
       )}
 
       {editing && (
-        <EditBookModal
+        <EditBookSheet
           book={editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -356,529 +373,66 @@ export default function HomePage() {
   );
 }
 
-type Mode = "paste" | "youtube" | "pdf" | "epub" | "subs" | "article";
+type MenuItem = { label: string; onSelect?: () => void; href?: string };
 
-const MODES: { key: Mode; label: string }[] = [
-  { key: "paste", label: "Paste / .txt" },
-  { key: "youtube", label: "YouTube" },
-  { key: "pdf", label: "PDF" },
-  { key: "epub", label: "EPUB" },
-  { key: "subs", label: "Subtitles" },
-  { key: "article", label: "Article URL" },
-];
-
-const inputClass = "field";
-
-function AddBookModal({
+/** Per-card "⋯" menu. Archive sits last and behind a tap, away from the title. */
+function BookMenu({
+  open,
+  onToggle,
   onClose,
-  onCreated,
+  items,
 }: {
+  open: boolean;
+  onToggle: () => void;
   onClose: () => void;
-  onCreated: () => void;
+  items: MenuItem[];
 }) {
-  const [mode, setMode] = useState<Mode>("paste");
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
-  const [source, setSource] = useState<"paste" | "txt">("paste");
-  const [url, setUrl] = useState("");
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfPages, setPdfPages] = useState("");
-  const [epubFile, setEpubFile] = useState<File | null>(null);
-  const [subsFiles, setSubsFiles] = useState<File[]>([]);
-  const [subsResult, setSubsResult] = useState<SubtitleImportResult | null>(null);
-  const [topic, setTopic] = useState("");
-  const [tags, setTags] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ScoreResult | null>(null);
-  const [checking, setChecking] = useState(false);
-
-  const handleTxtFile = async (file: File) => {
-    const content = await file.text();
-    setText(content);
-    setSource("txt");
-    setPreview(null);
-    if (!title.trim()) setTitle(file.name.replace(/\.txt$/i, ""));
-  };
-
-  const checkDifficulty = async () => {
-    if (!text.trim()) return;
-    setChecking(true);
-    setError(null);
-    try {
-      setPreview(await api.scoreText(text));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to score text.");
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const submit = async () => {
-    setError(null);
-    const tagList = tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    if (mode === "paste") {
-      if (!title.trim() || !text.trim()) {
-        setError("Title and text are both required.");
-        return;
-      }
-      setSubmitting(true);
-      try {
-        await api.createBook({ title: title.trim(), text, source, topic, tags: tagList });
-        onCreated();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to add item.");
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    if (mode === "youtube" || mode === "article") {
-      if (!url.trim()) {
-        setError("Paste a URL first.");
-        return;
-      }
-      setSubmitting(true);
-      try {
-        const body = { url: url.trim(), topic, tags: tagList };
-        if (mode === "youtube") await api.importYoutube(body);
-        else await api.importArticle(body);
-        onCreated();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Import failed.");
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    if (mode === "subs") {
-      if (subsFiles.length === 0) {
-        setError("Choose one or more subtitle files first.");
-        return;
-      }
-      setSubmitting(true);
-      setSubsResult(null);
-      try {
-        const result = await api.importSubtitles({
-          files: subsFiles,
-          title: title.trim(),
-          topic,
-          tags,
-        });
-        // Re-dropping a season is expected to be mostly duplicates, so a batch
-        // that wasn't perfectly clean reports per-file rather than closing
-        // silently on a partial result.
-        if (result.skipped.length === 0 && result.failed.length === 0) {
-          onCreated();
-          return;
-        }
-        setSubsResult(result);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Import failed.");
-      }
-      setSubmitting(false);
-      return;
-    }
-
-    if (mode === "epub") {
-      if (!epubFile) {
-        setError("Choose an EPUB file first.");
-        return;
-      }
-      setSubmitting(true);
-      try {
-        await api.importEpub({ file: epubFile, title: title.trim(), topic, tags });
-        onCreated();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Import failed.");
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    // mode === "pdf"
-    if (!pdfFile) {
-      setError("Choose a PDF file first.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await api.importPdf({
-        file: pdfFile,
-        title: title.trim(),
-        topic,
-        tags,
-        pages: pdfPages.trim(),
-      });
-      onCreated();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed.");
-      setSubmitting(false);
-    }
-  };
-
+  const itemClass =
+    "block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-paper transition-colors";
   return (
-    <div
-      className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full sm:max-w-md bg-surface border-t border-border sm:border shadow-xl sm:rounded-lg p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label="More actions"
+        aria-expanded={open}
+        className="-mr-1.5 -mt-1 rounded px-1.5 py-0.5 text-lg leading-none text-muted hover:text-ink transition-colors"
       >
-        <h2 className="text-xl font-bold">Add to Library</h2>
-
-        {subsResult && (
-          <div className="rounded border border-border bg-paper p-3 text-sm flex flex-col gap-1">
-            <p className="font-medium">
-              Imported {subsResult.imported.length} of{" "}
-              {subsResult.imported.length +
-                subsResult.skipped.length +
-                subsResult.failed.length}
-            </p>
-            {subsResult.skipped.length > 0 && (
-              <p className="text-muted text-xs">
-                {subsResult.skipped.length} already in the Library:{" "}
-                {subsResult.skipped.map((s) => s.filename).join(", ")}
-              </p>
+        ⋯
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
+          <div className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded border border-border bg-surface shadow-lg">
+            {items.map((item) =>
+              item.href ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  className={itemClass}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    item.onSelect?.();
+                  }}
+                  className={itemClass}
+                >
+                  {item.label}
+                </button>
+              )
             )}
-            {subsResult.failed.map((f) => (
-              <p key={f.filename} className="text-danger text-xs">
-                {f.filename}: {f.error}
-              </p>
-            ))}
           </div>
-        )}
-
-        <div className="flex flex-wrap gap-1 rounded bg-paper p-1 text-sm">
-          {MODES.map((m) => (
-            <button
-              key={m.key}
-              onClick={() => {
-                setMode(m.key);
-                setError(null);
-              }}
-              className={`flex-1 rounded px-2 py-1.5 whitespace-nowrap transition-colors ${
-                mode === m.key
-                  ? "bg-surface shadow-sm text-ink font-medium"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        {mode === "paste" && (
-          <>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              className={inputClass}
-            />
-            <textarea
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                setSource("paste");
-                setPreview(null);
-              }}
-              placeholder="Paste Korean text here…"
-              rows={8}
-              className={`${inputClass} resize-none`}
-            />
-            <label className="text-sm text-muted flex flex-col gap-1">
-              or upload a .txt file
-              <input
-                type="file"
-                accept=".txt"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleTxtFile(file);
-                }}
-                className="text-sm"
-              />
-            </label>
-            <div className="flex items-center gap-3 text-sm">
-              <button
-                onClick={checkDifficulty}
-                disabled={checking || !text.trim()}
-                className="btn-link"
-              >
-                {checking ? "Checking…" : "Check difficulty"}
-              </button>
-              {preview && (
-                <span className="text-muted">
-                  {preview.coverage !== null && (
-                    <span className={coverageClass(preview.coverage)}>
-                      {Math.round(preview.coverage * 100)}% known
-                    </span>
-                  )}
-                  {preview.coverage !== null && " · "}
-                  {preview.new_per_page} new/pg
-                  {preview.general_level !== null && preview.general_coverage !== null && (
-                    <>
-                      {" · general: "}
-                      {preview.general_level} ({Math.round(preview.general_coverage * 100)}%)
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
-          </>
-        )}
-
-        {(mode === "youtube" || mode === "article") && (
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder={mode === "youtube" ? "https://youtube.com/watch?v=…" : "https://example.com/article"}
-            className={inputClass}
-          />
-        )}
-
-        {mode === "pdf" && (
-          <>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title (defaults to filename)"
-              className={inputClass}
-            />
-            <label className="text-sm text-muted flex flex-col gap-1">
-              PDF file
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
-                className="text-sm"
-              />
-            </label>
-            <input
-              value={pdfPages}
-              onChange={(e) => setPdfPages(e.target.value)}
-              placeholder="Page range, e.g. 1-20 (optional)"
-              className={inputClass}
-            />
-          </>
-        )}
-
-        {mode === "epub" && (
-          <>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title (defaults to filename)"
-              className={inputClass}
-            />
-            <label className="text-sm text-muted flex flex-col gap-1">
-              EPUB file
-              <input
-                type="file"
-                accept=".epub,application/epub+zip"
-                onChange={(e) => setEpubFile(e.target.files?.[0] ?? null)}
-                className="text-sm"
-              />
-            </label>
-          </>
-        )}
-
-        {mode === "subs" && (
-          <>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title (single file only — a batch titles per filename)"
-              className={inputClass}
-            />
-            <label className="text-sm text-muted flex flex-col gap-1">
-              Subtitle files — .srt, .vtt, .smi, .ass, .ttml
-              <input
-                type="file"
-                multiple
-                accept=".srt,.vtt,.webvtt,.smi,.sami,.ass,.ssa,.ttml,.dfxp,.xml"
-                onChange={(e) => {
-                  setSubsFiles(Array.from(e.target.files ?? []));
-                  setSubsResult(null);
-                }}
-                className="text-sm"
-              />
-            </label>
-            {subsFiles.length > 0 && (
-              <p className="text-xs text-muted -mt-1">
-                {subsFiles.length} file{subsFiles.length === 1 ? "" : "s"} selected — one
-                item each, imported in filename order.
-              </p>
-            )}
-          </>
-        )}
-
-        {mode !== "paste" && (
-          <p className="text-xs text-muted -mt-1">
-            {mode === "pdf" || mode === "epub" || mode === "subs"
-              ? "Duplicate files (same file re-uploaded) are detected automatically."
-              : "Re-importing the same link won't create a duplicate item."}
-          </p>
-        )}
-
-        <div className="flex gap-2">
-          <select
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="field flex-1 min-w-0"
-          >
-            <option value="">No topic</option>
-            {TOPICS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="tags, comma, separated"
-            className={`${inputClass} flex-1 min-w-0`}
-          />
-        </div>
-
-        {error && <p className="text-danger text-sm">{error}</p>}
-
-        <div className="flex gap-2 justify-end mt-2">
-          <button
-            // A partial batch leaves the modal open on its summary, so closing
-            // still has to refresh the Library for whatever did import.
-            onClick={subsResult?.imported.length ? onCreated : onClose}
-            className="btn-secondary"
-          >
-            {subsResult ? "Close" : "Cancel"}
-          </button>
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="btn-primary"
-          >
-            {submitting ? "Adding…" : "Add"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-/** Edit an existing item's details. PATCH /books/{id} accepts more than this
- *  (archived/read/status), but those already have their own buttons in the card's
- *  action column — this covers the fields that had no UI at all. Deliberately not
- *  editable: source/source_ref (the import's identity, used for dedupe) and the
- *  cached difficulty scores (recomputed by "rescore"). */
-function EditBookModal({
-  book,
-  onClose,
-  onSaved,
-}: {
-  book: Book;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [title, setTitle] = useState(book.title);
-  const [topic, setTopic] = useState(book.topic);
-  const [tags, setTags] = useState(book.tags.join(", "));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    if (!title.trim()) {
-      setError("Title can't be empty.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await api.patchBook(book.id, {
-        title: title.trim(),
-        topic,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-      });
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save changes.");
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full sm:max-w-md bg-surface border-t border-border sm:border shadow-xl sm:rounded-lg p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-bold">Edit details</h2>
-
-        <label className="text-sm text-muted flex flex-col gap-1">
-          Title
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
-            className={`${inputClass} text-ink`}
-          />
-        </label>
-
-        <div className="flex gap-2">
-          <label className="text-sm text-muted flex flex-col gap-1 flex-1">
-            Topic
-            <select
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              className="field"
-            >
-              <option value="">No topic</option>
-              {TOPICS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-muted flex flex-col gap-1 flex-1">
-            Tags
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="tags, comma, separated"
-              className={`${inputClass} text-ink`}
-            />
-          </label>
-        </div>
-
-        {error && <p className="text-danger text-sm">{error}</p>}
-
-        <div className="flex gap-2 justify-end mt-2">
-          <button
-            onClick={onClose}
-            className="btn-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="btn-primary"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

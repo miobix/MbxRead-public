@@ -647,6 +647,14 @@ No API or behavior changes.
 **Accept:** pytest green (no backend change), `npm run build` and `npm run lint` clean,
 every page checked at phone width in dark mode.
 
+**Same-day follow-up (user review on the phone):** the Library top was three rows of
+controls and its ruled rows left loose gaps, while the Queue's cards read as organized.
+Library items are now cards in the Queue's layout with a solid Start/Continue button and
+the item actions in a "⋯" menu; sort became a select and the filters fold behind a
+"Filters" button. The Add to Library and Edit details modals became one `Sheet` pattern:
+title with a close ×, stacked full-width fields with labels and hints, topic as chips,
+a styled file picker, import types as a 3×2 grid, wide Cancel/primary footer buttons.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.
