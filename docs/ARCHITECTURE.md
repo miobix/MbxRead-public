@@ -666,12 +666,13 @@ dev`, where FastAPI must be separately running on 8002).
 Routes:
 - `/` — **implemented (Epic 4).** Book list (title, progress as a percentage of
   `current_offset/total_chars` — Epic 24; page numbers are per-device now) drawn
-  as a thin bar, a ruled list (no cards since Epic 28) with the score / read /
-  archive / edit actions on their own row under the meta, away from the title so
-  Archive isn't hit by accident, a solid "Add text" button, a mobile-only hamburger
-  for the nav links, "Add book" modal: title + paste-textarea or `.txt`
-  upload → `POST /api/books`. `app/page.tsx`, both the list and the modal in one
-  file (single small component, no separate `components/` dir yet).
+  as a thin bar. Cards in the Queue's layout (Epic 28 follow-up): source chip +
+  topic/tags, title, progress, scores, and a solid Start/Continue button; score /
+  read / edit / source / archive live in a per-card "⋯" menu, Archive last, so it
+  is never one stray tap from the title. Sort is a select, filters fold behind a
+  "Filters" button with an active count. `app/page.tsx` holds the list;
+  `app/LibrarySheets.tsx` the Add to Library and Edit details sheets, built on
+  `lib/sheet.tsx` (`Sheet`, `Field`, `TopicPicker` chips, `FilePicker`).
 - `/read/?id=<bookId>` — **implemented (Epic 4 rendering, Epic 5 tooltip flow).**
   `app/read/page.tsx`. Renders `content` as spans using `tokens` offsets; only
   tokens whose lemma is in `terms` with status `learning` get a highlight

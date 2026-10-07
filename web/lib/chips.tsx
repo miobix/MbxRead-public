@@ -10,6 +10,11 @@ const SOURCE_CHIPS: Record<string, { label: string; className: string }> = {
     label: "Article",
     className: "bg-border/40 text-ink border border-border",
   },
+  pdf: { label: "Book", className: "bg-border/40 text-ink border border-border" },
+  epub: { label: "Book", className: "bg-border/40 text-ink border border-border" },
+  subs: { label: "Subtitles", className: "bg-border/40 text-ink border border-border" },
+  paste: { label: "Text", className: "bg-border/40 text-ink border border-border" },
+  txt: { label: "Text", className: "bg-border/40 text-ink border border-border" },
 };
 
 export function SourceChip({ source }: { source: string }) {
