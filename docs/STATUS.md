@@ -19,7 +19,7 @@ files/article) and an automated feed roster that fetches candidates into a revie
 A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
 Next.js static-export frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 316 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 317 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -142,9 +142,6 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   environment. Worth confirming once, on a real sync, that a multi-sense word's card
   matches the popover preview and that pre-Epic-21 `Basic` notes still update in place
   without losing SRS history.
-- **Reader popover misses hanja:** `GET /api/books/{id}/text` term summaries carry no
-  `hanja`, so tapping a hanja term in the reader (풍경) shows neither its hanja nor its
-  sense-grouped meaning chips. Found during Epic 28; pre-existing.
 - **Epic 28 light mode** was built from the same tokens but only checked in dark mode
   (the machine runs dark); worth one look on a light-mode device.
 

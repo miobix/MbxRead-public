@@ -1375,3 +1375,17 @@ which is what the old side column (Epic 24 follow-up) was protecting.
 and fixed, so chips show every option with one tap where a form is filled in; in the
 filter panel a select stays compact. No behavior change: same fields, same API calls.
 
+## 2026-10-07 — Reader term summaries now carry `hanja`
+
+The follow-up found during Epic 28: `_terms_for_lemmas` (the `terms` map of
+`GET /api/books/{id}/text` and `/pages/{n}`) never selected `terms.hanja`, though the
+frontend's `TermSummary` type declared it. Tapping a hanja term in the reader (풍경 風景)
+opened the popover as a plain word: no hanja, and its Back chips (grouped under the
+hanja spelling since Epic 26) had no row to show in. Nothing was lost on save, since the
+popover only sends `hanja` when it shows it and resends the back_items it was given.
+
+The summary now includes the full ordered `hanja` list, for lemma and form matches alike
+(one shared `_term_summary` builder replaces the two copied dict literals). Several senses
+needed no new design: the list is the Epic 26 data model, and the popover already draws
+one row per sense with that sense's meanings, which is the same view `/terms` shows.
+

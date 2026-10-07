@@ -15,7 +15,7 @@ from ..difficulty import (
 )
 from ..paging import snap_back, snap_forward, split_pages
 from ..tokenizer import tokenize
-from .terms import _back_items_for, _forms_for
+from .terms import _back_items_for, _forms_for, hanja_list
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -380,6 +380,22 @@ def get_page(
     }
 
 
+def _term_summary(row: sqlite3.Row) -> dict:
+    """The reader popover's view of a term; forms and back_items are attached after."""
+    return {
+        "id": row["id"],
+        "lemma": row["lemma"],
+        "translation": row["translation"],
+        "notes": row["notes"],
+        "status": row["status"],
+        "deck": row["deck"],
+        "forms": [],
+        "examples": json.loads(row["examples"]),
+        "back_items": [],
+        "hanja": hanja_list(row["hanja"]),
+    }
+
+
 def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
     """Every saved term a set of page/window token lemmas should light up, keyed by the
     string that matched (the term's own lemma, or one of its extra `forms`). Extracted
@@ -389,45 +405,25 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
         rows = conn.execute(
-            f"SELECT id, lemma, translation, notes, status, deck, examples FROM terms "
+            f"SELECT id, lemma, translation, notes, status, deck, examples, hanja FROM terms "
             f"WHERE lemma IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
         for row in rows:
-            terms[row["lemma"]] = {
-                "id": row["id"],
-                "lemma": row["lemma"],
-                "translation": row["translation"],
-                "notes": row["notes"],
-                "status": row["status"],
-                "deck": row["deck"],
-                "forms": [],
-                "examples": json.loads(row["examples"]),
-                "back_items": [],
-            }
+            terms[row["lemma"]] = _term_summary(row)
         # Epic 20: a term also highlights via any of its extra `forms`. Match those
         # against the page's token lemmas too, keyed by the form string (so a token
         # whose lemma is 승인서 lights up as the 승인 term). A direct lemma match wins
         # if a string is both — hence the `not in terms` guard.
         form_rows = conn.execute(
             f"SELECT tf.form, t.id, t.lemma, t.translation, t.notes, t.status, t.deck, "
-            f"t.examples FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
+            f"t.examples, t.hanja FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
             f"WHERE tf.form IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
         for row in form_rows:
             if row["form"] not in terms:
-                terms[row["form"]] = {
-                    "id": row["id"],
-                    "lemma": row["lemma"],
-                    "translation": row["translation"],
-                    "notes": row["notes"],
-                    "status": row["status"],
-                    "deck": row["deck"],
-                    "forms": [],
-                    "examples": json.loads(row["examples"]),
-                    "back_items": [],
-                }
+                terms[row["form"]] = _term_summary(row)
         # Attach every matched term's full forms + back_items (so the reader popover
         # can rebuild the exact same Front/Back/Examples chip state when the token is
         # tapped) — reuses terms.py's own read helpers rather than a third copy of the
