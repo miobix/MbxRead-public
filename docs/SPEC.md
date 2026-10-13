@@ -40,7 +40,7 @@ korean-reader/
     main.py                app factory; mounts /api routers; serves web/out statically at /
     db.py                  sqlite (reader.db): connection, schema init, query helpers
     tokenizer.py           kiwipiepy wrapper: text -> eojeol tokens with lemma
-    anki.py                AnkiConnect client (http://localhost:8765)
+    anki.py                AnkiConnect client (http://127.0.0.1:8765)
     routes/
       books.py  terms.py  translate.py  anki_sync.py  settings.py
   server/tests/            pytest suite
@@ -186,7 +186,7 @@ Keep dependencies minimal: Next + Tailwind only; no state library (React context
 
 ## 8. Anki sync spec (`server/anki.py` + `routes/anki_sync.py`)
 
-AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`); Anki desktop with the AnkiConnect add-on (code 2055492159) is already installed from the Lute setup.
+AnkiConnect at `http://127.0.0.1:8765` (POST JSON `{action, version: 6, params}`); Anki desktop with the AnkiConnect add-on (code 2055492159) is already installed from the Lute setup.
 
 Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.

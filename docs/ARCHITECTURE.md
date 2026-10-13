@@ -14,7 +14,7 @@ korean-reader/
     main.py                app factory; mounts /api routers; serves web/out statically at /
     db.py                  sqlite (reader.db): connection, schema init, query helpers
     tokenizer.py           kiwipiepy wrapper: text -> eojeol tokens with lemma
-    anki.py                AnkiConnect client (http://localhost:8765)
+    anki.py                AnkiConnect client (http://127.0.0.1:8765)
     article.py             trafilatura wrapper: url -> (title, cleaned_text) — Epic 12
     difficulty.py           coverage/new-per-page scoring; Epic 13's cold-start
                             frequency fallback
@@ -787,7 +787,7 @@ reasoning in `docs/DECISIONS.md` 2026-07-21):**
 
 ## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — implemented)
 
-AnkiConnect at `http://localhost:8765` (POST JSON `{action, version: 6, params}`);
+AnkiConnect at `http://127.0.0.1:8765` (POST JSON `{action, version: 6, params}`);
 Anki desktop with the AnkiConnect add-on (code 2055492159) is already installed from
 the Lute setup.
 
