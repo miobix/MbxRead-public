@@ -1409,3 +1409,11 @@ Found, none fixed (all noise or slow growth, no failures):
 - **Epic 28 font:** `next/font/google` fetches Noto Sans KR at build time, unpinned to a
   font revision (Google serves the current one). Accepted in the Epic 28 entry; a clean
   build without network fails.
+
+## 2026-10-13: AnkiConnect URL is 127.0.0.1, not localhost
+
+Hanja deck syncs were slow. Measured: each AnkiConnect call took ~2.1s via `localhost` and
+~0.03s via `127.0.0.1` (Windows tries IPv6 `::1` first, AnkiConnect listens on IPv4 only, and
+the refused connect is retried before falling back). Sync is one call per new note and four per
+edited note, so this dominated. Switched `server/anki.py`, `server/hanja_study.py` and
+`hanja/anki_levels.py`. Batching via AnkiConnect `multi` left as a possible follow-up.

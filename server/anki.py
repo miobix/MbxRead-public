@@ -1,7 +1,7 @@
 """AnkiConnect client. See docs/SPEC.md section 8."""
 import httpx
 
-ANKICONNECT_URL = "http://localhost:8765"
+ANKICONNECT_URL = "http://127.0.0.1:8765"
 
 # Epic 21: the custom two-way note type. Two cards (KO→EN and EN→KO) share three
 # fields; `Examples` sits on the *back* of both templates and the front of neither,
