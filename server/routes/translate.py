@@ -25,4 +25,7 @@ def translate_text(body: TranslateRequest):
 
 @router.get("/dict")
 def dict_lookup(word: str):
-    return krdict.lookup(word)
+    try:
+        return krdict.lookup(word)
+    except krdict.KrdictUnavailable as e:
+        return JSONResponse(status_code=503, content={"error": str(e)})

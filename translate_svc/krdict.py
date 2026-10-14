@@ -3,14 +3,73 @@
 Free API key: https://krdict.korean.go.kr/openApi/openApiInfo
 """
 
+import json
+import sqlite3
+import time
 import xml.etree.ElementTree as ET
+from contextlib import closing
+from datetime import datetime
 
 import httpx
 
-from .config import KRDICT_API_KEY
+from .config import CACHE_DB, KRDICT_API_KEY
 
 API_URL = "https://krdict.korean.go.kr/api/search"
 VIEW_URL = "https://krdict.korean.go.kr/api/view"
+COOLDOWN_S = 30 * 60
+
+
+class KrdictUnavailable(Exception):
+    pass
+
+
+def _conn():
+    conn = sqlite3.connect(CACHE_DB)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS krdict_cache (key TEXT PRIMARY KEY, body TEXT NOT NULL,"
+        " created TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.execute("CREATE TABLE IF NOT EXISTS krdict_state (k TEXT PRIMARY KEY, v REAL NOT NULL)")
+    return conn
+
+
+def blocked_until() -> float | None:
+    with closing(_conn()) as conn:
+        row = conn.execute("SELECT v FROM krdict_state WHERE k = 'blocked_until'").fetchone()
+    return row[0] if row and row[0] > time.time() else None
+
+
+def _trip() -> None:
+    with closing(_conn()) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO krdict_state (k, v) VALUES ('blocked_until', ?)",
+            (time.time() + COOLDOWN_S,),
+        )
+        conn.commit()
+
+
+def _get(url: str, params: dict) -> ET.Element:
+    """Cached GET. The first failure opens a cooldown during which nothing is sent."""
+    key = json.dumps([url, {k: v for k, v in params.items() if k != "key"}], sort_keys=True)
+    with closing(_conn()) as conn:
+        row = conn.execute("SELECT body FROM krdict_cache WHERE key = ?", (key,)).fetchone()
+    if row:
+        return ET.fromstring(row[0])
+    until = blocked_until()
+    if until:
+        raise KrdictUnavailable(f"krdict paused after a failure, until {datetime.fromtimestamp(until):%H:%M}")
+    try:
+        r = httpx.get(url, params={"key": KRDICT_API_KEY, **params}, timeout=10)
+        root = ET.fromstring(r.text)
+        if getattr(r, "status_code", 200) != 200 or root.tag == "error":
+            raise ValueError(root.findtext("message", "") or f"HTTP {r.status_code}")
+    except Exception as e:
+        _trip()
+        raise KrdictUnavailable(f"krdict request failed ({e}); paused for {COOLDOWN_S // 60} min") from e
+    with closing(_conn()) as conn:
+        conn.execute("INSERT OR REPLACE INTO krdict_cache (key, body) VALUES (?, ?)", (key, r.text))
+        conn.commit()
+    return root
 
 
 def lookup(word: str, max_entries: int = 5, with_examples: bool = True) -> list[dict]:
@@ -20,24 +79,14 @@ def lookup(word: str, max_entries: int = 5, with_examples: bool = True) -> list[
     Epic 21: `max_entries` raised from 3 → 5 so more derived headwords (승인하다,
     승인서 alongside 승인) surface for click-to-add. `examples` comes from a second
     `view` call per entry — the search API's `<sense>` carries no example sentences.
+    Raises KrdictUnavailable on a failed request or during the cooldown after one.
     """
     if not KRDICT_API_KEY:
         return []
-    try:
-        r = httpx.get(
-            API_URL,
-            params={
-                "key": KRDICT_API_KEY,
-                "q": word,
-                "translated": "y",
-                "trans_lang": "1",  # English
-                "advanced": "n",
-            },
-            timeout=10,
-        )
-        root = ET.fromstring(r.text)
-    except Exception:
-        return []
+    root = _get(
+        API_URL,
+        {"q": word, "translated": "y", "trans_lang": "1", "advanced": "n"},  # English
+    )
 
     entries = []
     for item in root.findall(".//item")[:max_entries]:
@@ -74,19 +123,11 @@ def _view_examples(target_code: str, max_examples: int = 5) -> list[str]:
     `search` API omits — hence the separate call keyed by the item's target_code.
     Best-effort: returns [] on any failure (no key, network, unexpected XML)."""
     try:
-        r = httpx.get(
+        root = _get(
             VIEW_URL,
-            params={
-                "key": KRDICT_API_KEY,
-                "method": "target_code",
-                "target_code": target_code,
-                "translated": "y",
-                "trans_lang": "1",
-            },
-            timeout=10,
+            {"method": "target_code", "target_code": target_code, "translated": "y", "trans_lang": "1"},
         )
-        root = ET.fromstring(r.text)
-    except Exception:
+    except KrdictUnavailable:
         return []
 
     examples: list[str] = []
@@ -98,59 +139,3 @@ def _view_examples(target_code: str, max_examples: int = 5) -> list[str]:
             break
     return examples
 
-
-def search_by_origin(char: str, max_length: int = 6) -> list[dict]:
-    """Every headword whose 원어 (hanja) field contains `char`:
-    [{word, origin, grade, definition}] or [].
-
-    The advanced origin search only returns items on page 1 (later pages report the
-    right <total> but no <item>), so a truncated result is re-queried one syllable
-    count at a time, each bucket getting its own page-1 allowance."""
-    words, total = _origin_query(char)
-    if len(words) >= total:
-        return words
-    seen = {(w["word"], w["origin"], w["definition"]) for w in words}
-    for length in range(1, max_length + 1):
-        bucket, _ = _origin_query(char, length)
-        for w in bucket:
-            key = (w["word"], w["origin"], w["definition"])
-            if key not in seen:
-                seen.add(key)
-                words.append(w)
-    return words
-
-
-def _origin_query(char: str, length: int | None = None) -> tuple[list[dict], int]:
-    if not KRDICT_API_KEY:
-        return [], 0
-    params = {
-        "key": KRDICT_API_KEY,
-        "q": char,
-        "advanced": "y",
-        "target": 4,
-        "method": "include",
-        "start": 1,
-        "num": 100,
-    }
-    if length is not None:
-        params["letter_s"] = length
-        params["letter_e"] = length
-    try:
-        r = httpx.get(API_URL, params=params, timeout=10)
-        root = ET.fromstring(r.text)
-    except Exception:
-        return [], 0
-    try:
-        total = int(root.findtext("total", "0"))
-    except ValueError:
-        total = 0
-    words = [
-        {
-            "word": item.findtext("word", "").strip(),
-            "origin": item.findtext("origin", "").strip(),
-            "grade": item.findtext("word_grade", "").strip(),
-            "definition": item.findtext("sense/definition", "").strip(),
-        }
-        for item in root.findall(".//item")
-    ]
-    return words, total

@@ -1,5 +1,7 @@
-"""Epic 21: krdict example-sentence extraction (search + view-fallback)."""
+"""Epic 21: krdict example-sentence extraction (search + view-fallback), plus the
+response cache and the failure cooldown."""
 import httpx
+import pytest
 
 from translate_svc import krdict
 
@@ -146,3 +148,69 @@ def test_view_dedupes_and_caps_examples(monkeypatch):
     assert examples[0] == "같은 예문"
     assert examples.count("같은 예문") == 1  # deduped
     assert len(examples) == 5  # capped at max_examples
+
+
+def _counting_get(calls, text=SEARCH_XML):
+    def fake_get(url, params=None, timeout=None):
+        calls.append(url)
+        if isinstance(text, Exception):
+            raise text
+        return _Resp(text)
+
+    return fake_get
+
+
+def test_repeat_lookup_is_served_from_cache(monkeypatch):
+    monkeypatch.setattr(krdict, "KRDICT_API_KEY", "test-key")
+    calls = []
+    monkeypatch.setattr(httpx, "get", _counting_get(calls))
+    first = krdict.lookup("기타", with_examples=False)
+    assert krdict.lookup("기타", with_examples=False) == first
+    assert len(calls) == 1
+
+
+def test_first_failure_pauses_every_later_request(monkeypatch):
+    monkeypatch.setattr(krdict, "KRDICT_API_KEY", "test-key")
+    calls = []
+    monkeypatch.setattr(httpx, "get", _counting_get(calls, httpx.ConnectTimeout("t")))
+    with pytest.raises(krdict.KrdictUnavailable):
+        krdict.lookup("기타")
+    monkeypatch.setattr(httpx, "get", _counting_get(calls))
+    with pytest.raises(krdict.KrdictUnavailable, match="paused"):
+        krdict.lookup("다른")
+    assert len(calls) == 1
+    assert krdict.blocked_until() is not None
+
+
+def test_error_xml_trips_the_pause_and_is_not_cached(monkeypatch):
+    monkeypatch.setattr(krdict, "KRDICT_API_KEY", "test-key")
+    calls = []
+    err = "<error><error_code>010</error_code><message>limit exceeded</message></error>"
+    monkeypatch.setattr(httpx, "get", _counting_get(calls, err))
+    with pytest.raises(krdict.KrdictUnavailable, match="limit exceeded"):
+        krdict.lookup("기타")
+    monkeypatch.setattr(krdict.time, "time", lambda: 10**12)
+    monkeypatch.setattr(httpx, "get", _counting_get(calls))
+    assert krdict.lookup("기타", with_examples=False)[0]["word"] == "기타"
+    assert len(calls) == 2
+
+
+def test_cached_words_still_answer_during_the_pause(monkeypatch):
+    monkeypatch.setattr(krdict, "KRDICT_API_KEY", "test-key")
+    calls = []
+    monkeypatch.setattr(httpx, "get", _counting_get(calls))
+    krdict.lookup("기타", with_examples=False)
+    monkeypatch.setattr(httpx, "get", _counting_get(calls, httpx.ConnectTimeout("t")))
+    with pytest.raises(krdict.KrdictUnavailable):
+        krdict.lookup("다른")
+    assert krdict.lookup("기타", with_examples=False)[0]["word"] == "기타"
+    assert len(calls) == 2
+
+
+def test_dict_route_reports_the_pause(client, monkeypatch):
+    def paused(word):
+        raise krdict.KrdictUnavailable("krdict paused after a failure, until 15:00")
+
+    monkeypatch.setattr(krdict, "lookup", paused)
+    r = client.get("/api/dict", params={"word": "기타"})
+    assert r.status_code == 503 and "paused" in r.json()["error"]

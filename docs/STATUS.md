@@ -101,6 +101,13 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   full-line-height learning highlights, progress as metro stations (one per 10%), a
   lemma-first word card, and one button language app-wide (solid primary per screen).
   Frontend only; spec in SPEC Epic 28.
+- [x] **29** — Local hanja pipeline (2026-10-14): `/hanja` candidates and homographs come
+  from a vendored libhangul word list, so `char` sends no krdict request; krdict is used only
+  by `defs` for a picked word, cached, and pauses itself 30 min after any failure. New
+  `/hanja-today` skill: one call writes `hanja_output/<date>.md` (gitignored) for the
+  current study deck's characters of the day (official 훈음, 훈 word, 5-8 checked words with
+  register). Deck is `STUDY_DECK` in `server/hanja_study.py`; change it when the user moves
+  on from 4급-II.
 
 ## Live operational facts
 

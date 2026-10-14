@@ -1417,3 +1417,35 @@ Hanja deck syncs were slow. Measured: each AnkiConnect call took ~2.1s via `loca
 the refused connect is retried before falling back). Sync is one call per new note and four per
 edited note, so this dominated. Switched `server/anki.py`, `server/hanja_study.py` and
 `hanja/anki_levels.py`. Batching via AnkiConnect `multi` left as a possible follow-up.
+
+## 2026-10-14 — Epic 29: hanja candidates are local; krdict only for picked words
+
+The 2026-10-02 flood analysis still held, so the user asked to keep krdict out of candidate
+generation entirely and use it only for words chosen for Anki. Importing krdict's own
+dictionary download was dropped: its license terms couldn't be confirmed from here, and the
+user preferred not to copy it.
+
+- **Word list: libhangul `hanja.txt`** (the IME hangul→hanja table, BSD per its header),
+  pinned to commit `717409c`, trimmed and gzipped. It has correct hanja and good coverage
+  (266 entries for 競) but no frequency, so ranking stays on corpus count and NIKL grade,
+  checked by Claude's judgment. Both measures belong to the hangul, so a common homograph
+  inflates them (경영 競泳 c76 is 經營); the skills say so.
+- **The list is a gate, not only a menu.** A cap on the `rare` list cut real words (志望,
+  鬪志, 敎師) and no local signal orders them, so words Claude knows are allowed once
+  `check` finds the exact hangul+hanja pair. Nothing unchecked reaches the output.
+- **Official names from `hanja_grade.csv`, not namu.wiki or `hanja.txt`.** On today's 20
+  characters the dataset matched namu.wiki on 19 exactly (祭 lacks the minor readings 좨/채);
+  `hanja.txt`'s character glosses disagreed on 6 (想 係 律 際 常 布), being general
+  dictionary readings rather than the 한국어문회 representative 훈음. The user trusts the most
+  official list, so namu.wiki is only a fallback for characters missing from the dataset.
+- **krdict client: cache + 30 min pause, no throttle.** With candidates local, the only
+  callers are `defs` (one lookup per pick, reused by `save`) and the reader's tap lookup, so
+  a throttle buys little. The pause trips on any failure, including one `view` call, so a
+  single timeout also pauses reader lookups for 30 min; accepted as the price of never
+  retrying into a block. Responses are cached with no expiry (the dictionary barely changes).
+- **`/hanja-today`** is a separate skill from `/hanja`: a daily batch the user reviews by
+  hand for a few days before deciding the next step, so it writes a gitignored file and
+  saves nothing. Its deck is a constant (`Hanja::4급-II`) rather than auto-detected,
+  because the radicals deck also has cards introduced daily and must not be mixed in.
+  `anki-queue` used to include `Hanja::Pending*`, which is why it offered 詠 (3급); fixed.
+
