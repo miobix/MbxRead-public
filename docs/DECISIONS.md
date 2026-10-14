@@ -1449,3 +1449,12 @@ user preferred not to copy it.
   because the radicals deck also has cards introduced daily and must not be mixed in.
   `anki-queue` used to include `Hanja::Pending*`, which is why it offered 詠 (3급); fixed.
 
+## 2026-10-14 — /hanja-today: Card 1 only, daily limit counts cards
+
+First real run listed 20 characters: `getDeckStats.new_count` (20) was applied to notes, but
+each 4급-II note has two cards (Card 1 recognition, Card 2 recall) sharing one due number,
+so the user sees 10 new characters a day. `anki_today` now takes the first `new_count` new
+cards in (due, template) order and keeps only Card 1, and the today/due/learning query is
+`card:1` too; the user wants the list for recognition only. The 20-character file was split
+into 2026-10-14 and 2026-10-15, and the skill reports an existing file for the day instead
+of regenerating it.
