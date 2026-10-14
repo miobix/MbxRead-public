@@ -1,6 +1,6 @@
 # Anki sync
 
-How to push saved terms from korean-reader into Anki, and how the sync actually
+How to push saved terms from MbxRead into Anki, and how the sync actually
 works under the hood. See `docs/SPEC.md` section 8 and `docs/ARCHITECTURE.md`
 for the full technical spec; this is the practical how-to.
 
@@ -10,7 +10,7 @@ for the full technical spec; this is the practical how-to.
    you've used the old Lute setup, this is already installed — nothing to redo.
 2. That's it. Unlike the Lute setup, you do **not** need to add anything to
    AnkiConnect's `webCorsOriginList` config. That CORS allowlist only applies to
-   requests sent *from a browser* (with an `Origin` header); korean-reader's
+   requests sent *from a browser* (with an `Origin` header); MbxRead's
    sync call goes server-to-server (the FastAPI backend calling AnkiConnect
    directly over `httpx`), which isn't subject to that check at all.
 
@@ -24,7 +24,7 @@ for the full technical spec; this is the practical how-to.
 5. You'll see a result: `Added X, updated Y` (plus a list of any per-term
    failures). Check Anki's card browser to confirm.
 6. Run your normal AnkiWeb sync (or however you get cards to AnkiDroid) —
-   korean-reader only talks to the local Anki desktop app, not AnkiWeb.
+   MbxRead only talks to the local Anki desktop app, not AnkiWeb.
 
 ## What happens on Sync
 
@@ -34,7 +34,7 @@ for the full technical spec; this is the practical how-to.
   - `Front` = the term's lemma
   - `Back` = the translation, plus the saved example sentence in italics below
     it (if there is one)
-  - Tag: `korean-reader`
+  - Tag: `korean-reader` (kept from the old repo name, like the note type names)
   - Deck: whatever you picked when saving the term (falls back to Anki's own
     `Default` deck for older/hand-seeded terms with no deck set)
 - **Edited terms** — if you later change a synced term's translation, notes,
@@ -44,7 +44,7 @@ for the full technical spec; this is the practical how-to.
 - **known / ignored terms** — never synced. If a term was already synced and
   you later mark it known/ignored, its existing Anki note is left alone (not
   deleted, not touched).
-- **Deletes** — deleting a term in korean-reader does **not** delete its Anki
+- **Deletes** — deleting a term in MbxRead does **not** delete its Anki
   note. Anki notes are only ever added or updated, never removed by sync.
 
 ## Troubleshooting

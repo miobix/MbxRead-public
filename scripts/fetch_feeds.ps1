@@ -1,4 +1,4 @@
-# Epic 17: hits the running korean-reader server's fetch endpoint on a schedule.
+# Epic 17: hits the running MbxRead server's fetch endpoint on a schedule.
 # Register this as a Windows Task Scheduler action (see README.md) on a daily
 # trigger. Assumes the server is already up (Tailscale-hosted, always running) —
 # this script does not start it, just calls the same endpoint the Queue page's

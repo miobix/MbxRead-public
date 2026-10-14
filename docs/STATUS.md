@@ -1,6 +1,6 @@
 # Project status — read this first, update it last
 
-**MbxAndria** (internal repo name: korean-reader). **Live and in daily use since
+**MbxRead** (renamed 2026-10-14 from korean-reader / MbxAndria). **Live and in daily use since
 2026-07-24.** All planned epics are done; future work is ad-hoc user requests and polish, not
 a fixed backlog.
 
@@ -121,9 +121,9 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   this environment). Server output → `scripts/server.log` (gitignored).
 - **Feed fetch** is a daily 06:00 Task Scheduler job (`scripts/fetch_feeds.ps1` → `POST
   /api/feeds/fetch`, `-WindowStyle Hidden`, logs to `scripts/fetch_feeds.log`).
-  **Paused 2026-07-27** — task `korean-reader fetch feeds` is *Disabled*, because reading
+  **Paused 2026-07-27** — task `MbxRead fetch feeds` is *Disabled*, because reading
   is currently focused on one book and the queue was accumulating unread text. Re-enable
-  with `Enable-ScheduledTask -TaskName 'korean-reader fetch feeds'` (trigger/action are
+  with `Enable-ScheduledTask -TaskName 'MbxRead fetch feeds'` (trigger/action are
   unchanged; nothing else was touched).
 - **Tailscale** address: `<machine>.<tailnet>.ts.net` — phone reaches the app at
   `http://<machine>.<tailnet>.ts.net:8002`.

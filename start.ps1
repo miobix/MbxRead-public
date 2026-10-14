@@ -1,4 +1,4 @@
-# Starts korean-reader: rebuilds web/ if the source is newer than the last
+# Starts MbxRead: rebuilds web/ if the source is newer than the last
 # build, launches the FastAPI server (serves the API and the built frontend
 # together on one port), and opens the browser.
 $root = $PSScriptRoot

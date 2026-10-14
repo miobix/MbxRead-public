@@ -1458,3 +1458,16 @@ cards in (due, template) order and keeps only Card 1, and the today/due/learning
 `card:1` too; the user wants the list for recognition only. The 20-character file was split
 into 2026-10-14 and 2026-10-15, and the skill reports an existing file for the day instead
 of regenerating it.
+
+## 2026-10-14 — Renamed to MbxRead (repo, folder, app title)
+
+The user names personal apps Mbx<thing> (MbxP, MbxBrush, MbxWrite). korean-reader becomes
+MbxRead everywhere: GitHub repo, folder `C:\Work\PyCharmProjects\MbxRead`, UI title and tray
+(was MbxAndria, a play on the Library of Alexandria), FastAPI title, Startup shortcut, the
+fetch-feeds scheduled task, and the user-level skills that list the repo. Kept on purpose:
+the Anki note type names `Korean Reader 2-way` / `Korean Reader Hanja` and the tag
+`korean-reader`, because the sync finds its models by name and renaming them means editing
+the user's collection for no visible gain. History entries (this log, `docs/archive/`,
+LEARNED_LESSONS) keep the old names. `.venv` was rebuilt after the move (its launchers
+hardcode the old path).
+

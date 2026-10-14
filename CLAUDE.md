@@ -1,4 +1,4 @@
-# korean-reader — Korean reading app (custom rebuild, replaces Lute)
+# MbxRead — Korean reading app (custom rebuild, replaces Lute)
 
 Personal app: read Korean texts, tap words, translate (DeepL/Claude), hand-enrich the
 translation, save terms by **dictionary form (lemma)** so all inflections highlight, and
@@ -36,8 +36,8 @@ frontend (static export), phone access via Tailscale.
   `requirements.txt`.
 - Never commit or modify: `.env`, `*.sqlite3`, `reader.db`, `.venv/`.
 - **Lute is retired (Epic 8, 2026-07-21).** The user has fully switched to
-  korean-reader. `translate_svc/main.py` (the old Lute-HTML tooltip page) is
-  deleted; `start.ps1` now launches only korean-reader. `%LOCALAPPDATA%\Lute3`
+  MbxRead. `translate_svc/main.py` (the old Lute-HTML tooltip page) is
+  deleted; `start.ps1` now launches only MbxRead. `%LOCALAPPDATA%\Lute3`
   (the user's old Lute reading history/database) was deliberately left
   untouched — it's their data, not ours to delete, and nothing in this repo
   depends on it.

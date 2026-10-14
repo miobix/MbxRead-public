@@ -9,7 +9,7 @@ const noto = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "MbxAndria",
+  title: "MbxRead",
   description: "Read Korean texts, save terms by dictionary form, sync to Anki.",
 };
 

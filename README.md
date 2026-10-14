@@ -1,4 +1,4 @@
-# korean-reader
+# MbxRead
 
 Personal Korean reading app: read texts, tap unknown words, translate them (DeepL or
 Claude), hand-enrich the translation, save by **dictionary form (lemma)** so every
@@ -96,10 +96,10 @@ schedule, register `scripts/fetch_feeds.ps1` as a Windows Task Scheduler action:
 
 1. Open **Task Scheduler** → **Create Task…** (not "Create Basic Task" — you need the
    full dialog for the arguments below).
-2. **General**: name it e.g. `korean-reader fetch feeds`.
+2. **General**: name it e.g. `MbxRead fetch feeds`.
 3. **Triggers** → **New…**: Daily, pick a time (e.g. 6:00 AM), recur every 1 day.
 4. **Actions** → **New…**: Program/script `powershell.exe`; arguments:
-   `-WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path\to\korean-reader\scripts\fetch_feeds.ps1"`
+   `-WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path\to\MbxRead\scripts\fetch_feeds.ps1"`
    (adjust the path to where you cloned this repo). `-WindowStyle Hidden` is what
    stops a console window from flashing up when the task fires.
 5. **Conditions**: uncheck "Start the task only if the computer is on AC power" if this

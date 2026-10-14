@@ -81,4 +81,4 @@ if __name__ == "__main__":
     )
     out.write_text(text, encoding="utf-8")
     print(f"Saved {len(text)} chars -> {out}")
-    print("Import it into korean-reader: Add book > YouTube URL.")
+    print("Import it into MbxRead: Add book > YouTube URL.")
