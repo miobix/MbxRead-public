@@ -30,7 +30,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         db.init_db(path)
         yield
 
-    app = FastAPI(title="korean-reader", lifespan=lifespan)
+    app = FastAPI(title="MbxRead", lifespan=lifespan)
     app.state.db_path = path
 
     @app.get("/api/health")

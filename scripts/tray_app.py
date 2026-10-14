@@ -73,11 +73,11 @@ def on_quit(icon: pystray.Icon, item: pystray.MenuItem) -> None:
 def main() -> None:
     start_server()
     icon = pystray.Icon(
-        "mbxandria",
+        "mbxread",
         make_icon_image(),
-        "MbxAndria",
+        "MbxRead",
         menu=pystray.Menu(
-            pystray.MenuItem("Open MbxAndria", on_open, default=True),
+            pystray.MenuItem("Open MbxRead", on_open, default=True),
             pystray.MenuItem("Restart server", on_restart),
             pystray.MenuItem("Quit", on_quit),
         ),

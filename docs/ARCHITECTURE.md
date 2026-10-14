@@ -8,7 +8,7 @@ original intent. See `docs/DECISIONS.md` for the reasoning behind divergences.
 ## Layout
 
 ```
-korean-reader/
+MbxRead/
   server/                  FastAPI app, port 8002
     __init__.py
     main.py                app factory; mounts /api routers; serves web/out statically at /

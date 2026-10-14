@@ -1,4 +1,4 @@
-# Korean Reader — full rebuild spec (handover plan)
+# MbxRead (formerly korean-reader) — full rebuild spec (handover plan)
 
 **Audience:** this plan will be executed epic-by-epic by other models (Sonnet). Each epic is self-contained, has tests and acceptance criteria, and ends with a git commit plus a design-doc update. Read "Executor conventions" before starting any epic.
 
@@ -19,7 +19,7 @@ Agreed decisions:
 
 ## 2. Existing code (reuse, do not rewrite)
 
-Repo root: `C:\Users\<user>\PycharmProjects\korean-reader` (venv at `.venv`, Python 3.10, Windows).
+Repo root: `C:\Work\PyCharmProjects\MbxRead` (venv at `.venv`, Python 3.10, Windows).
 
 | Path | Role | Action |
 |---|---|---|
@@ -34,7 +34,7 @@ Repo root: `C:\Users\<user>\PycharmProjects\korean-reader` (venv at `.venv`, Pyt
 ## 3. Architecture
 
 ```
-korean-reader/
+MbxRead/
   server/                  FastAPI app, port 8002
     __init__.py
     main.py                app factory; mounts /api routers; serves web/out statically at /
