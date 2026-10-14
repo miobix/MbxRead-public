@@ -26,6 +26,9 @@ frontend (static export), phone access via Tailscale.
    Epic 27) to analyse one character from the user's Anki deck and save picked words. It
    reads the user's `Hanja::*` Anki decks and **never writes to them**; use `save --dry-run`
    to test, a real `save` changes the live DB.
+6. **Daily hanja word list: run `/hanja-today`** (`.claude/skills/hanja-today/SKILL.md`,
+   SPEC Epic 29). One call, no krdict, writes `hanja_output/<date>.md` for today's
+   characters of the study deck (`STUDY_DECK`, never Pending). Read-only on Anki.
 
 ## Hard rules
 

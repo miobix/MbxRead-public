@@ -563,7 +563,8 @@ deterministic parts live in a small tested module the skill calls.
 
 **Decisions from the trial:**
 
-- **krdict first.** Candidates come from krdict's origin search (every word is real, with a
+- **krdict first** (superseded by Epic 29: candidates are now local, krdict only for picked
+  words). Candidates come from krdict's origin search (every word is real, with a
   verified `origin`), never from the LLM. The LLM may add words krdict lacks, saved as
   `manual` and marked unverified.
 - **Filter by rule, rank by measurement.** Drop modifier derivatives (하다/되다/적/률/화/자/
@@ -616,6 +617,46 @@ tooling, `save` reports `reading_term` and writes nothing until run with `--conv
 reports what it would do. Tests: convert keeps context and resets sync state, forces
 `learning`, 409/404, `save` without `--convert` is a no-op, and a sync of a converted term
 adds a hanja note carrying the sentence.
+
+### Epic 29 — Local hanja pipeline: no krdict for candidates, plus `/hanja-today`
+
+Scoped 2026-10-14. A `char` run sent 1 to 7 origin searches plus one lookup per candidate
+(homographs) with no cache and no stop on failure, which got this PC's IP blocked on
+2026-10-02. The user wants krdict used only for words chosen for Anki, and a one-call daily
+batch for the characters of their current study deck.
+
+**Scope:**
+
+1. **`server/data/hanja_words.txt.gz`**: libhangul `data/hanja/hanja.txt` (BSD, header
+   kept) @ `717409ce61524bb3d8426060a384822f21354c62`, trimmed to `word:hanja` lines with an
+   all-hangul word of 2+ syllables and an all-hanja origin of the same length (238,047
+   pairs, 1.8 MB gzipped).
+2. **`server/hanja_study.py`**: `load_words`, `words_with`, local `homographs` (every other
+   spelling of the same hangul), `search` with no network (words with a NIKL grade, corpus
+   hit or DB row are `candidates`, the rest `rare`), `check_words`, `name_matches` (strict
+   card-vs-dataset 훈음), `anki_today` (deck's cards rated today, due or learning, plus
+   today's remaining new cards by `getDeckStats.new_count` in queue order) and
+   `today_report`. `getDeckStats` joins the read-only Anki allowlist. `anki-queue` now
+   excludes `Hanja::Pending*`.
+3. **`translate_svc/krdict.py`**: `search_by_origin` removed. All requests go through
+   `_get`: SQLite response cache, and a 30 min pause after the first failure (timeout,
+   non-200, unparseable or `<error>` XML) during which nothing is sent and
+   `KrdictUnavailable` is raised. `/api/dict` maps it to 503.
+4. **CLI**: `today [--deck]`, `check <word> <hanja>…`; `char` no longer probes krdict.
+5. **`.claude/skills/hanja-today/SKILL.md`**: one call, writes
+   `hanja_output/<date>.md` (gitignored): card name vs official 훈음, the 훈 as a
+   dictionary-form word with English, 5-8 words per character with register. Every word
+   passes `check`. Official names come from `hanja_grade.csv`; namu.wiki only for a
+   character the dataset lacks.
+
+**Tests:** gzipped list loads; vendored list holds 競技/景氣/競爭 and only all-hanja origins;
+`search` and `today_report` make no `httpx.get`; `anki_today` order, dedupe, deck-scoped
+queries and read-only actions; `name_matches` strict; `check_words` exact; krdict cache hit,
+pause after a timeout and after `<error>` XML (not cached), cached words still served during
+the pause, `/api/dict` 503.
+
+**Accept:** pytest green; `char 競` and `today` run with zero krdict requests; one real
+`/hanja-today` file written for 2026-10-14.
 
 ### Epic 28 — Visual redesign: indigo palette, Noto Sans KR, metro-line progress
 

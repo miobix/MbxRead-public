@@ -21,3 +21,6 @@ anki_decks/
 *.ssa
 *.ttml
 *.dfxp
+
+# /hanja-today word lists (personal study output, never committed)
+hanja_output/
