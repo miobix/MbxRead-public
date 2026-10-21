@@ -1,9 +1,8 @@
 """System tray wrapper for daily use — replaces double-clicking start.ps1.
 
 Launches uvicorn as a hidden background process and shows a tray icon (Open /
-Restart / Quit). Meant to be registered as a Task Scheduler "at log on" action
-via pythonw.exe, so there's never a console window, not even for this script
-itself. Assumes web/out is already built (this is the day-to-day launcher, not
+Restart / Quit). Started at logon by a Startup-folder shortcut to pythonw.exe, so
+there's never a console window, not even for this script itself. Assumes web/out is already built (this is the day-to-day launcher, not
 the dev one) — run `npm run build` in web/, or use start.ps1 once, after any
 frontend change.
 """
@@ -17,6 +16,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
 LOG_PATH = Path(__file__).resolve().parent / "server.log"
+LOG_MAX_BYTES = 5_000_000
 URL = "http://localhost:8002"
 
 proc: subprocess.Popen | None = None
@@ -28,14 +28,20 @@ def start_server() -> None:
     # exception traceback on a 500 — go to a plain log file instead of being
     # discarded, appended across restarts.
     global proc
-    log_file = open(LOG_PATH, "a", encoding="utf-8")
-    proc = subprocess.Popen(
-        [str(PYTHON), "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8002"],
-        cwd=ROOT,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-    )
+    # Rotate at start, when nothing holds the file: keeps this log and one previous.
+    try:
+        if LOG_PATH.stat().st_size > LOG_MAX_BYTES:
+            LOG_PATH.replace(LOG_PATH.with_suffix(".log.1"))
+    except OSError:
+        pass
+    with open(LOG_PATH, "a", encoding="utf-8") as log_file:
+        proc = subprocess.Popen(
+            [str(PYTHON), "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8002"],
+            cwd=ROOT,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
 
 
 def stop_server() -> None:

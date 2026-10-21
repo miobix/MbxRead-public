@@ -10,6 +10,7 @@ web/out/
 .idea/
 scripts/fetch_feeds.log
 scripts/server.log
+scripts/server.log.1
 anki_decks/
 
 # Source material dropped in the root for a one-off import — copyrighted, and
