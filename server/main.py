@@ -35,6 +35,13 @@ class _WebOut(StaticFiles):
             return super().lookup_path(_NEXT_SEGMENT.sub(r"\1/\2", path))
         return full_path, stat_result
 
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        # Unhashed HTML/RSC cached from an older build points at deleted chunks.
+        if not scope["path"].startswith("/_next/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
 
 def create_app(db_path: Path | str | None = None) -> FastAPI:
     path = Path(db_path) if db_path else db.DEFAULT_DB_PATH
