@@ -634,7 +634,7 @@ batch for the characters of their current study deck.
 2. **`server/hanja_study.py`**: `load_words`, `words_with`, local `homographs` (every other
    spelling of the same hangul), `search` with no network (words with a NIKL grade, corpus
    hit or DB row are `candidates`, the rest `rare`), `check_words`, `name_matches` (strict
-   card-vs-dataset 훈음), `anki_today` (deck's cards rated today, due or learning, plus
+   card-vs-dataset 훈음), `anki_today` (deck's Card 1s introduced today, plus
    today's remaining new cards by `getDeckStats.new_count` in queue order) and
    `today_report`. `getDeckStats` joins the read-only Anki allowlist. `anki-queue` now
    excludes `Hanja::Pending*`.

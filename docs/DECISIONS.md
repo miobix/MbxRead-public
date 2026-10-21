@@ -1471,3 +1471,11 @@ the user's collection for no visible gain. History entries (this log, `docs/arch
 LEARNED_LESSONS) keep the old names. `.venv` was rebuilt after the move (its launchers
 hardcode the old path).
 
+
+## 2026-10-15 — /hanja-today lists first-time characters only
+
+The user studies the word list for characters they meet for the first time; reviews in the
+list got in the way. `anki_today`'s seen-query was `card:1 (rated:1 OR is:due OR is:learn)`,
+which pulled in every review and lapsed card. It is now `card:1 introduced:1` (first studied
+today) plus today's remaining new Card 1s, so a mid-deck run never lists old characters.
+The hand-made 2026-10-16..18 files (written ahead for a trip) dropped their review line too.
