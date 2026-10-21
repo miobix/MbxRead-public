@@ -343,43 +343,6 @@ def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db
     return _score_and_cache(conn, book_id, text)
 
 
-@router.get("/{book_id}/pages/{page_no}")
-def get_page(
-    book_id: int, page_no: int, conn: sqlite3.Connection = Depends(db_module.get_db)
-):
-    _get_book_or_404(conn, book_id)
-    # 2026-07-24: stamps every time a page is actually viewed — drives the
-    # Library's "most recently opened" default sort. Deliberately on the
-    # page-content fetch (the one call the reader makes to actually display a
-    # page), not on create/patch, so it reflects real reading activity.
-    conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))
-    conn.commit()
-    page_count = conn.execute(
-        "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
-    ).fetchone()[0]
-    page = conn.execute(
-        "SELECT content FROM pages WHERE book_id = ? AND page_no = ?",
-        (book_id, page_no),
-    ).fetchone()
-    if page is None:
-        raise HTTPException(status_code=404, detail="page not found")
-
-    content = page["content"]
-    tokens = tokenize(content)
-    terms = _terms_for_lemmas(conn, {t.lemma for t in tokens})
-
-    return {
-        "page_no": page_no,
-        "page_count": page_count,
-        "content": content,
-        "tokens": [
-            {"s": t.s, "e": t.e, "surface": t.surface, "lemma": t.lemma, "pos": t.pos}
-            for t in tokens
-        ],
-        "terms": terms,
-    }
-
-
 def _term_summary(row: sqlite3.Row) -> dict:
     """The reader popover's view of a term; forms and back_items are attached after."""
     return {
@@ -397,10 +360,8 @@ def _term_summary(row: sqlite3.Row) -> dict:
 
 
 def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
-    """Every saved term a set of page/window token lemmas should light up, keyed by the
-    string that matched (the term's own lemma, or one of its extra `forms`). Extracted
-    from get_page in Epic 24 so the new text-window endpoint highlights identically —
-    behaviour unchanged, this is a straight lift."""
+    """Every saved term a set of window token lemmas should light up, keyed by the
+    string that matched (the term's own lemma, or one of its extra `forms`)."""
     terms: dict = {}
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
@@ -472,8 +433,7 @@ def get_text(
     sentence-extraction work unchanged — absolute positions are `offset + token.s`.
     """
     _get_book_or_404(conn, book_id)
-    # Moved here from get_page: this is now the call the reader makes to display text,
-    # so it's what "most recently opened" should reflect.
+    # The reader's display call, so it's what "most recently opened" reflects.
     conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))
     conn.commit()
 

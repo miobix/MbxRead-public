@@ -18,28 +18,18 @@ def test_create_book_splits_into_pages_matching_paging_util(client):
     assert body["source"] == "paste"
 
 
-def test_page_boundaries_never_split_a_sentence(client):
-    resp = client.post("/api/books", json={"title": "Long", "text": LONG_STORY})
-    book_id = resp.json()["id"]
-    page_count = resp.json()["page_count"]
-
-    pages_content = []
-    for n in range(1, page_count + 1):
-        page = client.get(f"/api/books/{book_id}/pages/{n}").json()
-        pages_content.append(page["content"])
-
-    assert "".join(pages_content) == LONG_STORY
-    for content in pages_content[:-1]:
-        assert content.endswith(".") or content.endswith("\n")
+def test_stored_pages_round_trip_the_text(client):
+    book_id = client.post("/api/books", json={"title": "Long", "text": LONG_STORY}).json()["id"]
+    assert client.get(f"/api/books/{book_id}/text").json()["content"] == LONG_STORY
 
 
-def test_page_payload_shape(client):
+def test_text_payload_shape(client):
     resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
     book_id = resp.json()["id"]
 
-    page = client.get(f"/api/books/{book_id}/pages/1").json()
-    assert page["page_no"] == 1
-    assert page["page_count"] == 1
+    page = client.get(f"/api/books/{book_id}/text").json()
+    assert page["offset"] == 0
+    assert page["total_chars"] == len(SHORT_STORY)
     assert page["content"] == SHORT_STORY
     assert isinstance(page["tokens"], list)
     assert page["tokens"]  # tokenizer should find something in this sentence
@@ -53,7 +43,7 @@ def test_page_payload_shape(client):
     assert "학교" in lemmas
 
 
-def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
+def test_text_includes_saved_terms_matching_its_lemmas(client, db_path):
     resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
     book_id = resp.json()["id"]
 
@@ -65,7 +55,7 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
     conn.commit()
     conn.close()
 
-    page = client.get(f"/api/books/{book_id}/pages/1").json()
+    page = client.get(f"/api/books/{book_id}/text").json()
     assert page["terms"] == {
         "입다": {
             "id": 1,
@@ -82,7 +72,7 @@ def test_page_includes_saved_terms_matching_page_lemmas(client, db_path):
     }
 
 
-def test_page_highlights_a_terms_extra_form(client):
+def test_text_highlights_a_terms_extra_form(client):
     """Epic 20: a token whose lemma is one of a term's `forms` highlights as that
     term, even though the term's own lemma never appears on the page."""
     resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
@@ -98,17 +88,15 @@ def test_page_highlights_a_terms_extra_form(client):
         },
     )
 
-    page = client.get(f"/api/books/{book_id}/pages/1").json()
+    page = client.get(f"/api/books/{book_id}/text").json()
     assert "승인" not in page["terms"]
     assert page["terms"]["학교"]["translation"] == "approval"
     assert page["terms"]["학교"]["lemma"] == "승인"
     assert page["terms"]["학교"]["forms"] == [{"text": "학교", "kind": "manual"}]
 
 
-def test_get_nonexistent_page_returns_404(client):
-    resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
-    book_id = resp.json()["id"]
-    assert client.get(f"/api/books/{book_id}/pages/99").status_code == 404
+def test_text_of_nonexistent_book_returns_404(client):
+    assert client.get("/api/books/999/text").status_code == 404
 
 
 def test_title_patch_persists(client):
@@ -331,11 +319,11 @@ def test_score_book_caches_general_difficulty(client):
 # --- 2026-07-24: sort + pagination (Library/Queue volume), last_opened ---
 
 
-def test_get_page_stamps_last_opened(client):
+def test_get_text_stamps_last_opened(client):
     book_id = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
     assert client.get("/api/books").json()[0]["last_opened"] is None
 
-    client.get(f"/api/books/{book_id}/pages/1")
+    client.get(f"/api/books/{book_id}/text")
 
     assert client.get("/api/books").json()[0]["last_opened"] is not None
 
@@ -344,8 +332,8 @@ def test_list_books_sort_opened_puts_most_recently_viewed_first(client):
     a = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
     b = client.post("/api/books", json={"title": "B", "text": SHORT_STORY}).json()["id"]
     # open A first, then B — B should now sort first ("most recently opened")
-    client.get(f"/api/books/{a}/pages/1")
-    client.get(f"/api/books/{b}/pages/1")
+    client.get(f"/api/books/{a}/text")
+    client.get(f"/api/books/{b}/text")
 
     titles = [bk["title"] for bk in client.get("/api/books?sort=opened").json()]
     assert titles == ["B", "A"]
@@ -354,7 +342,7 @@ def test_list_books_sort_opened_puts_most_recently_viewed_first(client):
 def test_list_books_sort_opened_never_opened_sinks_after_opened(client):
     a = client.post("/api/books", json={"title": "A", "text": SHORT_STORY}).json()["id"]
     client.post("/api/books", json={"title": "B", "text": SHORT_STORY})
-    client.get(f"/api/books/{a}/pages/1")
+    client.get(f"/api/books/{a}/text")
 
     titles = [bk["title"] for bk in client.get("/api/books?sort=opened").json()]
     assert titles == ["A", "B"]
@@ -462,14 +450,12 @@ def test_get_text_highlights_saved_terms(client):
     book_id = client.post(
         "/api/books", json={"title": "Short", "text": SHORT_STORY}
     ).json()["id"]
-    page = client.get(f"/api/books/{book_id}/pages/1").json()
+    page = client.get(f"/api/books/{book_id}/text").json()
     lemma = page["tokens"][0]["lemma"]
     client.post("/api/terms", json={"lemma": lemma, "translation": "x"})
 
     body = client.get(f"/api/books/{book_id}/text").json()
     assert lemma in body["terms"]
-    # identical highlighting to the page endpoint it was extracted from
-    assert set(body["terms"]) == set(client.get(f"/api/books/{book_id}/pages/1").json()["terms"])
 
 
 def test_get_text_terms_carry_every_hanja_sense(client):
@@ -478,7 +464,7 @@ def test_get_text_terms_carry_every_hanja_sense(client):
     book_id = client.post(
         "/api/books", json={"title": "Short", "text": SHORT_STORY}
     ).json()["id"]
-    tokens = client.get(f"/api/books/{book_id}/pages/1").json()["tokens"]
+    tokens = client.get(f"/api/books/{book_id}/text").json()["tokens"]
     lemma, form = tokens[0]["lemma"], tokens[1]["lemma"]
     senses = ["市場", "市長"]
     client.post("/api/terms", json={"lemma": lemma, "translation": "x", "hanja": senses})

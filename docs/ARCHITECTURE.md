@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS terms (
   hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25, list since Epic 26: JSON list of hanja spellings, one per sense (시장 = 市場 + 市長); '[]' = a plain reading-flow term
 );
 -- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
--- Highlights in the reader (matched alongside the lemma in get_page) and renders on the
+-- Highlights in the reader (matched alongside the lemma in get_text) and renders on the
 -- Anki card's Korean face; lemma stays the single clean dictionary form. Epic 22: `kind`
 -- ('dict'|'manual', additive, default 'manual') — dictionary-clicked vs hand-typed via
 -- "Add entry"; drives popover chip color only, irrelevant to page-token matching.
@@ -261,7 +261,7 @@ position without sharing a pagination.
 | GET `/api/books/{id}` | – | `{id,title,current_offset,total_chars,page_count}` — **implemented (Epic 2)**; `current_offset`/`total_chars` Epic 24 |
 | PATCH `/api/books/{id}` | `{current_offset?, title?, topic?, tags?, archived?, read?, status?}` (`current_offset` = Epic 24 reading position, `ge=0`; replaced `current_page`) | full updated book row (as `GET /api/books` shape); `status` is how the Queue promotes (`"library"`) or discards (`"discarded"`) a candidate — **implemented (Epic 2, extended Epic 11, Epic 15)**. Setting `status: "discarded"` here also stamps `discard_reason: "user"` (Epic 19) — the auto-expiry path (`POST /api/feeds/fetch`) stamps `"expired"` instead, via its own `UPDATE` |
 | DELETE `/api/books/{id}` | – | 204 — **implemented (Epic 2)** |
-| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) — **implemented (Epic 2)**; no longer used by the reader as of Epic 24, kept for scoring/tests |
+| ~~GET `/api/books/{id}/pages/{n}`~~ | – | removed 2026-10-21 (unused since Epic 24; `/text` serves the reader) |
 | GET `/api/books/{id}/text?offset=&window=` | – | `{offset, total_chars, content, tokens, terms}` — the reader's own source of text as of **Epic 24**. A character-addressed slice; both ends snap **outward** to a sentence/newline boundary, so `offset` in the response may precede the one requested. Token offsets are relative to `content` (absolute = `offset + token.s`). `window` defaults to 20k chars and is capped at 50k. Stamps `last_opened` (moved here from the pages endpoint) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
 | POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists — since Epic 26 the popover answers that by offering to append onto the existing term rather than surfacing the error); `hanja` (Epic 25, a list since Epic 26) = one spelling per sense; `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
