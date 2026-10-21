@@ -11,6 +11,7 @@ web/out/
 scripts/fetch_feeds.log
 scripts/server.log
 scripts/server.log.1
+scripts/crash.log
 anki_decks/
 
 # Source material dropped in the root for a one-off import — copyrighted, and
