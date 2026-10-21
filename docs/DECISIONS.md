@@ -1523,3 +1523,10 @@ checked against the live `reader.db` (read-only) before it went.
   file's AST (docstrings and SQL `--` lines stripped) and each TS file's comment-free
   printed AST match the previous commit. Not cut: `import_tools/subtitles.py`'s per-format
   notes, which document real format quirks.
+- **`same-code` user-level skill written** (`~/.claude/skills/same-code/`, indexed in the
+  user's global CLAUDE.md) from the comment-only verifier built for the doc-hygiene pass, so
+  any future comment/doc cleanup can prove it left the code untouched.
+- **No TokenPopover / reader file split for now.** `TokenPopover.tsx` (706 lines) and
+  `read/page.tsx` (551) have clean seams (the Front→Back preview and Examples sections; the
+  selection hit-test helpers), but those screens may be redesigned, so splitting now would be
+  work thrown away. Revisit as part of that redesign.
