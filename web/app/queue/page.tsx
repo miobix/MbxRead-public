@@ -227,11 +227,6 @@ export default function QueuePage() {
                 , expired <b>{fetchResult.expired}</b> stale candidate(s)
               </>
             )}
-            {fetchResult.skipped_feed_types > 0 && (
-              <>
-                , skipped <b>{fetchResult.skipped_feed_types}</b> unsupported feed type(s)
-              </>
-            )}
             .
           </p>
           {fetchResult.feeds.some((f) => f.fetch_error) && (

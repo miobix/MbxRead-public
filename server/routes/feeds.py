@@ -8,7 +8,6 @@
     * youtube (Epic 14) — parse the channel's Atom feed, pull each new video's Korean
       transcript via import_tools.yt_subs (yt-dlp). Videos with no Korean subs are
       skipped, not failed.
-    * scraper — no fetch logic yet, skipped gracefully.
   Every item is scored (personal + general difficulty) and deduped on source_ref
   BEFORE the expensive fetch. Per-feed/per-item failures are isolated so one bad feed
   or article never blocks the rest (same pattern as anki_sync's per-note failures).
@@ -44,7 +43,7 @@ from .books import DuplicateSourceRef, _purge_queue_text, _score_and_cache, inse
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
-FeedType = Literal["rss", "youtube", "scraper"]
+FeedType = Literal["rss", "youtube"]
 
 # Cap new videos processed per YouTube feed per run: the Atom feed only carries the
 # ~15 latest anyway, and each transcript is a yt-dlp network round-trip, so an
@@ -62,8 +61,6 @@ class FeedCreate(BaseModel):
     url_or_channel_id: str
     topic: str = ""
     enabled: bool = True
-    difficulty_min: float | None = None
-    difficulty_max: float | None = None
 
 
 class FeedPatch(BaseModel):
@@ -72,8 +69,6 @@ class FeedPatch(BaseModel):
     url_or_channel_id: str | None = None
     topic: str | None = None
     enabled: bool | None = None
-    difficulty_min: float | None = None
-    difficulty_max: float | None = None
 
 
 def _feed_dict(row: sqlite3.Row) -> dict:
@@ -84,8 +79,6 @@ def _feed_dict(row: sqlite3.Row) -> dict:
         "url_or_channel_id": row["url_or_channel_id"],
         "topic": row["topic"],
         "enabled": bool(row["enabled"]),
-        "difficulty_min": row["difficulty_min"],
-        "difficulty_max": row["difficulty_max"],
         "last_fetched": row["last_fetched"],
     }
 
@@ -106,17 +99,8 @@ def list_feeds(conn: sqlite3.Connection = Depends(db_module.get_db)):
 @router.post("", status_code=201)
 def create_feed(body: FeedCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
     cur = conn.execute(
-        "INSERT INTO feeds (name, type, url_or_channel_id, topic, enabled, "
-        "difficulty_min, difficulty_max) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (
-            body.name,
-            body.type,
-            body.url_or_channel_id,
-            body.topic,
-            int(body.enabled),
-            body.difficulty_min,
-            body.difficulty_max,
-        ),
+        "INSERT INTO feeds (name, type, url_or_channel_id, topic, enabled) VALUES (?, ?, ?, ?, ?)",
+        (body.name, body.type, body.url_or_channel_id, body.topic, int(body.enabled)),
     )
     conn.commit()
     return _feed_dict(_get_feed_or_404(conn, cur.lastrowid))
@@ -309,21 +293,14 @@ def fetch_feeds(
     frequency = frequency_grades(conn)
 
     checked_feeds = 0
-    skipped_feed_types = 0
     candidates_created = 0
     feed_summaries = []
 
     for feed in feeds:
         if feed["type"] == "rss":
             summary = _process_rss(conn, feed, known, frequency)
-        elif feed["type"] == "youtube":
+        else:
             summary = _process_youtube(conn, feed, known, frequency)
-        else:  # scraper — no fetch logic yet
-            skipped_feed_types += 1
-            feed_summaries.append(
-                {"id": feed["id"], "name": feed["name"], "skipped_type": feed["type"]}
-            )
-            continue
 
         checked_feeds += 1
         candidates_created += summary["created"]
@@ -336,7 +313,6 @@ def fetch_feeds(
 
     return {
         "checked_feeds": checked_feeds,
-        "skipped_feed_types": skipped_feed_types,
         "candidates_created": candidates_created,
         "expired": expired,
         "feeds": feed_summaries,

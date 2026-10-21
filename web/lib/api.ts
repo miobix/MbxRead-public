@@ -50,7 +50,6 @@ export type ScoreResult = {
 
 export type FeedFetchResult = {
   checked_feeds: number;
-  skipped_feed_types: number;
   candidates_created: number;
   expired: number;
   feeds: {
@@ -62,11 +61,10 @@ export type FeedFetchResult = {
     skipped_no_subs?: number;
     failed?: number;
     fetch_error?: string;
-    skipped_type?: string;
   }[];
 };
 
-export type FeedType = "rss" | "youtube" | "scraper";
+export type FeedType = "rss" | "youtube";
 
 export type Feed = {
   id: number;
@@ -75,8 +73,6 @@ export type Feed = {
   url_or_channel_id: string;
   topic: string;
   enabled: boolean;
-  difficulty_min: number | null;
-  difficulty_max: number | null;
   last_fetched: string | null;
 };
 
