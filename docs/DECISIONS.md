@@ -1537,3 +1537,10 @@ checked against the live `reader.db` (read-only) before it went.
   with no chips, and removing the branch would change those cards, so it stays.
 - **Claude translator dependency deferred.** `anthropic` is still not in `requirements.txt`;
   the app runs on DeepL + krdict keys (no Anthropic key, no Claude-cached translations).
+- **`/code-review` of the cleanup (093e5c4..fff6c41).** 7 findings. Fixed: a malformed
+  `pages` field on PDF import raised an uncaught ValueError (500); it is now a 422, with a
+  test. `hanja_study.annotate` reuses `routes.terms.hanja_list` instead of a second inline
+  parser. Not changed, because they only bite a pre-cleanup `reader.db` (old backup or
+  hand-edited row), which the migration decision above already covers: strict `hanja_list`,
+  the two-way `else` in sync, scraper rows reaching the YouTube path, the dead feed columns
+  in SCHEMA, and no stale-schema check in `init_db`.
