@@ -80,24 +80,9 @@ def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
     return [{"text": text, "kind": kind} for text, kind in seen.items()]
 
 
-def _normalize_examples(examples: list[str]) -> list[str]:
+def _normalize_strings(values: list[str]) -> list[str]:
     """Trim, drop blanks, and dedupe while keeping order."""
-    seen: dict[str, None] = {}
-    for raw in examples:
-        ex = raw.strip()
-        if ex:
-            seen.setdefault(ex, None)
-    return list(seen)
-
-
-def _normalize_hanja(hanja: list[str]) -> list[str]:
-    """Trim, drop blanks, and dedupe while keeping order — the sense list."""
-    seen: dict[str, None] = {}
-    for raw in hanja:
-        text = raw.strip()
-        if text:
-            seen.setdefault(text, None)
-    return list(seen)
+    return list(dict.fromkeys(s for v in values if (s := v.strip())))
 
 
 def hanja_list(value: str | None) -> list[str]:
@@ -252,10 +237,10 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 body.status,
                 body.deck,
                 body.sentence,
-                json.dumps(_normalize_examples(body.examples)),
+                json.dumps(_normalize_strings(body.examples)),
                 body.source_book_id,
                 body.source_page,
-                json.dumps(_normalize_hanja(body.hanja), ensure_ascii=False),
+                json.dumps(_normalize_strings(body.hanja), ensure_ascii=False),
             ),
         )
     except sqlite3.IntegrityError:
@@ -302,12 +287,12 @@ def patch_term(
     # re-encode it back into `fields` so the generic UPDATE + dirty check below both
     # handle it (it's in _DIRTY_TRIGGER_FIELDS; the DB stores its JSON string).
     if "examples" in fields:
-        fields["examples"] = json.dumps(_normalize_examples(fields["examples"] or []))
+        fields["examples"] = json.dumps(_normalize_strings(fields["examples"] or []))
 
     # Same treatment as `examples`: a real column whose value arrives as a list, so
     # re-encode it here and the generic UPDATE + dirty check below both just work.
     if "hanja" in fields:
-        fields["hanja"] = json.dumps(_normalize_hanja(fields["hanja"] or []), ensure_ascii=False)
+        fields["hanja"] = json.dumps(_normalize_strings(fields["hanja"] or []), ensure_ascii=False)
 
     if not fields and not forms_provided and not back_items_provided:
         return _term_dict(conn, row)
@@ -363,7 +348,7 @@ def convert_to_hanja(
     row = _get_term_or_404(conn, term_id)
     if hanja_list(row["hanja"]):
         raise HTTPException(status_code=409, detail="term already has hanja; append a sense")
-    senses = _normalize_hanja([body.hanja])
+    senses = _normalize_strings([body.hanja])
     if not senses:
         raise HTTPException(status_code=422, detail="hanja can't be empty")
     items = _normalize_back_items([{**it.model_dump(), "group": senses[0]} for it in body.back_items])
