@@ -40,6 +40,7 @@ export function TokenPopover({
   defaultDeck,
   translatorBackend,
   hanjaMode,
+  hanjaDeck,
   onClose,
   onSaved,
   onDeleted,
@@ -52,6 +53,8 @@ export function TokenPopover({
   translatorBackend?: string;
   // "Add word" on /terms, or editing a term that already has hanja.
   hanjaMode?: boolean;
+  // Hanja is required only when saving to this deck; pure Korean words go elsewhere.
+  hanjaDeck?: string;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
@@ -261,7 +264,7 @@ export function TokenPopover({
       return;
     }
     // A blank hanja field here would silently save to the two-way model instead.
-    if (hanjaMode && senses.length === 0) {
+    if (hanjaMode && deck === hanjaDeck && senses.length === 0) {
       setError("Hanja can't be empty — look it up or type it in.");
       return;
     }

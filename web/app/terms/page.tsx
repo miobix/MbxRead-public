@@ -237,6 +237,7 @@ export default function TermsPage() {
           defaultDeck={settings?.hanja_deck || settings?.default_deck || ""}
           translatorBackend={settings?.translator_backend}
           hanjaMode
+          hanjaDeck={settings?.hanja_deck}
           onClose={() => setAddingWord(false)}
           onSaved={() => refresh()}
           onDeleted={() => {}}
