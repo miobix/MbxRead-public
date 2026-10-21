@@ -1512,3 +1512,5 @@ checked against the live `reader.db` (read-only) before it went.
   `test_books.py` catches any future column leaking into the API.
 - **`_normalize_examples`/`_normalize_hanja` merged** into `_normalize_strings`
   (`dict.fromkeys` keeps first-seen order).
+- **`estimatedMinutes` removed from `web/lib/length.ts`.** The "Shortest first" sort moved
+  server-side (`_SORT_CLAUSES["shortest"]`), which left the client copy unused.

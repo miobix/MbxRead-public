@@ -13,14 +13,3 @@ export function formatLength(book: Lengthy): string | null {
   }
   return null;
 }
-
-// A standard reading-speed heuristic used ONLY to make "Shortest first" sort
-// mixed source types against each other — never shown to the user (formatLength
-// above always shows the exact word count or exact duration).
-const WORDS_PER_MINUTE = 250;
-
-export function estimatedMinutes(book: Lengthy): number {
-  if (book.duration_seconds != null) return book.duration_seconds / 60;
-  if (book.word_count != null) return book.word_count / WORDS_PER_MINUTE;
-  return Infinity; // unknown length sinks to the bottom of "shortest first"
-}
