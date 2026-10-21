@@ -1479,3 +1479,14 @@ list got in the way. `anki_today`'s seen-query was `card:1 (rated:1 OR is:due OR
 which pulled in every review and lapsed card. It is now `card:1 introduced:1` (first studied
 today) plus today's remaining new Card 1s, so a mid-deck run never lists old characters.
 The hand-made 2026-10-16..18 files (written ahead for a trip) dropped their review line too.
+
+## 2026-10-21 — Over-engineering cleanup (ponytail audit)
+
+A repo-wide audit for dead code and duplication; one commit per group. Each deletion was
+checked against the live `reader.db` (read-only) before it went.
+
+- **One-time migrations removed.** `_backfill_current_offset`, `_migrate_page_reads_to_read_days`,
+  `_backfill_hanja_json`, the `current_page` drop and the retired-settings purge had all run
+  (live DB: no `page_reads`, no `current_page`, no non-JSON `hanja`). `hanja_list` is now a
+  plain `json.loads`. `_ADDED_COLUMNS` stays: a fresh DB still needs it to get its columns.
+  An older backup of `reader.db` would need the version before this commit to upgrade.
