@@ -1497,3 +1497,6 @@ checked against the live `reader.db` (read-only) before it went.
 - **`GET /api/books/{id}/pages/{n}` removed.** Nothing has called it since Epic 24 moved the
   reader to `/text`. Its tests now hit `/text`, which shares the same token/highlight code.
   `pages` stays as the storage table.
+- **`server/anki.py` note helpers collapsed.** The three add/update pairs and two
+  `ensure_*model` functions shared one body each; they are now one-liners over `_add`,
+  `_update` and `_ensure`, keeping the public names the sync and tests use.

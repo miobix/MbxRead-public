@@ -531,6 +531,24 @@ def test_invoke_wraps_transport_errors(monkeypatch):
         assert "Anki is not running" in str(e)
 
 
+def test_note_payloads_carry_model_fields_and_tag(monkeypatch):
+    calls = []
+    monkeypatch.setattr(anki, "_invoke", lambda action, **p: calls.append((action, p)) or 5)
+
+    assert anki.add_note_hanja("한자어", "제일", "第一", "the most", "가장") == 5
+    anki.update_note_model(9, "입다", "to wear", "")
+
+    add, update = calls
+    assert add == ("addNote", {"note": {
+        "deckName": "한자어", "modelName": anki.HANJA_MODEL_NAME,
+        "fields": {"Korean": "제일", "Hanja": "第一", "English": "the most", "KoreanDef": "가장"},
+        "tags": ["korean-reader"], "options": {"allowDuplicate": False},
+    }})
+    assert update == ("updateNoteFields", {"note": {
+        "id": 9, "fields": {"Korean": "입다", "English": "to wear", "Examples": ""},
+    }})
+
+
 def test_sync_converted_reading_term_adds_a_hanja_note_carrying_the_sentence(client, monkeypatch):
     """Epic 27: a term converted from a reading save is new to Anki again, routes to the
     hanja model, and its book sentence lands in KoreanDef."""
