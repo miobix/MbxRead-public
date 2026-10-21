@@ -21,7 +21,7 @@ Sino-Korean words get their own hanja deck and note type, fed by the `/hanja` an
 `/hanja-today` study skills. FastAPI + SQLite + kiwipiepy backend, Next.js static-export
 frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 326 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 328 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
