@@ -1544,3 +1544,6 @@ checked against the live `reader.db` (read-only) before it went.
   hand-edited row), which the migration decision above already covers: strict `hanja_list`,
   the two-way `else` in sync, scraper rows reaching the YouTube path, the dead feed columns
   in SCHEMA, and no stale-schema check in `init_db`.
+- **No old-backup restores (user, 2026-10-21).** The live DB has moved on since deployment and
+  the user won't restore a pre-cleanup backup, so there is no stale-schema guard in
+  `init_db`. Future reviews: findings that need a pre-cleanup `reader.db` are out of scope.
