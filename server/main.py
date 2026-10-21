@@ -1,4 +1,5 @@
 """FastAPI app factory: mounts /api routers, serves web/out statically."""
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,6 +21,19 @@ from .routes import (
 )
 
 WEB_OUT = Path(__file__).resolve().parent.parent / "web" / "out"
+
+_NEXT_SEGMENT = re.compile(r"(__next\.[^/]+)\.([^./]+\.txt)$")
+
+
+class _WebOut(StaticFiles):
+    """Next's client asks for `__next.read.__PAGE__.txt`; the static export writes
+    `__next.read/__PAGE__.txt`. Without this every client navigation 404s and reloads."""
+
+    def lookup_path(self, path: str):
+        full_path, stat_result = super().lookup_path(path)
+        if stat_result is None and _NEXT_SEGMENT.search(path):
+            return super().lookup_path(_NEXT_SEGMENT.sub(r"\1/\2", path))
+        return full_path, stat_result
 
 
 def create_app(db_path: Path | str | None = None) -> FastAPI:
@@ -49,7 +63,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
     app.include_router(stats.router)
 
     if WEB_OUT.is_dir():
-        app.mount("/", StaticFiles(directory=WEB_OUT, html=True), name="web")
+        app.mount("/", _WebOut(directory=WEB_OUT, html=True), name="web")
 
     return app
 
