@@ -1510,3 +1510,5 @@ checked against the live `reader.db` (read-only) before it went.
 - **`_book_dict` spreads the row.** It copied all 23 `books` columns by hand; it now spreads
   `dict(row)` and overrides only the JSON/boolean ones. The existing key-set test in
   `test_books.py` catches any future column leaking into the API.
+- **`_normalize_examples`/`_normalize_hanja` merged** into `_normalize_strings`
+  (`dict.fromkeys` keeps first-seen order).
