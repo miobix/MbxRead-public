@@ -1490,3 +1490,7 @@ checked against the live `reader.db` (read-only) before it went.
   (live DB: no `page_reads`, no `current_page`, no non-JSON `hanja`). `hanja_list` is now a
   plain `json.loads`. `_ADDED_COLUMNS` stays: a fresh DB still needs it to get its columns.
   An older backup of `reader.db` would need the version before this commit to upgrade.
+- **Legacy `Basic` Anki path removed.** The live DB has 0 synced notes on `Basic` (every
+  note is on `Korean Reader 2-way` or `Korean Reader Hanja`), so `add_note`,
+  `update_note_fields`, `_render_back` and the sync's fallback branch were dead. A dirty
+  term whose `anki_model` is not the hanja model now updates as a two-way note.

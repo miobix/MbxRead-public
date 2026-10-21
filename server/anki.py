@@ -5,9 +5,8 @@ ANKICONNECT_URL = "http://127.0.0.1:8765"
 
 # Epic 21: the custom two-way note type. Two cards (KO→EN and EN→KO) share three
 # fields; `Examples` sits on the *back* of both templates and the front of neither,
-# so studying either direction never reveals the prompt word. Existing terms synced
-# before Epic 21 stay on stock `Basic` (preserving their SRS history) — only new
-# terms use this model. Bump the name if the templates ever change incompatibly;
+# so studying either direction never reveals the prompt word. Bump the name if the
+# templates ever change incompatibly;
 # ensure_model() is a create-once no-op when a model of this name already exists.
 MODEL_NAME = "Korean Reader 2-way"
 
@@ -73,24 +72,6 @@ def move_note_to_deck(note_id: int, deck: str) -> None:
     ]
     if stray:
         _invoke("changeDeck", cards=stray, deck=deck)
-
-
-def add_note(deck: str, front: str, back: str) -> int:
-    note = {
-        "deckName": deck,
-        "modelName": "Basic",
-        "fields": {"Front": front, "Back": back},
-        "tags": ["korean-reader"],
-        "options": {"allowDuplicate": False},
-    }
-    return _invoke("addNote", note=note)
-
-
-def update_note_fields(note_id: int, front: str, back: str) -> None:
-    _invoke(
-        "updateNoteFields",
-        note={"id": note_id, "fields": {"Front": front, "Back": back}},
-    )
 
 
 def ensure_model() -> None:

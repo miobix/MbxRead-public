@@ -15,13 +15,6 @@ router = APIRouter(prefix="/api/anki", tags=["anki"])
 DEFAULT_DECK = "Default"
 
 
-def _render_back(translation: str, sentence: str) -> str:
-    """Legacy `Basic` note back (translation + captured sentence)."""
-    if sentence:
-        return f"{translation}<br><br><i>{sentence}</i>"
-    return translation
-
-
 def _render_legacy_examples(examples: list[str], sentence: str) -> str:
     """Pre-Epic-22 Examples rendering, for a term the structured card builder has
     never touched (no term_back_items rows): clicked-in krdict collocations (the
@@ -253,16 +246,9 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
                 anki.update_note_hanja(
                     row["anki_note_id"], korean, hanja, english, korean_def
                 )
-            elif row["anki_model"] == anki.MODEL_NAME:
+            else:
                 korean, english, examples = _render_two_way(conn, row)
                 anki.update_note_model(row["anki_note_id"], korean, english, examples)
-            else:
-                # Legacy `Basic` note (synced before Epic 21): keep the Front/Back
-                # shape so its SRS scheduling history is preserved.
-                front_entries = _front_entries(conn, row["id"], row["lemma"])
-                korean = _render_korean(front_entries)
-                back = _render_back(row["translation"], row["sentence"])
-                anki.update_note_fields(row["anki_note_id"], korean, back)
             anki.move_note_to_deck(row["anki_note_id"], row["deck"] or DEFAULT_DECK)
             conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = ?", (row["id"],))
             updated += 1
