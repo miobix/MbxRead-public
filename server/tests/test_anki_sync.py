@@ -1,5 +1,3 @@
-import sqlite3
-
 from server import anki
 
 
@@ -23,7 +21,7 @@ def test_sync_down_returns_503_and_touches_nothing(client, monkeypatch):
 
     monkeypatch.setattr(anki, "ping", raise_error)
     calls = []
-    monkeypatch.setattr(anki, "add_note", lambda *a, **k: calls.append((a, k)))
+    monkeypatch.setattr(anki, "add_note_model", lambda *a, **k: calls.append((a, k)))
 
     term = _create(client)
     resp = client.post("/api/anki/sync")
@@ -467,50 +465,12 @@ def test_sync_updates_new_model_term(client, monkeypatch):
         "update_note_model",
         lambda note_id, k, e, x: update_model_calls.append((note_id, k, e, x)),
     )
-    legacy_calls = []
-    monkeypatch.setattr(
-        anki, "update_note_fields", lambda *a: legacy_calls.append(a)
-    )
 
     second = client.post("/api/anki/sync")
     assert second.json() == {"added": 0, "updated": 1, "failed": []}
     assert update_model_calls == [(999, "입다", "to put on", "")]
-    assert legacy_calls == []  # a two-way note never touches the Basic path
 
     assert client.get("/api/terms").json()[0]["anki_dirty"] is False
-
-
-def test_sync_preserves_legacy_basic_notes(client, db_path, monkeypatch):
-    """A note synced before Epic 21 (anki_model NULL) keeps the Front/Back path so
-    its SRS history is preserved — no add, no two-way update."""
-    monkeypatch.setattr(anki, "ping", lambda: None)
-    _mock_model(monkeypatch)
-    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
-
-    # Simulate a legacy synced Basic note directly in the DB.
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO terms (lemma, translation, sentence, deck, anki_note_id, "
-        "anki_model, anki_dirty) VALUES ('입다','to wear','오늘 입다.','Korean',777,NULL,1)"
-    )
-    conn.commit()
-    conn.close()
-
-    legacy_calls = []
-    monkeypatch.setattr(
-        anki, "update_note_fields", lambda *a: legacy_calls.append(a)
-    )
-    model_calls = []
-    monkeypatch.setattr(anki, "update_note_model", lambda *a: model_calls.append(a))
-    add_calls = []
-    monkeypatch.setattr(anki, "add_note_model", lambda *a: add_calls.append(a))
-
-    resp = client.post("/api/anki/sync")
-    assert resp.json() == {"added": 0, "updated": 1, "failed": []}
-    # Front = lemma (+forms), Back = translation + italic sentence — the Epic 20 shape.
-    assert legacy_calls == [(777, "입다", "to wear<br><br><i>오늘 입다.</i>")]
-    assert model_calls == []
-    assert add_calls == []
 
 
 def test_sync_isolates_per_note_failure(client, monkeypatch):
