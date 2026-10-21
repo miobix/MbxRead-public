@@ -99,14 +99,9 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 
 ## Open follow-ups (not blockers)
 
-- **Two small bugs found by the 2026-10-21 audit** (for a `/code-review` pass):
-  `score_book` joins pages with `"\n"` while `/text` joins them with `""`, so a score sees
-  slightly different text than the reader; and the Claude translator is selectable in
-  Settings but `anthropic` is not in `requirements.txt`.
-- **Audit items 11–15 not done:** the term-without-back_items rendering branches in
-  `anki_sync.py` (check whether `/terms` can still create one first), `html_unescape` wrapper
-  in `import_tools/yt_subs.py`, `score_book` reusing `_book_text`, the duplicate `except` in
-  `import_subtitles`, and the one-caller `_group_key`.
+- **Claude translator is selectable but not installable:** Settings offers it, but
+  `anthropic` is not in `requirements.txt`. Unused today (DeepL in settings and `.env`, no
+  Anthropic key); the user deferred adding the dependency (2026-10-21).
 - **One feed still errors:** `김성회의 G식백과` (YouTube) hit a transient Atom-feed fetch
   error during the go-live run. Worth a manual retry; reads as network/rate-limit.
 - **Live-Anki two-way card check:** worth confirming once, on a real sync, that a

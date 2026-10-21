@@ -281,11 +281,7 @@ def delete_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
 def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
     """Compute the book's personal + general difficulty and cache it on the row."""
     _get_book_or_404(conn, book_id)
-    rows = conn.execute(
-        "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
-    ).fetchall()
-    text = "\n".join(row["content"] for row in rows)
-    return _score_and_cache(conn, book_id, text)
+    return _score_and_cache(conn, book_id, _book_text(conn, book_id))
 
 
 def _term_summary(row: sqlite3.Row) -> dict:

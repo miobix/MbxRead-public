@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from import_tools.epub_text import extract as extract_epub
 from import_tools.pdf_text import extract as extract_pdf
 from import_tools.pdf_text import parse_page_range
-from import_tools.subtitles import SubtitleError, clean_title
+from import_tools.subtitles import clean_title
 from import_tools.subtitles import extract as extract_subtitles
 from import_tools.yt_subs import fetch_subs
 
@@ -159,9 +159,6 @@ async def import_subtitles(
         content = await upload.read()
         try:
             text, duration = extract_subtitles(content, filename)
-        except SubtitleError as e:
-            failed.append({"filename": filename, "error": str(e)})
-            continue
         except Exception as e:  # a malformed file must not sink the rest of the batch
             failed.append({"filename": filename, "error": str(e)})
             continue

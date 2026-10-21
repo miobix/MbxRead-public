@@ -1,4 +1,4 @@
-"""Download Korean subtitles from a YouTube video as clean text for Lute.
+"""Download Korean subtitles from a YouTube video as clean text for MbxRead.
 
 Usage:
     python import_tools/yt_subs.py "https://www.youtube.com/watch?v=..." [out.txt]
@@ -6,6 +6,7 @@ Usage:
 Prefers manually-uploaded Korean subs, falls back to auto-generated ones.
 """
 
+import html
 import re
 import sys
 import tempfile
@@ -55,16 +56,10 @@ def clean_vtt(vtt: str) -> str:
         ):
             continue
         line = re.sub(r"<[^>]+>", "", line)  # inline timing tags in auto-subs
-        line = html_unescape(line)
+        line = html.unescape(line)
         if line and (not lines or lines[-1] != line):  # drop rolling duplicates
             lines.append(line)
     return "\n".join(lines)
-
-
-def html_unescape(s: str) -> str:
-    import html
-
-    return html.unescape(s)
 
 
 if __name__ == "__main__":
