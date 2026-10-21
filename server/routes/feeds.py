@@ -1,24 +1,7 @@
-"""Feeds API — the curation subscription roster + the fetch job that fills the queue.
+"""Feeds API: the roster CRUD and the fetch job that fills the Queue with candidates.
 
-- CRUD (`GET/POST/PATCH/DELETE /api/feeds`, Epic 14) is what the `/feeds` management
-  page edits, so the user can swap/enable/disable sources without touching code.
-- `POST /api/feeds/fetch` (Epic 15 + Epic 14) iterates enabled feeds and lands new
-  items as `status='candidate'` books for the Queue page:
-    * rss   — parse items, fetch+clean each article via server.article (trafilatura).
-    * youtube (Epic 14) — parse the channel's Atom feed, pull each new video's Korean
-      transcript via import_tools.yt_subs (yt-dlp). Videos with no Korean subs are
-      skipped, not failed.
-  Every item is scored (personal + general difficulty) and deduped on source_ref
-  BEFORE the expensive fetch. Per-feed/per-item failures are isolated so one bad feed
-  or article never blocks the rest (same pattern as anki_sync's per-note failures).
-  Epic 17: every call (scheduled via Task Scheduler + scripts/fetch_feeds.ps1, or the
-  Queue's manual button) first stamps settings.last_fetch_attempt, then auto-discards
-  any candidate older than settings.candidate_retention_days (see
-  _expire_stale_candidates) before touching any feed.
-  Epic 19: every feed-sourced book gets a `feed_id` (see _insert_and_score) and, if
-  it's ever discarded, a `discard_reason` — 'expired' from _expire_stale_candidates
-  above, 'user' from a manual PATCH in routes/books.py — so GET /api/stats can break
-  down promoted/user_discarded/expired/pending by topic and by feed.
+Items are deduped on source_ref before the expensive fetch, and failures are isolated
+per feed and per item so one bad source never blocks the rest.
 """
 import sqlite3
 from typing import Literal
@@ -45,14 +28,12 @@ router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
 FeedType = Literal["rss", "youtube"]
 
-# Cap new videos processed per YouTube feed per run: the Atom feed only carries the
-# ~15 latest anyway, and each transcript is a yt-dlp network round-trip, so an
-# uncapped first run over 9 channels could take minutes and stall the interactive
-# "Fetch new candidates" button. Newer runs pick up the rest; tunable.
+# Each transcript is a yt-dlp round trip; uncapped, a first run stalls the manual
+# "Fetch" button for minutes. Later runs pick up the rest.
 YOUTUBE_MAX_PER_FETCH = 5
 
 
-# --- CRUD (Epic 14) ---
+# --- CRUD ---
 
 
 class FeedCreate(BaseModel):
@@ -130,7 +111,7 @@ def delete_feed(feed_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
     conn.commit()
 
 
-# --- Fetch job (Epic 15 + Epic 14) ---
+# --- Fetch job ---
 
 
 def _already_imported(conn: sqlite3.Connection, source_ref: str) -> bool:
@@ -242,18 +223,8 @@ def _insert_and_score(
 
 
 def _expire_stale_candidates(conn: sqlite3.Connection) -> int:
-    """Auto-discards candidates older than the configured retention window (Epic
-    17). Reuses the existing status='discarded' value exactly — permanent, same as
-    a manual discard — rather than a new status, per the user's confirmed choice.
-    Runs on every call (scheduled, manual whole-roster, or a single-feed retry):
-    it's a single indexed UPDATE, cheap and idempotent, so there's no reason to
-    special-case any trigger path.
-
-    Also purges the expired candidates' `pages` text (article/yt are the only two
-    sources the feed fetcher ever creates as 'candidate' — see
-    books._purge_queue_text) so an unpromoted queue item stops costing storage
-    once it ages out; the `books` row itself is kept (title/source_ref/topic/
-    stats) so dedup and the curation stats breakdown are unaffected."""
+    """Discard candidates older than the retention window (a normal, permanent discard)
+    and purge their text. Cheap and idempotent, so it runs on every fetch call."""
     retention_days = settings_route.get_candidate_retention_days(conn)
     stale_ids = [
         row["id"]
@@ -277,8 +248,7 @@ def _expire_stale_candidates(conn: sqlite3.Connection) -> int:
 def fetch_feeds(
     feed_id: int | None = None, conn: sqlite3.Connection = Depends(db_module.get_db)
 ):
-    # Stamped first, before touching any feed, so a run that errors out partway
-    # still records that an attempt happened (Epic 17).
+    # Stamped first so a run that dies partway still records the attempt.
     settings_route.stamp_last_fetch_attempt(conn)
     expired = _expire_stale_candidates(conn)
 

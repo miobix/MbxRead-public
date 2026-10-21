@@ -73,8 +73,7 @@ CREATE TABLE IF NOT EXISTS books (
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   -- Epic 24: reading position as a character offset into the book's text —
   -- device-independent, unlike a page number, now that each device paginates for
-  -- its own screen. Replaced current_page, which was backfilled into it and then
-  -- dropped (db._backfill_current_offset, then ALTER TABLE ... DROP COLUMN).
+  -- its own screen. Replaced current_page (dropped in Epic 24).
   current_offset INTEGER NOT NULL DEFAULT 0,
   -- Epic 9 (additive migration): cached difficulty score.
   coverage REAL,                                 -- fraction of lemmas already known; NULL if unscored
@@ -126,7 +125,7 @@ CREATE TABLE IF NOT EXISTS terms (
   source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
   source_page INTEGER,                           -- Epic 16: page it was first saved from
   examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence, shown on the Anki card back only
-  anki_model TEXT,                               -- Epic 21: NULL/'Basic' = legacy note, else the custom two-way model name
+  anki_model TEXT,                               -- Epic 21: two-way or hanja model name (legacy 'Basic' path removed 2026-10-21)
   hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25, list since Epic 26: JSON list of hanja spellings, one per sense (시장 = 市場 + 市長); '[]' = a plain reading-flow term
 );
 -- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
@@ -163,8 +162,8 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- identified the same text across devices. The pages-read *counts* were dropped
 -- as unhelpful; the table survives because /api/stats derives the streak from
 -- days-with-a-word-saved UNION days-with-reading — without it, a day spent
--- reading but saving nothing would break the streak. Old history was folded in
--- (db._migrate_page_reads_to_read_days), not discarded.
+-- reading but saving nothing would break the streak. Old page_reads history was
+-- folded in during Epic 24, not discarded.
 CREATE TABLE IF NOT EXISTS read_days (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   day TEXT NOT NULL,
@@ -271,11 +270,11 @@ position without sharing a pagination.
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call). Epic 29: every krdict response is cached in `translate_cache.sqlite3` (`krdict_cache`, no expiry) and the first failed request pauses krdict for 30 min (`krdict_state`); during the pause this returns 503 `{error}` — **implemented (Epic 3, examples Epic 21)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. Retired keys are deleted from the `settings` table by the migration, since stored rows merge *over* DEFAULTS and would otherwise resurface |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, hanja_deck, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. The migration that purged their stored rows ran and was removed 2026-10-21 |
 | PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge. No setting re-paginates anything as of Epic 24 — `repaginate_all` is gone — so this is a plain write — **implemented (Epic 7; `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
-| POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails; 409 on re-upload of the same bytes — **implemented (Epic 12)** |
+| POST `/api/import/pdf` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated), `pages?` (`"1-20"`) | created book (source `pdf`, `source_ref="pdf:<sha256 of file bytes>"`); 502 `{error}` if extraction fails or the PDF has no extractable text (since 2026-10-21; shares `_import_file` with EPUB); 409 on re-upload of the same bytes — **implemented (Epic 12)** |
 | POST `/api/import/epub` | multipart: `file`, `title?`, `topic?`, `tags?` (comma-separated) | created book (source `epub`, `source_ref="epub:<sha256 of file bytes>"`); 502 `{error}` if extraction fails or the EPUB has no extractable text; 409 on re-upload of the same bytes — **implemented (EPUB import, 2026-07-23)** |
 | POST `/api/import/subtitles` | multipart: `files` (**repeatable** — one or many), `title?`, `topic?`, `tags?` (comma-separated) | **Batch**, always 201 with `{imported: Book[], skipped: [{filename, reason}], failed: [{filename, error}]}` — partial success is the normal outcome of dropping a season in, so no single status code can describe it. One book per file (source `subs`, `source_ref="subs:<sha256 of file bytes>"`, `duration_seconds` from the last cue's timestamp), imported in filename order. `title` only applies when exactly one file is uploaded; a batch titles each book from its own filename. Accepts `.srt/.vtt/.smi/.ass/.ttml` and friends — **implemented (subtitle import, 2026-08-18)** |
 | POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
@@ -814,11 +813,10 @@ Sync algorithm:
    `anki_model` with the model name**, clear dirty. On per-note error (e.g. duplicate)
    record in `failed`, continue.
 4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → **branch by `anki_model`**:
-   the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples` (same
-   Epic 22 rendering as above); a legacy `Basic` note (`anki_model` NULL, synced before
-   Epic 21) → the old Front/Back `updateNoteFields` (Front = lemma+forms, now also
-   numbered when 2+; Back = translation + `<br><br><i>sentence</i>`), so its SRS
-   scheduling history is preserved. On success clear `anki_dirty`.
+   the hanja model → `updateNoteFields` with its four fields; anything else → the
+   two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above).
+   The legacy `Basic` Front/Back path was removed 2026-10-21 (no live notes used it).
+   Every updated note is also moved to the term's deck. On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not
    synced (existing notes left alone).
 

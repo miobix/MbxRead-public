@@ -19,16 +19,11 @@ _VERB_PREFIXES = ("VV", "VA", "VX")
 _STANDALONE_TAGS = {"NNG", "NNP", "NNB", "NR", "NP", "MAG", "MAJ", "IC"}
 _NOUN_TAGS = {"NNG", "NNP", "NNB", "NR", "NP"}
 
-# Punctuation/symbol morpheme tags (brackets, quotes, dashes, ellipsis, sentence
-# marks, misc symbols; SSO/SSC are newer kiwi's split of SS into open/close). We
-# strip these off the ends of an eojeol so a word wrapped in 〈…〉, "…", (…), etc.
-# still yields a token with a clean offset span. Internal symbols are left in place.
+# Symbol tags stripped off an eojeol's ends (SSO/SSC are newer kiwi's split of SS).
 _SYMBOL_TAGS = {"SF", "SP", "SS", "SSO", "SSC", "SE", "SO", "SW"}
 
-# Noun-derivational suffix (XSN) forms that we do NOT glue onto the head noun: the
-# plural 들 is inflection-like, not a new dictionary word — 사람들 must still lemmatize
-# to 사람 (SPEC section 6, difficulty scoring). Everything else tagged XSN (계, 성, 적,
-# 화, 장, 가 …) forms a distinct compound lemma and is merged (자연계의 → 자연계).
+# Plural 들 is inflection, not a new word (사람들 → 사람); other XSN suffixes form a
+# compound lemma (자연계의 → 자연계).
 _XSN_NOT_MERGED = {"들"}
 
 _EOJEOL_RE = re.compile(r"\S+")
@@ -63,11 +58,8 @@ def tokenize(text: str) -> list[Token]:
         if not eo_morphs:
             continue
 
-        # Strip leading & trailing symbol morphemes so a word led by 〈, ", (, … (or
-        # trailed by !, ?, 」) still resolves and its offset span covers just the word
-        # — otherwise a leading symbol becomes the "first" morpheme and the whole
-        # eojeol produces no token at all (no click target, no highlight). Internal
-        # symbols (e.g. the mid-word ? in 이야기?라고) are left untouched.
+        # Otherwise a leading 〈 or " becomes the first morpheme and the word gets no
+        # token at all. Internal symbols (이야기?라고) stay.
         lo, hi = 0, len(eo_morphs)
         while lo < hi and eo_morphs[lo].tag in _SYMBOL_TAGS:
             lo += 1
@@ -102,9 +94,7 @@ def _resolve_lemma(eo_morphs: list) -> tuple[str | None, str | None]:
     if first.tag.startswith(_VERB_PREFIXES):
         return first.form + "다", first.tag
 
-    # Rule 3: bare noun/adverb/etc (학교에 -> 학교, 사람들이 -> 사람). A noun head also
-    # absorbs any trailing derivational suffixes (XSN) into one compound lemma
-    # (자연계의 -> 자연계, 가능성 -> 가능성), except the plural 들 (사람들이 -> 사람).
+    # Rule 3: bare noun/adverb/etc (학교에 -> 학교); a noun absorbs XSN suffixes (자연계의 -> 자연계)
     if first.tag in _STANDALONE_TAGS:
         lemma = first.form
         if first.tag in _NOUN_TAGS:

@@ -1514,3 +1514,12 @@ checked against the live `reader.db` (read-only) before it went.
   (`dict.fromkeys` keeps first-seen order).
 - **`estimatedMinutes` removed from `web/lib/length.ts`.** The "Shortest first" sort moved
   server-side (`_SORT_CLAUSES["shortest"]`), which left the client copy unused.
+- **Doc-hygiene pass (own commit).** STATUS rolled up (epics 25–29 to one line each, test
+  count, stale `/pages/{n}` and Basic-note facts, audit follow-ups added). SPEC's
+  current-state sections (§4 schema, §5 API, §7 UX, §8 sync) and ARCHITECTURE now match the
+  cleanup; SPEC's per-epic scope entries are left as written, since they record what each
+  epic was asked for. Code comments cut to WHY-only, two lines max, with every "Epic N" /
+  date tag removed (the history is here and in git). Verified comment-only: each Python
+  file's AST (docstrings and SQL `--` lines stripped) and each TS file's comment-free
+  printed AST match the previous commit. Not cut: `import_tools/subtitles.py`'s per-format
+  notes, which document real format quirks.

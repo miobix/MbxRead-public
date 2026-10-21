@@ -21,10 +21,8 @@ router = APIRouter(prefix="/api/books", tags=["books"])
 
 BookStatus = Literal["library", "candidate", "discarded"]
 
-# Epic 24: how much text one /text request serves. 20k chars covers a median book
-# (1.8k) whole and takes ~3 fetches for 어린 왕자 (45k), while keeping the token JSON
-# for one response small enough to send to a phone over Tailscale. MAX caps what a
-# caller can ask for so a hand-crafted `?window=` can't force a 100k-char tokenize.
+# 20k covers a median book whole while keeping one response's token JSON phone-sized;
+# MAX stops a hand-crafted `?window=` from forcing a huge tokenize.
 DEFAULT_TEXT_WINDOW = 20_000
 MAX_TEXT_WINDOW = 50_000
 
@@ -42,9 +40,7 @@ class BookCreate(BaseModel):
 
 
 class BookPatch(BaseModel):
-    # Epic 24: the reader's position. ge=0 only — the upper bound is the book's
-    # length, which the client already respects and which a stale write can't usefully
-    # exceed (the text endpoint clamps anything past the end).
+    # No upper bound: /text clamps anything past the end.
     current_offset: int | None = Field(default=None, ge=0)
     title: str | None = None
     topic: str | None = None
@@ -61,8 +57,6 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
     page_count = conn.execute(
         "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
     ).fetchone()[0]
-    # Epic 24: the denominator for reading progress — the Library reports
-    # current_offset/total_chars as a percentage, page numbers being per-device now.
     total_chars = conn.execute(
         "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM pages WHERE book_id = ?",
         (book_id,),
@@ -89,15 +83,8 @@ class DuplicateSourceRef(Exception):
 
 
 def _purge_queue_text(conn: sqlite3.Connection, book_ids: list[int]) -> None:
-    """Deletes `pages` rows for the given books, restricted to source in
-    ('article', 'yt') — the only two sources the Queue ever holds (the feed
-    fetcher's candidates). paste/pdf/epub/txt content is kept indefinitely even
-    if such a book is ever discarded — the user's explicit call (2026-07-24) was
-    to reclaim storage from unpromoted feed content, never from anything
-    manually imported. Called from both discard sites: routes/feeds.py's
-    auto-expiry and patch_book's manual discard below. The `books` row itself is
-    never touched here — title/source_ref/topic/stats stay put so dedup and the
-    Epic 19 curation stats breakdown are unaffected."""
+    """Drop the text of discarded feed candidates (article/yt only; manual imports are
+    kept). The `books` row stays so dedup and curation stats still see it."""
     if not book_ids:
         return
     placeholders = ", ".join("?" for _ in book_ids)
@@ -124,12 +111,7 @@ def insert_book(
     duration_seconds: int | None = None,
     feed_id: int | None = None,
 ) -> dict:
-    """Shared by the paste/txt route, the Epic 12 importers, and Epic 15's feed
-    fetcher: insert the book row + split pages, or raise DuplicateSourceRef on a
-    source_ref collision. word_count (Epic 18) is derived from `text` for every
-    source; duration_seconds is only ever passed for source='yt' (real yt-dlp
-    video length, not a transcript-based estimate). feed_id (Epic 19) is only
-    ever passed by routes/feeds.py — manual imports leave it NULL."""
+    """Insert the book row and its page slices; DuplicateSourceRef on a source_ref clash."""
     word_count = len(text.split())
     try:
         cur = conn.execute(
@@ -144,9 +126,6 @@ def insert_book(
     except sqlite3.IntegrityError:
         raise DuplicateSourceRef(source_ref)
     book_id = cur.lastrowid
-    # Epic 24: `pages` is a storage substrate, not a display unit — the reader
-    # paginates client-side and reads whole character windows via /text. So the
-    # split is just the plain 1500-char, never-mid-sentence chunking.
     pages = split_pages(text)
     conn.executemany(
         "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
@@ -163,12 +142,8 @@ def _score_and_cache(
     known: set[str] | None = None,
     frequency: dict[str, str] | None = None,
 ) -> dict:
-    """Shared by POST /api/books/{id}/score and Epic 15's feed fetcher: compute
-    both personal (score_text) and general/public (score_general_difficulty)
-    difficulty and cache all five fields onto the book row under one scored_at.
-    `known`/`frequency` are optional so a caller scoring many candidates in one
-    fetch run can load them once and pass them through, rather than re-querying
-    per item."""
+    """Compute personal + general difficulty and cache it on the book row. A fetch run
+    passes `known`/`frequency` in so they load once, not once per candidate."""
     if known is None:
         known = known_lemmas(conn)
     if frequency is None:
@@ -190,18 +165,13 @@ def _score_and_cache(
     return _book_dict(conn, book_id)
 
 
-# 2026-07-24: server-side sort, so pagination (LIMIT/OFFSET) is actually correct —
-# sorting only the current page client-side would silently reorder rows as you
-# page through. "recent" (id ascending) is the pre-existing default, unchanged, so
-# omitting `sort` entirely (every caller before this change) shifts nothing.
+# Sorted server-side so LIMIT/OFFSET pages stay consistent.
 _SORT_CLAUSES = {
     "recent": "id DESC",
-    # never-opened books (NULL) sort after anything with a real timestamp, falling
-    # back to most-recently-added within that group.
+    # never-opened books sort last, newest-added first among them
     "opened": "(last_opened IS NULL) ASC, last_opened DESC, id DESC",
     "easiest": "(new_per_page IS NULL) ASC, new_per_page ASC",
-    # 250 wpm for text, real yt-dlp duration for video. Sorted here, not client-side,
-    # so "Shortest first" stays correct across pages.
+    # 250 wpm for text, real yt-dlp duration for video
     "shortest": (
         "COALESCE(CASE WHEN source = 'yt' THEN duration_seconds / 60.0 "
         "ELSE word_count / 250.0 END, 999999999) ASC"
@@ -220,10 +190,7 @@ def list_books(
     offset: int = 0,
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    # Epic 15: defaults to "library" when omitted, so candidates/discarded books
-    # don't clutter the main list — the one behavior change to this endpoint (see
-    # docs/DECISIONS.md; every pre-Epic-15 book defaults to 'library' so nothing
-    # currently visible becomes hidden).
+    # Defaults to the library so Queue candidates and discards stay out of the main list.
     query = "SELECT id FROM books WHERE 1=1"
     params: list = []
     if topic:
@@ -287,9 +254,7 @@ def patch_book(
     fields = body.model_dump(exclude_unset=True)
     if "tags" in fields:
         fields["tags"] = json.dumps(fields["tags"])
-    # Epic 19: the manual discard path (the Queue's Discard button) is what sets
-    # discard_reason='user' — the other write site, auto-expiry, sets 'expired'
-    # directly in its own UPDATE (routes/feeds.py._expire_stale_candidates).
+    # Auto-expiry sets 'expired' in its own UPDATE (routes/feeds.py).
     if fields.get("status") == "discarded":
         fields["discard_reason"] = "user"
     if fields:
@@ -352,10 +317,7 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
         ).fetchall()
         for row in rows:
             terms[row["lemma"]] = _term_summary(row)
-        # Epic 20: a term also highlights via any of its extra `forms`. Match those
-        # against the page's token lemmas too, keyed by the form string (so a token
-        # whose lemma is 승인서 lights up as the 승인 term). A direct lemma match wins
-        # if a string is both — hence the `not in terms` guard.
+        # A term also lights up via its forms; a direct lemma match wins over a form.
         form_rows = conn.execute(
             f"SELECT tf.form, t.id, t.lemma, t.translation, t.notes, t.status, t.deck, "
             f"t.examples, t.hanja FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
@@ -365,10 +327,7 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
         for row in form_rows:
             if row["form"] not in terms:
                 terms[row["form"]] = _term_summary(row)
-        # Attach every matched term's full forms + back_items (so the reader popover
-        # can rebuild the exact same Front/Back/Examples chip state when the token is
-        # tapped) — reuses terms.py's own read helpers rather than a third copy of the
-        # same query (Epic 22).
+        # Full forms + back_items so the popover can rebuild the saved card when tapped.
         matched_ids = {entry["id"] for entry in terms.values()}
         if matched_ids:
             forms_by_term = {tid: _forms_for(conn, tid) for tid in matched_ids}
@@ -381,9 +340,7 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
 
 
 def _book_text(conn: sqlite3.Connection, book_id: int) -> str:
-    """The book's full text, reassembled from its stored page slices. `pages` is now
-    purely a storage substrate (Epic 24) — the slices are contiguous and lossless, so
-    joining them with no separator round-trips the original import exactly."""
+    """The full text. Page slices are contiguous, so joining with "" is lossless."""
     return "".join(
         row["content"] for row in conn.execute(
             "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
@@ -398,20 +355,8 @@ def get_text(
     window: int = DEFAULT_TEXT_WINDOW,
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    """Epic 24: a character-addressed slice of the book, for the client-side paginator.
-
-    The reader lays this out itself with CSS columns, so the server no longer decides
-    where pages break — it just serves enough text to fill a screenful many times over
-    and lets the browser wrap it. Windowed rather than whole-book because the long YT
-    transcripts run past 100k chars (~MBs of token JSON), which is not something to
-    push to a phone in one response.
-
-    Both ends snap **outward** to a sentence/newline boundary, so a window never opens
-    or closes mid-sentence; `offset` in the response is the snapped start, which may
-    precede the requested one. Token offsets are relative to the returned `content`
-    (exactly like the page endpoint), so the client's existing rendering and
-    sentence-extraction work unchanged — absolute positions are `offset + token.s`.
-    """
+    """A window of the book for the client-side paginator, snapped outward to sentence
+    boundaries. Token offsets are relative to `content`; absolute is `offset + s`."""
     _get_book_or_404(conn, book_id)
     # The reader's display call, so it's what "most recently opened" reflects.
     conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))

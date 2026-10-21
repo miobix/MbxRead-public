@@ -1,6 +1,4 @@
-// Epic 18: one colored chip per source type on the Queue. Kept within the existing
-// theme tokens (accent/border/muted) rather than introducing new hues,
-// so it stays theme-aware in both light and dark without adding to app/globals.css.
+// Built from existing theme tokens so the chips follow light/dark with no new hues.
 const SOURCE_CHIPS: Record<string, { label: string; className: string }> = {
   yt: {
     label: "YouTube",

@@ -27,20 +27,16 @@ import { TokenPopover, type PopoverTarget } from "./TokenPopover";
 // reconstruct from two points that are the same point.
 const DRAG_MIN_PX = 6;
 
-// A page only counts as "read" once it's been visible this long — filters out
-// flicking past a page, and (with the server's INSERT OR IGNORE) later pages the
-// same day are a silent no-op. See docs/DECISIONS.md.
+// A page counts as read only after this long on screen, so flicking past doesn't count.
 const READ_DWELL_MS = 5000;
 
-// Term provenance (terms.source_page) still wants a discrete unit. 1500 chars is the
-// same unit difficulty's new_per_page uses (server/difficulty.py), and unlike a
-// rendered page it means the same thing on a phone and a laptop.
+// terms.source_page unit: the same 1500 chars as difficulty's new_per_page, which,
+// unlike a rendered page, means the same thing on every device.
 const READ_BUCKET_CHARS = 1500;
 const bucketOf = (offset: number) => Math.floor(offset / READ_BUCKET_CHARS) + 1;
 
-// How far back to reach when paging backwards off the front of the loaded window.
-// Smaller than the server's window so the fetched slice always overlaps the current
-// one, and the character we're paging back to is guaranteed to be inside it.
+// Reach when paging back off the loaded window; smaller than the server's window so
+// the new slice overlaps the current one and contains the target character.
 const BACK_STEP_CHARS = 12_000;
 
 export default function ReadPage() {
@@ -74,9 +70,8 @@ function ReadPageContent() {
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
-  // Set when a load needs to land on a specific character offset, and consumed once
-  // the columns have been measured — the target column can't be known until the
-  // browser has actually laid the text out.
+  // Offset a load must land on; consumed after layout, since the target column is
+  // unknown until the browser has laid the text out.
   const pendingOffset = useRef<number | null>(null);
   // Where a mouse selection started, so the released drag can be turned back into a
   // character range by hit-testing both ends (see readSelection).
@@ -113,11 +108,8 @@ function ReadPageContent() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load item."));
   }, [bookId, loadWindow]);
 
-  // The viewport's width is the column width — one column exactly fills the screen.
-  // Its line-height gives the page height in real pixels: `height: {N}lh` would say
-  // the same thing more elegantly, but `lh` needs Chrome 109+/Safari 16.4+ and
-  // silently degrades to `height: auto` when unsupported — which drops the column
-  // breaking entirely. Measuring is exact everywhere.
+  // Measured line-height, not `height: {N}lh`: where `lh` is unsupported it degrades
+  // to `height: auto` and column breaking silently stops.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -132,10 +124,8 @@ function ReadPageContent() {
     return () => observer.disconnect();
   }, []);
 
-  // One DOM pass per layout produces everything position-related: how many columns
-  // the browser made, and the absolute character offset each one starts at. Reading
-  // it here rather than per-navigation keeps `position` a pure derivation during
-  // render (colStarts[col]) instead of state that has to be synced in an effect.
+  // One DOM pass per layout: column count and each column's start offset, so
+  // `position` stays a pure derivation (colStarts[col]) rather than synced state.
   useLayoutEffect(() => {
     const article = articleRef.current;
     if (!article || !win || width <= 0) return;
@@ -178,12 +168,8 @@ function ReadPageContent() {
     if (el && width > 0) el.scrollLeft = col * width;
   }, [col, width, win]);
 
-  // Nothing but the line above is allowed to scroll the viewport. It's overflow:hidden,
-  // but that only stops the *user* scrolling it: while a selection drag is in progress
-  // the browser still scrolls it to keep the selection's edge in view, which slides the
-  // columns sideways under the cursor mid-drag — the jitter. Snapping back on every
-  // stray scroll pins the page. (Assigning scrollLeft re-fires `scroll`, but by then
-  // it already equals `want`, so this settles immediately.)
+  // overflow:hidden doesn't stop the browser scrolling during a selection drag, which
+  // slides the columns under the cursor. Snap back on every stray scroll.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el || width <= 0) return;
@@ -265,16 +251,9 @@ function ReadPageContent() {
   };
 
   /**
-   * What the user actually selected, as text plus where it starts in the content —
-   * or null when this was a plain tap.
-   *
-   * The article is one multi-column flow that's horizontally scrolled to the current
-   * column, and dragging inside it makes Chrome pull the selection's anchor back to
-   * the start of the flow: `getSelection()` then returns everything from the top of
-   * the loaded window down to the phrase. So when a real drag happened, rebuild the
-   * range by hit-testing the press and release points instead. Touch selection
-   * (long-press, then tap to open) has no drag to rebuild from and falls back to the
-   * native string. Either way the result is capped to the last two sentences.
+   * The selected text and its start in the content, or null for a plain tap. In the
+   * multi-column flow Chrome drags the anchor back to the window's start, so a mouse
+   * drag is rebuilt by hit-testing press and release; touch uses the native string.
    */
   const readSelection = (e: React.MouseEvent<HTMLElement>) => {
     const down = dragStart.current;
@@ -391,10 +370,8 @@ function ReadPageContent() {
     setWin((prev) => {
       if (!prev) return prev;
       const nextTerms = { ...prev.terms };
-      // Drop every key this term currently occupies (its old lemma and any removed
-      // forms), then re-key it by its current lemma + forms so highlights refresh
-      // without a refetch. A form that collides with another term's lemma keeps the
-      // direct lemma (matching the server's precedence).
+      // Re-key the term by its current lemma + forms so highlights refresh without a
+      // refetch; another term's direct lemma wins a collision, as on the server.
       for (const key of Object.keys(nextTerms)) {
         if (nextTerms[key].id === term.id) delete nextTerms[key];
       }
@@ -466,9 +443,7 @@ function ReadPageContent() {
               height: "100%",
               columnWidth: width > 0 ? `${width}px` : undefined,
               columnGap: 0,
-              // Without this, multicol *balances* content across columns inside the
-              // fixed height instead of filling each one — which would defeat the
-              // whole point of a fixed line count per page.
+              // Otherwise multicol balances text across columns instead of filling each.
               columnFill: "auto",
             }}
           >
@@ -543,13 +518,8 @@ function renderContent(
 }
 
 /**
- * Character offset into the window's content at a viewport point, or null if the
- * point isn't over the article's text.
- *
- * `caretPositionFromPoint` is a *visual* hit test, so unlike the browser's own
- * drag-to-extend logic it lands in the column the user is actually looking at.
- * Firefox/Chrome ≥128 have the standard method; older WebKit/Blink only have the
- * deprecated `caretRangeFromPoint`.
+ * Content offset at a viewport point, or null off the text. A visual hit test, so it
+ * lands in the visible column; older WebKit/Blink only have `caretRangeFromPoint`.
  */
 function caretIndexAt(article: HTMLElement, x: number, y: number): number | null {
   let node: Node | null = null;

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Indigo palette (Epic 28). Plain custom properties, so the dark block below swaps
+/* Indigo palette. Plain custom properties, so the dark block below swaps
    them in place and every utility built from them follows, no dark: variants. */
 @theme {
   --font-sans: var(--font-noto-kr), system-ui, sans-serif;

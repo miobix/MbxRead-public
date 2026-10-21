@@ -1,11 +1,6 @@
-"""Import wiring — YouTube subs / PDF / EPUB / subtitle files / article URL
--> a scored-ready book.
+"""Import routes: extract text with an import tool, then `books.insert_book`.
 
-Epic 12. Thin routes: each fetches/extracts text via an existing tool
-(`import_tools.yt_subs`, `import_tools.pdf_text`, `server.article`), then
-delegates to `books.insert_book` for the shared page-split + source_ref-dedup
-insert. Tests mock at this module's boundary (`imports.fetch_subs`, etc.),
-same convention as `routes/translate.py`.
+Tests mock the extractors at this module's boundary (`imports.fetch_subs`, etc.).
 """
 import hashlib
 import sqlite3
@@ -151,18 +146,8 @@ async def import_subtitles(
     tags: str = Form(""),
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    """Import one or many subtitle files as one book each.
-
-    Batch rather than one-file-per-request because the whole point is dropping a
-    season in at once, and 20+ sequential round trips would each need their own
-    error handling in the UI. Files are imported in filename order so an
-    episode-numbered season lands in the Library in episode order.
-
-    Always 201 with a per-file summary: partial success is the normal outcome of
-    a batch (a re-dropped season is *expected* to be mostly duplicates), so a
-    single status code can't describe it. `title` only overrides when exactly one
-    file is uploaded — for a batch each book is titled from its own filename.
-    """
+    """One book per subtitle file, in filename order so a season lands in episode order.
+    Always 201 with a per-file summary, since partial success is normal for a batch."""
     ordered = sorted(files, key=lambda f: (f.filename or "").lower())
     tag_list = _split_tags(tags)
     imported: list[dict] = []

@@ -21,9 +21,7 @@ class NoSubtitlesError(Exception):
 def fetch_subs(url: str) -> tuple[str, str, str, int | None]:
     """Returns (title, cleaned_text, video_id, duration_seconds).
 
-    duration_seconds is yt-dlp's own info["duration"] (real video length, not a
-    transcript-based estimate) — Epic 18 needs it for the Queue's length stat.
-    None on the rare video where yt-dlp doesn't report it."""
+    duration_seconds is yt-dlp's real video length, None when it doesn't report one."""
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             "skip_download": True,

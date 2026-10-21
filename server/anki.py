@@ -3,11 +3,8 @@ import httpx
 
 ANKICONNECT_URL = "http://127.0.0.1:8765"
 
-# Epic 21: the custom two-way note type. Two cards (KO→EN and EN→KO) share three
-# fields; `Examples` sits on the *back* of both templates and the front of neither,
-# so studying either direction never reveals the prompt word. Bump the name if the
-# templates ever change incompatibly;
-# ensure_model() is a create-once no-op when a model of this name already exists.
+# Created once and never updated (see _ensure), so bump the name if the templates ever
+# change incompatibly.
 MODEL_NAME = "Korean Reader 2-way"
 
 _CARD_CSS = (
@@ -16,9 +13,7 @@ _CARD_CSS = (
     ".examples{margin-top:1em;font-size:15px;color:#777;text-align:left}"
 )
 
-# Examples are wrapped in a {{#Examples}}…{{/Examples}} section so an empty field
-# renders nothing (no stray divider). Crucially they appear only after {{FrontSide}}
-# on the answer, never in either Front — the anti-spoiler guarantee.
+# Examples only ever on the answer side, so neither direction spoils its prompt.
 _BACK_EN = (
     "{{FrontSide}}<hr id=answer>{{English}}"
     '{{#Examples}}<div class="examples">{{Examples}}</div>{{/Examples}}'
@@ -116,19 +111,14 @@ def update_note_model(note_id: int, korean: str, english: str, examples: str) ->
     _update(note_id, {"Korean": korean, "English": english, "Examples": examples})
 
 
-# Epic 25: on-demand hanja saves get their own note type — a separate deck from the
-# reading-flow terms, with the hanja spelling as a first-class field (the user wants
-# to practice *reading* the hanja, not have it hidden in notes). Templates are
-# deliberately minimal; the user shapes the cards in Anki desktop afterwards, and
-# ensure_hanja_model()'s create-once guard means the app never overwrites that.
+# Minimal on purpose: the user shapes these cards in Anki desktop, and _ensure never
+# overwrites an existing model.
 HANJA_MODEL_NAME = "Korean Reader Hanja"
 
 _HANJA_CARD_TEMPLATES = [
     {
         "Name": "Card 1",
-        # Korean + Hanja together on the Front — the whole point of surfacing the
-        # hanja is to tell homographs (e.g. 제일 祭日 vs 第一) apart, so it can't be
-        # the thing under test.
+        # Hanja on the Front: it is what tells homographs (제일 祭日 vs 第一) apart.
         "Front": "{{Korean}}<br>{{Hanja}}",
         "Back": (
             "{{FrontSide}}<hr id=answer>{{English}}"

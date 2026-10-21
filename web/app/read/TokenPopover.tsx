@@ -20,7 +20,7 @@ export type PopoverTarget = {
   isPhrase: boolean;
 };
 
-// Epic 22: dictionary-derived chips run strong→pale across this "blue family" in
+// Dictionary-derived chips run strong→pale across this "blue family" in
 // the order they're added this session (front forms + back senses, combined).
 const DICT_SHADES = ["bg-dict-1", "bg-dict-2", "bg-dict-3", "bg-dict-4"];
 const dictShade = (i: number) => DICT_SHADES[Math.min(i, DICT_SHADES.length - 1)];
@@ -50,23 +50,17 @@ export function TokenPopover({
   decks: string[];
   defaultDeck: string;
   translatorBackend?: string;
-  // Epic 25: on-demand hanja saves (from /terms' "Add word") show an editable
-  // Hanja field and route it into the create/patch payload. Also turns on when
-  // editing a term that already has one, so it stays editable after the fact.
+  // "Add word" on /terms, or editing a term that already has hanja.
   hanjaMode?: boolean;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
 }) {
   const isEditing = target.existing !== null;
-  // Phrases are translate-only: dictionary, forms, and the manual front-entry
-  // affordance all hide, since a multi-word span has no single dictionary lemma or
-  // card-worthy forms.
+  // Phrases are translate-only: a multi-word span has no single dictionary lemma.
   const isPhrase = target.isPhrase;
-  // The select must always include whatever deck the save will actually use —
-  // the term's current deck when editing, and the popover's defaultDeck (e.g.
-  // Epic 25's hanja_deck) when adding new, neither of which is necessarily one
-  // of the user's regular `decks`.
+  // Include the deck the save will use (the term's, or defaultDeck such as
+  // hanja_deck), which may not be in the user's `decks` list.
   const deckOptions = [...new Set([...decks, target.existing?.deck, defaultDeck])].filter(
     (d): d is string => !!d
   );
@@ -78,9 +72,8 @@ export function TokenPopover({
   const [forms, setForms] = useState<FormEntry[]>(target.existing?.forms ?? []);
   const [backItems, setBackItems] = useState<BackItem[]>(target.existing?.back_items ?? []);
   const [notes, setNotes] = useState(target.existing?.notes ?? "");
-  // Epic 26: a hanja term carries an ordered list of senses (시장 = 市場 market +
-  // 市長 mayor). `hanjaList` is the senses committed so far, `hanja` the one being
-  // built in the input; a sense's meanings are the Back chips grouped under it.
+  // `hanjaList` = senses committed so far (시장 = 市場 + 市長), `hanja` = the one in the
+  // input; a sense's meanings are the Back chips grouped under it.
   const [hanjaList, setHanjaList] = useState<string[]>(target.existing?.hanja ?? []);
   const [hanja, setHanja] = useState("");
   const [addingHanja, setAddingHanja] = useState(false);
@@ -96,7 +89,7 @@ export function TokenPopover({
   const [error, setError] = useState<string | null>(null);
 
   // A term never touched by this card builder (no back_items) shows its old flat
-  // translation read-only instead of chips — no migration forced (Epic 22).
+  // translation read-only instead of chips.
   const legacyTranslation =
     (target.existing?.back_items.length ?? 0) === 0 ? target.existing?.translation || "" : "";
 
@@ -247,7 +240,7 @@ export function TokenPopover({
     setBusy("dict");
     setError(null);
     try {
-      // Epic 26: the same keystroke answers "is this word already saved?", so a
+      // The same keystroke answers "is this word already saved?", so a
       // homograph shows the append offer before any chips are picked.
       if (hanjaMode && !targetTerm) {
         const found = await api.termByLemma(lemma.trim());
@@ -267,18 +260,14 @@ export function TokenPopover({
       setError("Lemma can't be empty.");
       return;
     }
-    // hanjaMode is /terms' "Add word" entry point — its whole point is capturing
-    // the hanja spelling, so a blank field here would silently fall back to the
-    // plain two-way Anki model instead of the Hanja one.
+    // A blank hanja field here would silently save to the two-way model instead.
     if (hanjaMode && senses.length === 0) {
       setError("Hanja can't be empty — look it up or type it in.");
       return;
     }
     setBusy("save");
     setError(null);
-    // Only send back_items when there's actually structured content — an empty
-    // array would otherwise blank out a legacy term's flat translation on any
-    // save (e.g. just changing the deck) via the server's derived-mirror rule.
+    // An empty back_items array would blank a chip-less term's translation on save.
     const backItemsPayload = backItems.length > 0 ? backItems : undefined;
     // Never send hanja from a plain reading-flow save — only /terms' hanjaMode
     // (or editing a term that already has one) touches this field.
@@ -305,7 +294,7 @@ export function TokenPopover({
             forms,
             back_items: backItemsPayload,
             status: "learning",
-            // Provenance: record where this word was first saved (Epic 16 stats).
+            // Where the word was first saved, for per-book stats.
             source_book_id: bookId ?? undefined,
             source_page: pageNo ?? undefined,
             hanja: hanjaPayload,
@@ -313,9 +302,7 @@ export function TokenPopover({
       onSaved(term);
       onClose();
     } catch (e) {
-      // The create path's one expected failure is the UNIQUE lemma (Epic 26): the
-      // word is already saved. Don't dead-end on it — pull that term in and turn
-      // this into the same append offer the lemma lookup would have shown.
+      // A 409 means the word is already saved: turn it into the append offer.
       const clash = targetTerm ? null : await api.termByLemma(trimmedLemma);
       if (clash) {
         adoptExisting(clash);
@@ -373,8 +360,7 @@ export function TokenPopover({
   const backItemsFor = (group: string) => backItems.filter((b) => b.group === group);
   const backIndexOf = (item: BackItem) => backItems.indexOf(item);
 
-  // The "→ meaning meaning" run of one preview row, shared by the front-entry rows
-  // and Epic 26's per-sense rows.
+  // The "→ meaning meaning" run of one preview row (front-entry and per-sense rows).
   const backRow = (group: string) => {
     const items = backItemsFor(group);
     return (
@@ -520,7 +506,7 @@ export function TokenPopover({
               </div>
             );
           })}
-          {/* Epic 26: one row per hanja sense, numbered the same on the card's Back. */}
+          {/* One row per hanja sense, numbered the same on the card's Back. */}
           {showHanja &&
             senses.map((sense) => (
               <div key={`sense-${sense}`} className="py-2 flex flex-wrap items-center gap-1.5">

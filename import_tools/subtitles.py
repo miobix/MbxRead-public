@@ -10,8 +10,7 @@ Handles the five formats a Korean subtitle file actually arrives in:
 
 Everything is parsed into a common list of ``Cue`` (start/end in ms + text) so
 one cleanup path serves all five and the file's real duration falls out of the
-last cue for free — the Library/Queue length stat Epic 18 added for YouTube
-then works for subtitles too.
+last cue for free.
 
 Accepts a file path (CLI) or raw bytes (in-memory upload), mirroring
 ``pdf_text.extract`` / ``epub_text.extract``, but returns a *pair* —

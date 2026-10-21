@@ -76,9 +76,7 @@ def lookup(word: str, max_entries: int = 5, with_examples: bool = True) -> list[
     """Returns [{word, pos, origin, target_code, definitions: [{ko, en_word, en_def}],
     examples: [str]}] or [].
 
-    Epic 21: `max_entries` raised from 3 → 5 so more derived headwords (승인하다,
-    승인서 alongside 승인) surface for click-to-add. `examples` comes from a second
-    `view` call per entry — the search API's `<sense>` carries no example sentences.
+    `examples` needs a second `view` call per entry: search results carry none.
     Raises KrdictUnavailable on a failed request or during the cooldown after one.
     """
     if not KRDICT_API_KEY:

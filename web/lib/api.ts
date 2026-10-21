@@ -94,16 +94,11 @@ export type Token = {
 
 export type TermStatus = "learning" | "known" | "ignored";
 
-// Epic 22: a Front chip. 'dict' = clicked in from a dictionary headword, 'manual' =
-// typed via the "Add entry" form. The lemma itself isn't in this list — it's always
-// entry 0, carried by `Term.lemma`/`TermSummary.lemma`.
+// A Front chip besides the lemma (which is always entry 0, from `lemma`).
 export type FormEntry = { text: string; kind: "dict" | "manual" };
 
-// Epic 22: a Back chip. `group` is '' for the lemma's own group, or a FormEntry's
-// `text` for a form's group — or, on a hanja term (Epic 26), the hanja spelling of
-// the sense it belongs to. `korean_def` (kind "dict" only) is the krdict Korean
-// definition (+ any glued-on example) — feeds the Anki Examples field, never shown
-// on Back itself.
+// A Back chip. `group` is '' (the lemma), a form's text, or a hanja sense's spelling.
+// `korean_def` feeds the Anki Examples field, never the Back.
 export type BackItem = {
   group: string;
   kind: "dict" | "translate" | "manual";
@@ -142,10 +137,8 @@ export type Term = {
   hanja: string[];
 };
 
-// Epic 24: a character-addressed slice of a book, which the reader paginates itself
-// with CSS columns. `offset` is where `content` starts in the whole book (the server
-// snaps it back to a sentence boundary, so it may precede what was requested); token
-// offsets are relative to `content`, so absolute position = offset + token.s.
+// `offset` may precede the requested one (snapped to a sentence start); token offsets
+// are relative to `content`, so absolute position = offset + token.s.
 export type TextWindow = {
   offset: number;
   total_chars: number;
@@ -182,8 +175,7 @@ export type Settings = {
   last_fetch_attempt: string | null;
 };
 
-// `read` = how many books were read that day (Epic 24 — was a page count, which
-// stopped being comparable once each device paginates for its own screen).
+// `read` = books read that day (not pages: those differ per device).
 export type StatsActivity = { date: string; words: number; read: number };
 
 export type StatsBookRow = {
@@ -359,9 +351,7 @@ export const api = {
 
   deleteTerm: (id: number) => request<void>(`/terms/${id}`, { method: "DELETE" }),
 
-  // Epic 26: exact-lemma lookup — "is this word already saved?", which the LIKE
-  // search in listTerms can't answer. null rather than a throw on 404, since "not
-  // saved yet" is the ordinary case at the call site.
+  // null on 404: "not saved yet" is the ordinary case at the call site.
   termByLemma: async (lemma: string) => {
     try {
       return await request<Term>(`/terms/by-lemma?lemma=${encodeURIComponent(lemma)}`);
