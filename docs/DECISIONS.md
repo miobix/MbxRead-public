@@ -1530,3 +1530,10 @@ checked against the live `reader.db` (read-only) before it went.
   `read/page.tsx` (551) have clean seams (the Front→Back preview and Examples sections; the
   selection hit-test helpers), but those screens may be redesigned, so splitting now would be
   work thrown away. Revisit as part of that redesign.
+- **Audit items 12–15 done; item 11 kept.** `yt_subs` calls `html.unescape` directly,
+  `score_book` scores `_book_text` (fixing its `"\n"` page join, so a score sees exactly the
+  text the reader shows), subtitle import has one `except`, `_group_key` is inlined. Item 11
+  (the no-back_items rendering in `anki_sync.py`) is not dead: the popover can save a term
+  with no chips, and removing the branch would change those cards, so it stays.
+- **Claude translator dependency deferred.** `anthropic` is still not in `requirements.txt`;
+  the app runs on DeepL + krdict keys (no Anthropic key, no Claude-cached translations).

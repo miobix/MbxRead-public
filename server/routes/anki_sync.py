@@ -31,10 +31,6 @@ def _front_entries(conn: sqlite3.Connection, term_id: int, lemma: str) -> list[d
     ]
 
 
-def _group_key(front_entries: list[dict], index: int) -> str:
-    return front_entries[index]["group"]
-
-
 def _render_korean(front_entries: list[dict]) -> str:
     """One entry renders bare; several render numbered so Back labels can point at them."""
     if len(front_entries) == 1:
@@ -54,7 +50,7 @@ def _label_items(
 
     out: list[tuple[str, dict]] = []
     for i, entry in enumerate(front_entries):
-        items = by_group.get(_group_key(front_entries, i), [])
+        items = by_group.get(entry["group"], [])
         if len(items) == 1:
             label = f"{i + 1}." if num_fronts > 1 else ""
             out.append((label, items[0]))
