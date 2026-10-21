@@ -1507,3 +1507,6 @@ checked against the live `reader.db` (read-only) before it went.
 - **PDF and EPUB imports share `_import_file`.** The two routes were the same function. One
   behaviour change: a PDF with no extractable text (an image-only scan) now gets the EPUB's
   502 "No extractable text" instead of becoming an empty book.
+- **`_book_dict` spreads the row.** It copied all 23 `books` columns by hand; it now spreads
+  `dict(row)` and overrides only the JSON/boolean ones. The existing key-set test in
+  `test_books.py` catches any future column leaking into the API.

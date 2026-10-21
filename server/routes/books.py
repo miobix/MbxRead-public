@@ -68,31 +68,12 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
         (book_id,),
     ).fetchone()[0]
     return {
-        "id": row["id"],
-        "title": row["title"],
-        "source": row["source"],
-        "current_offset": row["current_offset"],
+        **dict(row),
         "page_count": page_count,
         "total_chars": total_chars,
-        "created": row["created"],
-        "coverage": row["coverage"],
-        "new_per_page": row["new_per_page"],
-        "scored_at": row["scored_at"],
-        "topic": row["topic"],
         "tags": json.loads(row["tags"]),
-        "source_url": row["source_url"],
-        "source_ref": row["source_ref"],
-        "fetched": row["fetched"],
         "archived": bool(row["archived"]),
         "read": bool(row["read"]),
-        "status": row["status"],
-        "general_coverage": row["general_coverage"],
-        "general_level": row["general_level"],
-        "word_count": row["word_count"],
-        "duration_seconds": row["duration_seconds"],
-        "feed_id": row["feed_id"],
-        "discard_reason": row["discard_reason"],
-        "last_opened": row["last_opened"],
     }
 
 
