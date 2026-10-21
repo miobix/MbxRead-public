@@ -151,6 +151,16 @@ def test_pdf_import_extract_failure_returns_502(client, monkeypatch):
     assert resp.json() == {"error": "cannot open broken document"}
 
 
+def test_pdf_import_bad_page_range_returns_422(client):
+    resp = client.post(
+        "/api/import/pdf",
+        data={"pages": "1-x"},
+        files={"file": ("a.pdf", b"%PDF", "application/pdf")},
+    )
+    assert resp.status_code == 422
+    assert "1-20" in resp.json()["detail"]
+
+
 def test_pdf_import_empty_text_returns_502(client, monkeypatch):
     monkeypatch.setattr(imports_route, "extract_pdf", lambda content, page_range: "  \n")
 

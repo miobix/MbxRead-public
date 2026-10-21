@@ -121,7 +121,10 @@ async def import_pdf(
     pages: str = Form(""),
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    page_range = parse_page_range(pages) if pages else None
+    try:
+        page_range = parse_page_range(pages) if pages else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"bad page range {pages!r}; use 5 or 1-20")
     return await _import_file(
         conn, file, lambda c: extract_pdf(c, page_range), "pdf", title, topic, tags
     )
