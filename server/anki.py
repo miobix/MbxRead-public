@@ -74,40 +74,46 @@ def move_note_to_deck(note_id: int, deck: str) -> None:
         _invoke("changeDeck", cards=stray, deck=deck)
 
 
-def ensure_model() -> None:
-    """Create the custom two-way note type once. Idempotent — guarded on modelNames,
-    so it's a cheap no-op on every sync after the first."""
-    if MODEL_NAME in (_invoke("modelNames") or []):
+def _ensure(name: str, fields: list[str], templates: list[dict]) -> None:
+    """Create a note type once; a no-op when it already exists, so the user's own
+    template edits in Anki are never overwritten."""
+    if name in (_invoke("modelNames") or []):
         return
     _invoke(
         "createModel",
-        modelName=MODEL_NAME,
-        inOrderFields=["Korean", "English", "Examples"],
+        modelName=name,
+        inOrderFields=fields,
         css=_CARD_CSS,
         isCloze=False,
-        cardTemplates=_CARD_TEMPLATES,
+        cardTemplates=templates,
     )
 
 
-def add_note_model(deck: str, korean: str, english: str, examples: str) -> int:
+def _add(deck: str, model: str, fields: dict[str, str]) -> int:
     note = {
         "deckName": deck,
-        "modelName": MODEL_NAME,
-        "fields": {"Korean": korean, "English": english, "Examples": examples},
+        "modelName": model,
+        "fields": fields,
         "tags": ["korean-reader"],
         "options": {"allowDuplicate": False},
     }
     return _invoke("addNote", note=note)
 
 
+def _update(note_id: int, fields: dict[str, str]) -> None:
+    _invoke("updateNoteFields", note={"id": note_id, "fields": fields})
+
+
+def ensure_model() -> None:
+    _ensure(MODEL_NAME, ["Korean", "English", "Examples"], _CARD_TEMPLATES)
+
+
+def add_note_model(deck: str, korean: str, english: str, examples: str) -> int:
+    return _add(deck, MODEL_NAME, {"Korean": korean, "English": english, "Examples": examples})
+
+
 def update_note_model(note_id: int, korean: str, english: str, examples: str) -> None:
-    _invoke(
-        "updateNoteFields",
-        note={
-            "id": note_id,
-            "fields": {"Korean": korean, "English": english, "Examples": examples},
-        },
-    )
+    _update(note_id, {"Korean": korean, "English": english, "Examples": examples})
 
 
 # Epic 25: on-demand hanja saves get their own note type — a separate deck from the
@@ -133,41 +139,13 @@ _HANJA_CARD_TEMPLATES = [
 
 
 def ensure_hanja_model() -> None:
-    """Create the hanja note type once. Idempotent — guarded on modelNames, so it's
-    a cheap no-op on every sync after the first."""
-    if HANJA_MODEL_NAME in (_invoke("modelNames") or []):
-        return
-    _invoke(
-        "createModel",
-        modelName=HANJA_MODEL_NAME,
-        inOrderFields=["Korean", "Hanja", "English", "KoreanDef"],
-        css=_CARD_CSS,
-        isCloze=False,
-        cardTemplates=_HANJA_CARD_TEMPLATES,
-    )
+    _ensure(HANJA_MODEL_NAME, ["Korean", "Hanja", "English", "KoreanDef"], _HANJA_CARD_TEMPLATES)
 
 
 def add_note_hanja(deck: str, korean: str, hanja: str, english: str, korean_def: str) -> int:
-    note = {
-        "deckName": deck,
-        "modelName": HANJA_MODEL_NAME,
-        "fields": {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def},
-        "tags": ["korean-reader"],
-        "options": {"allowDuplicate": False},
-    }
-    return _invoke("addNote", note=note)
+    fields = {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def}
+    return _add(deck, HANJA_MODEL_NAME, fields)
 
 
 def update_note_hanja(note_id: int, korean: str, hanja: str, english: str, korean_def: str) -> None:
-    _invoke(
-        "updateNoteFields",
-        note={
-            "id": note_id,
-            "fields": {
-                "Korean": korean,
-                "Hanja": hanja,
-                "English": english,
-                "KoreanDef": korean_def,
-            },
-        },
-    )
+    _update(note_id, {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def})
