@@ -125,7 +125,7 @@ def _view_examples(target_code: str, max_examples: int = 5) -> list[str]:
     try:
         root = _get(
             VIEW_URL,
-            {"method": "target_code", "target_code": target_code, "translated": "y", "trans_lang": "1"},
+            {"method": "target_code", "q": target_code, "target_code": target_code, "translated": "y", "trans_lang": "1"},
         )
     except KrdictUnavailable:
         return []
