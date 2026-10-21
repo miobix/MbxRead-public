@@ -87,30 +87,3 @@ def test_put_settings_overwrites_existing_key(client):
     assert resp.status_code == 200
     assert resp.json()["default_deck"] == "Korean"
 
-
-def test_retired_pagination_settings_are_purged_from_storage(client, db_path):
-    """Settings rows are merged *over* DEFAULTS, so dropping a key from DEFAULTS isn't
-    enough — a row written before Epic 24 would keep surfacing in GET /api/settings.
-    The migration deletes them."""
-    import json
-    import sqlite3
-
-    from server import db as db_module
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.executemany(
-        "INSERT INTO settings (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        [("page_rows", json.dumps(12)), ("chars_per_row", json.dumps(32)),
-         ("page_size", json.dumps(1500))],
-    )
-    conn.commit()
-
-    db_module._apply_migrations(conn)
-    conn.commit()
-    conn.close()
-
-    body = client.get("/api/settings").json()
-    for retired in ("page_rows", "chars_per_row", "page_size"):
-        assert retired not in body

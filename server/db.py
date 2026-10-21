@@ -1,6 +1,5 @@
 """SQLite connection and schema management for reader.db."""
 import csv
-import json
 import sqlite3
 from pathlib import Path
 from typing import Generator
@@ -128,8 +127,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # Epic 25: hanja spelling for on-demand Sino-Korean word saves (separate deck
         # + note type). Empty for every reading-flow term. Epic 26: a JSON list of
         # spellings, one per sense (시장 is 市場 *and* 市長), ordered — same
-        # list-in-a-column shape as `examples`. _backfill_hanja_json converts the
-        # Epic 25 single-string values in place.
+        # list-in-a-column shape as `examples`.
         "hanja": "TEXT NOT NULL DEFAULT '[]'",
     },
     "books": {
@@ -169,13 +167,6 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # time a page is actually viewed (routes/books.py's get_page), not on
         # create/patch, so it reflects reading activity rather than list churn.
         "last_opened": "TIMESTAMP",
-        # Epic 24: reading position as a character offset into the book's text, which
-        # is device-independent — the reader now paginates client-side (CSS columns,
-        # exact N rendered lines per device), so `current_page` no longer means the
-        # same thing on a phone and a laptop. Backfilled once from current_page by
-        # _backfill_current_offset; current_page is left in place but unused by the
-        # reader until the stage-2 cleanup.
-        "current_offset": "INTEGER NOT NULL DEFAULT 0",
     },
     "term_forms": {
         # Epic 22: was this form clicked in from the dictionary, or typed by hand via
@@ -222,90 +213,13 @@ _SEED_FEEDS: list[tuple[str, str, str, str]] = [
 ]
 
 
-def _backfill_current_offset(conn: sqlite3.Connection) -> None:
-    """Epic 24, run once at the moment books.current_offset is added: convert every
-    book's existing page-number position into a character offset by summing the
-    lengths of the pages before it. Same arithmetic the retired repaginate_all used
-    to preserve position across a re-split — pages hold contiguous, lossless slices,
-    so the sum is the exact offset where that page starts."""
-    conn.execute(
-        "UPDATE books SET current_offset = COALESCE(("
-        "  SELECT SUM(LENGTH(p.content)) FROM pages p "
-        "  WHERE p.book_id = books.id AND p.page_no < books.current_page"
-        "), 0)"
-    )
-
-
-def _backfill_hanja_json(conn: sqlite3.Connection) -> None:
-    """Epic 26: terms.hanja went from one spelling to a JSON list of them. Rewrites
-    the Epic 25 values in place ('' -> [], '第一' -> ["第一"]) and leaves anything
-    already JSON alone, so it is safe to run on every init. Each converted term's
-    Back chips move from the lemma group ('') into that hanja's group, which is
-    where the new renderer looks for a sense's meanings."""
-    rows = conn.execute("SELECT id, hanja FROM terms").fetchall()
-    for row in rows:
-        value = (row["hanja"] or "").strip()
-        if value.startswith("["):
-            continue
-        conn.execute(
-            "UPDATE terms SET hanja = ? WHERE id = ?",
-            (json.dumps([value] if value else [], ensure_ascii=False), row["id"]),
-        )
-        if value:
-            conn.execute(
-                "UPDATE term_back_items SET group_key = ? WHERE term_id = ? AND group_key = ''",
-                (value, row["id"]),
-            )
-
-
-def _migrate_page_reads_to_read_days(conn: sqlite3.Connection) -> None:
-    """Epic 24 stage 2: fold the old per-page read log into the per-day one, then
-    drop it. Existing history is preserved rather than discarded — every distinct
-    (book, local day) that had any page read becomes one read_days row, so the
-    streak and heatmap carry straight over."""
-    tables = {
-        row["name"] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
-        )
-    }
-    if "page_reads" not in tables:
-        return
-    conn.execute(
-        "INSERT OR IGNORE INTO read_days (book_id, day) "
-        "SELECT book_id, date(read_at, 'localtime') FROM page_reads "
-        "WHERE read_at IS NOT NULL"
-    )
-    conn.execute("DROP TABLE page_reads")
-
-
 def _apply_migrations(conn: sqlite3.Connection) -> None:
-    added: set[tuple[str, str]] = set()
     for table, columns in _ADDED_COLUMNS.items():
         existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
         for name, decl in columns.items():
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
-                added.add((table, name))
 
-    book_columns = {row["name"] for row in conn.execute("PRAGMA table_info(books)")}
-    # Order matters for a database upgrading straight from pre-Epic-24: add
-    # current_offset, derive it from current_page, and only then drop current_page.
-    if ("books", "current_offset") in added and "current_page" in book_columns:
-        _backfill_current_offset(conn)
-    if "current_page" in book_columns:
-        conn.execute("ALTER TABLE books DROP COLUMN current_page")
-
-    _migrate_page_reads_to_read_days(conn)
-    _backfill_hanja_json(conn)
-
-    # Settings are stored as rows and merged *over* DEFAULTS, so deleting a key from
-    # DEFAULTS isn't enough — a previously-written row keeps surfacing in GET
-    # /api/settings forever. These three are all retired reader-pagination knobs
-    # (page_size: Epic 16; page_rows/chars_per_row: 2026-07-24, both dropped in
-    # Epic 24 when pagination moved client-side).
-    conn.execute(
-        "DELETE FROM settings WHERE key IN ('page_size', 'page_rows', 'chars_per_row')"
-    )
     # Partial index: NULL source_ref (paste/txt books) never collides, but two
     # imports of the same video id / feed guid do — the dedup guarantee Epic 12's
     # importers and Epic 15's feed fetcher rely on.

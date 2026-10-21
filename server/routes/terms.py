@@ -101,14 +101,7 @@ def _normalize_hanja(hanja: list[str]) -> list[str]:
 
 
 def hanja_list(value: str | None) -> list[str]:
-    """Parse the stored column. Tolerates a pre-Epic-26 bare spelling and a NULL so
-    a caller never has to care whether _backfill_hanja_json has run yet."""
-    text = (value or "").strip()
-    if not text:
-        return []
-    if not text.startswith("["):
-        return [text]
-    return json.loads(text)
+    return json.loads(value or "[]")
 
 
 def _normalize_back_items(items: list[dict]) -> list[dict]:
