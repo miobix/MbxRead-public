@@ -541,9 +541,9 @@ for free) and `duration_seconds` (NULL except for `source='yt'`). Frontend:
 tokens (`accent`/`border`/`muted`) rather than new hues, so it stays
 theme-aware without touching `globals.css`. `web/lib/length.ts` exposes
 `formatLength()` (exact word count or exact duration, whichever field is
-non-null — never an estimate) and `estimatedMinutes()` (a 250-wpm heuristic
-used *only* to rank mixed source types against each other for the "Shortest
-first" sort — never displayed). `web/app/queue/page.tsx` rewritten: a Cards/
+non-null — never an estimate). The "Shortest first" ranking (250 wpm for text,
+real duration for video) moved server-side into `GET /api/books?sort=shortest`;
+the client copy `estimatedMinutes()` was removed 2026-10-21. `web/app/queue/page.tsx` rewritten: a Cards/
 List view toggle (`localStorage["queueViewMode"]`, read after mount so the
 static export's build-time render never touches `localStorage`, cards
 default), a sort-by `<select>` (newest fetched / easiest first / shortest

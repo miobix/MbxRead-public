@@ -200,9 +200,8 @@ _SORT_CLAUSES = {
     # back to most-recently-added within that group.
     "opened": "(last_opened IS NULL) ASC, last_opened DESC, id DESC",
     "easiest": "(new_per_page IS NULL) ASC, new_per_page ASC",
-    # mirrors web/lib/length.ts's estimatedMinutes heuristic (250 wpm for text,
-    # real yt-dlp duration for video) so "Shortest first" stays correct across
-    # pages instead of only within whatever page happened to be fetched.
+    # 250 wpm for text, real yt-dlp duration for video. Sorted here, not client-side,
+    # so "Shortest first" stays correct across pages.
     "shortest": (
         "COALESCE(CASE WHEN source = 'yt' THEN duration_seconds / 60.0 "
         "ELSE word_count / 250.0 END, 999999999) ASC"
