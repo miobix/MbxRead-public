@@ -1500,3 +1500,7 @@ checked against the live `reader.db` (read-only) before it went.
 - **`server/anki.py` note helpers collapsed.** The three add/update pairs and two
   `ensure_*model` functions shared one body each; they are now one-liners over `_add`,
   `_update` and `_ensure`, keeping the public names the sync and tests use.
+- **`scraper` feed type and `difficulty_min`/`difficulty_max` dropped from the API and UI.**
+  The fetcher never had scraper logic and nothing read the difficulty range (0 live rows
+  used either). The DB columns and CHECK stay, since removing them needs a table rebuild for
+  no gain. `skipped_feed_types` went with scraper (it could only ever be 0).

@@ -11,7 +11,7 @@ export const TOPICS = [
   "other",
 ] as const;
 
-export const FEED_TYPES = ["rss", "youtube", "scraper"] as const;
+export const FEED_TYPES = ["rss", "youtube"] as const;
 
 // Book/candidate source values (server's `books.source` column) — shared by the
 // Library and Queue filters.

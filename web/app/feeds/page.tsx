@@ -8,7 +8,7 @@ import { FEED_TYPES, TOPICS } from "@/lib/topics";
 
 const BLANK = { name: "", type: "youtube" as FeedType, url_or_channel_id: "", topic: "gaming" };
 
-// YouTube feeds store the bare channel id (UC…); RSS/scraper store a full URL.
+// YouTube feeds store the bare channel id (UC…); RSS feeds store a full URL.
 const idHint = (type: FeedType) =>
   type === "youtube" ? "Channel id (UC…)" : "Feed URL";
 

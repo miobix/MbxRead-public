@@ -178,12 +178,12 @@ CREATE TABLE IF NOT EXISTS read_days (
 CREATE TABLE IF NOT EXISTS feeds (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('rss','youtube','scraper')),
+  type TEXT NOT NULL CHECK (type IN ('rss','youtube','scraper')),  -- API accepts rss/youtube only (2026-10-21)
   url_or_channel_id TEXT NOT NULL,
   topic TEXT NOT NULL DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
-  difficulty_min REAL,
-  difficulty_max REAL,
+  difficulty_min REAL,  -- unused, dropped from the API 2026-10-21
+  difficulty_max REAL,  -- unused, dropped from the API 2026-10-21
   last_fetched TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref
@@ -280,11 +280,11 @@ position without sharing a pagination.
 | POST `/api/import/subtitles` | multipart: `files` (**repeatable** — one or many), `title?`, `topic?`, `tags?` (comma-separated) | **Batch**, always 201 with `{imported: Book[], skipped: [{filename, reason}], failed: [{filename, error}]}` — partial success is the normal outcome of dropping a season in, so no single status code can describe it. One book per file (source `subs`, `source_ref="subs:<sha256 of file bytes>"`, `duration_seconds` from the last cue's timestamp), imported in filename order. `title` only applies when exactly one file is uploaded; a batch titles each book from its own filename. Accepts `.srt/.vtt/.smi/.ass/.ttml` and friends — **implemented (subtitle import, 2026-08-18)** |
 | POST `/api/score` | `{text}` | `{coverage, new_lemmas, total_lemmas, new_per_page, general_coverage, general_level}` — general fields **implemented (Epic 15)**, personal fields (Epic 9, cold-start Epic 13) |
 | POST `/api/books/{id}/score` | – | full updated book row, personal + general difficulty cached under one `scored_at` — **implemented (Epic 9, general fields Epic 15)** |
-| GET `/api/feeds` | – | `[{id,name,type,url_or_channel_id,topic,enabled,difficulty_min,difficulty_max,last_fetched}]` — **implemented (Epic 14)** |
-| POST `/api/feeds` | `{name, type, url_or_channel_id, topic?, enabled?, difficulty_min?, difficulty_max?}` | created feed — **implemented (Epic 14)** |
+| GET `/api/feeds` | – | `[{id,name,type,url_or_channel_id,topic,enabled,last_fetched}]` — **implemented (Epic 14)** |
+| POST `/api/feeds` | `{name, type, url_or_channel_id, topic?, enabled?}` | created feed — **implemented (Epic 14)** |
 | PATCH `/api/feeds/{id}` | any editable field | updated feed — **implemented (Epic 14)** |
 | DELETE `/api/feeds/{id}` | – | 204 — **implemented (Epic 14)** |
-| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, skipped_feed_types, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?,skipped_type?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped), `scraper` skipped — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded', discard_reason='expired'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17, `discard_reason` Epic 19)**. Every created candidate is also stamped with its `feed_id` (Epic 19) |
+| POST `/api/feeds/fetch` | `?feed_id=` (optional) | `{checked_feeds, candidates_created, expired, feeds:[{id,name,items_seen?,created?,skipped_duplicate?,skipped_no_subs?,failed?,fetch_error?}]}` — iterates enabled feeds, inserts new items as `status='candidate'` books, dedups on `source_ref`; `rss` fetches articles (trafilatura), `youtube` pulls each new video's Korean transcript (yt-dlp; no-subs videos skipped) — **implemented (Epic 15, YouTube support Epic 14)**. Every call (regardless of `feed_id`) first stamps `settings.last_fetch_attempt` and auto-discards (`status='discarded', discard_reason='expired'`) any candidate older than `settings.candidate_retention_days`, reporting the count as `expired` — **implemented (Epic 17, `discard_reason` Epic 19)**. Every created candidate is also stamped with its `feed_id` (Epic 19) |
 | POST `/api/reads` | `{book_id, page_no}` | `{counted}` — logs a page read (`INSERT OR IGNORE`, so revisits are no-ops); reader pings it after a 5s dwell — **implemented (Epic 16)** |
 | GET `/api/stats` | – | `{totals, streak, activity:[{date,words,read}], new_words_per_book:[{book_id,title,new_words,days_read}], vocab_depth:{buckets,beginner_pct,total_a}, curation:{by_topic:[{topic,promoted,user_discarded,expired,pending}], by_feed:[{feed_id,feed_name,promoted,user_discarded,expired,pending}]}}` — **implemented (Epic 16, `curation` Epic 19)**. `curation` is computed only over `books` rows with `feed_id IS NOT NULL` (feed-fetched content); manual imports/paste are outside its scope by construction |
 

@@ -130,26 +130,6 @@ def test_fetch_feeds_dedupes_on_second_run(client, db_path, monkeypatch):
     assert len(client.get("/api/books?status=candidate").json()) == 1
 
 
-def test_fetch_feeds_skips_scraper_feed_type(client, db_path):
-    # Epic 14: youtube is now processed; only 'scraper' still has no fetch logic.
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (?, ?, ?, ?)",
-        ("Some site", "scraper", "https://example.com", "gaming"),
-    )
-    conn.commit()
-    feed_id = conn.execute(
-        "SELECT id FROM feeds WHERE url_or_channel_id = 'https://example.com'"
-    ).fetchone()[0]
-    conn.close()
-
-    resp = client.post("/api/feeds/fetch", params={"feed_id": feed_id})
-    body = resp.json()
-    assert body["checked_feeds"] == 0
-    assert body["skipped_feed_types"] == 1
-    assert body["feeds"][0]["skipped_type"] == "scraper"
-
-
 def test_fetch_feeds_isolates_per_feed_failure(client, monkeypatch):
     def raise_error(url):
         raise FeedFetchError("boom")
