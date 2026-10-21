@@ -26,8 +26,7 @@ def split_pages(text: str, max_chars: int = MAX_PAGE_CHARS) -> list[str]:
         if candidates:
             end = candidates[-1]
         else:
-            # No break point within max_chars (one very long sentence) — take the
-            # next available break point rather than splitting mid-sentence.
+            # One sentence longer than max_chars: overrun rather than split it.
             later = [bp for bp in breakpoints if bp > start]
             end = later[0] if later else len(text)
         pages.append(text[start:end])
@@ -37,9 +36,7 @@ def split_pages(text: str, max_chars: int = MAX_PAGE_CHARS) -> list[str]:
 
 
 def snap_back(text: str, i: int) -> int:
-    """Largest sentence/newline boundary at or before `i` (0 if there is none) — used
-    to start a served text window at the top of a sentence rather than mid-clause.
-    Epic 24."""
+    """Largest sentence/newline boundary at or before `i` (0 if there is none)."""
     i = max(0, min(i, len(text)))
     best = 0
     for m in _BREAK_RE.finditer(text, 0, i):
@@ -48,8 +45,7 @@ def snap_back(text: str, i: int) -> int:
 
 
 def snap_forward(text: str, i: int) -> int:
-    """Smallest sentence/newline boundary at or after `i` (len(text) if there is none)
-    — the closing counterpart to snap_back. Epic 24."""
+    """Smallest sentence/newline boundary at or after `i` (len(text) if there is none)."""
     if i >= len(text):
         return len(text)
     m = _BREAK_RE.search(text, max(0, i))

@@ -1,15 +1,6 @@
-"""Reading-activity log API (Epic 16, re-keyed by day in Epic 24). See docs/SPEC.md.
+"""Reading-activity log: a book counts once per local day it was read.
 
-A book counts once per local day it was genuinely read. The client only pings this
-after a dwell gate (a few seconds of visible time on the page), and the PRIMARY KEY
-+ INSERT OR IGNORE here means every later page that day is a silent no-op.
-
-Epic 24 replaced the per-page log with a per-day one: page numbers became
-per-device (each device paginates for its own screen), so a `page_no` key no longer
-identified the same stretch of text across devices and the counts wouldn't compose.
-The pages-read *statistic* was dropped as unhelpful; this table survives because
-`/api/stats` derives the streak from days-with-a-word-saved UNION days-with-reading,
-so without it a day spent reading without saving a word would break the streak.
+The client pings after a few seconds of visible reading; later pings that day no-op.
 """
 import sqlite3
 

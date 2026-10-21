@@ -1,8 +1,4 @@
-"""RSS feed fetching/parsing for the Epic 15 curation queue. Stdlib only — both
-seeded feeds (Inven, Ruliweb) are plain RSS 2.0: no namespaces, no <guid> (falls
-back to <link>), CDATA-wrapped title/description. Verified live against both
-feeds' real XML this session.
-"""
+"""RSS and YouTube Atom feed fetching/parsing for the curation Queue. Stdlib only."""
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
@@ -46,13 +42,8 @@ def parse_rss(xml_bytes: bytes) -> list[FeedItem]:
     return items
 
 
-# Epic 14: YouTube channel feeds. A channel's uploads are exposed as an Atom feed at
-# youtube.com/feeds/videos.xml?channel_id=UC… (the ~15 latest videos, namespaced XML,
-# each <entry> carrying a <yt:videoId>). We store the bare channel_id (UC…) in the
-# feed's url_or_channel_id and build the URL here — matching the Epic 15 test that
-# seeded a youtube feed with url_or_channel_id='UCabc'. guid = the video id, so the
-# fetch route dedupes on `yt:<video_id>`, the same source_ref shape Epic 12's manual
-# YouTube import uses (a video imported by hand and by feed collapse to one book).
+# guid = the video id, so a video imported by hand and by feed dedupes to one book
+# (both use source_ref `yt:<video_id>`).
 _ATOM_NS = "http://www.w3.org/2005/Atom"
 _YT_NS = "http://www.youtube.com/xml/schemas/2015"
 

@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS books (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf
-  current_page INTEGER NOT NULL DEFAULT 1,
+  current_offset INTEGER NOT NULL DEFAULT 0,      -- Epic 24: char offset; replaced current_page
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS pages (
@@ -86,12 +86,12 @@ CREATE TABLE IF NOT EXISTS terms (
   anki_note_id INTEGER,                          -- NULL until first sync
   anki_dirty INTEGER NOT NULL DEFAULT 0,         -- 1 = edited since last sync
   examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence (card back only)
-  anki_model TEXT,                               -- Epic 21: NULL/'Basic' = legacy note; else custom two-way model name
+  anki_model TEXT,                               -- Epic 21: two-way or hanja model name (legacy 'Basic' path removed 2026-10-21)
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 -- Epic 20: extra surface forms one term also covers (aliases), e.g. 승인서/승인하다 under
--- lemma 승인. Each form highlights in the reader (matched alongside the lemma in get_page)
+-- lemma 승인. Each form highlights in the reader (matched alongside the lemma in get_text)
 -- and renders on the Anki card's Korean face; lemma stays the single clean dictionary form.
 -- Epic 22: `kind` ('dict'|'manual', additive, default 'manual') records whether a form
 -- was clicked in from the dictionary or hand-typed via "Add entry" — drives popover
@@ -119,19 +119,19 @@ CREATE TABLE IF NOT EXISTS term_back_items (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
-Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at import: split text into pages, breaking only at sentence ends (`.` `?` `!` `…` `다.` patterns / newlines); never split mid-sentence. Originally bounded by a ~1500-char budget (this section's original text); as of 2026-07-24 the reader's own pages are bounded by estimated visual rows instead (`settings.page_rows`/`chars_per_row`, `split_pages_by_rows` — see §227's Epic 16 entry and DECISIONS.md), while difficulty scoring keeps the original 1500-char budget as a fixed, page-size-independent reference. **Superseded by Epic 24 (2026-07-27):** reader pagination moved to the client (CSS columns, exact N rendered lines per device), so `page_rows`, `chars_per_row`, `split_pages_by_rows`, `repaginate_all` and `books.current_page` are all deleted; `pages` is storage only and reading position is `books.current_offset`, a character offset. See DECISIONS.md and ARCHITECTURE.md. Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`), `default_deck`, `translator_backend`.
+Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at import: split text into pages, breaking only at sentence ends (`.` `?` `!` `…` `다.` patterns / newlines); never split mid-sentence. Originally bounded by a ~1500-char budget (this section's original text); as of 2026-07-24 the reader's own pages are bounded by estimated visual rows instead (`settings.page_rows`/`chars_per_row`, `split_pages_by_rows` — see §227's Epic 16 entry and DECISIONS.md), while difficulty scoring keeps the original 1500-char budget as a fixed, page-size-independent reference. **Superseded by Epic 24 (2026-07-27):** reader pagination moved to the client (CSS columns, exact N rendered lines per device), so `page_rows`, `chars_per_row`, `split_pages_by_rows`, `repaginate_all` and `books.current_page` are all deleted; `pages` is storage only and reading position is `books.current_offset`, a character offset. See DECISIONS.md and ARCHITECTURE.md. The one-time migrations that carried existing databases across these changes were removed 2026-10-21; upgrades are additive columns only. Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`), `default_deck`, `translator_backend`.
 
 ## 5. API contract (all under `/api`, JSON)
 
 | Method & path | Request | Response |
 |---|---|---|
 | GET `/api/health` | – | `{ok, version}` |
-| GET `/api/books` | – | `[{id,title,source,current_page,page_count,created}]` |
+| GET `/api/books` | – | `[{id,title,source,current_offset,page_count,total_chars,created,…}]` (full shape in ARCHITECTURE.md) |
 | POST `/api/books` | `{title, text, source?}` | created book (splits pages) |
-| GET `/api/books/{id}` | – | `{id,title,current_page,page_count}` |
-| PATCH `/api/books/{id}` | `{current_page?, title?}` | updated book |
+| GET `/api/books/{id}` | – | `{id,title,current_offset,total_chars,page_count}` |
+| PATCH `/api/books/{id}` | `{current_offset?, title?, …}` | updated book |
 | DELETE `/api/books/{id}` | – | 204 |
-| GET `/api/books/{id}/pages/{n}` | – | `{page_no, page_count, content, tokens, terms}` (see below) |
+| GET `/api/books/{id}/text` | `?offset=&window=` | `{offset, total_chars, content, tokens, terms}` (see below); replaced `/pages/{n}` (Epic 24, endpoint removed 2026-10-21) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` |
 | POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], back_items?: [{group,kind,text,korean_def}]}` | created term (409 if lemma exists); `translation` is derived from `back_items` when non-empty (Epic 22) |
 | PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` |
@@ -141,16 +141,16 @@ Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at imp
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` |
 | GET/PUT `/api/settings` | PUT: `{key: value, …}` | full settings dict |
 
-**Page payload** (the core endpoint):
+**Text payload** (the core endpoint; a sentence-snapped window of the book):
 ```json
 {
-  "page_no": 3, "page_count": 12,
+  "offset": 4210, "total_chars": 45120,
   "content": "그는 옷을 입고 나갔다. …",
   "tokens": [ {"s": 7, "e": 9, "surface": "입고", "lemma": "입다", "pos": "VV"}, … ],
   "terms":  { "입다": {"id": 5, "translation": "to wear", "status": "learning", "deck": "Korean"}, … }
 }
 ```
-`tokens` covers every eojeol with a resolvable lemma (`s`/`e` are char offsets into `content`). `terms` contains saved terms whose lemma **or one of its Epic-20 `forms`** appears in this page's tokens; the map is keyed by the matched string (a direct lemma match wins over a form of the same string) and each entry carries `lemma` + `forms` (so the popover can show the parent dictionary form when a form token is tapped). The frontend renders spans from offsets and applies the highlight class when `token.lemma in terms && status === 'learning'`.
+`tokens` covers every eojeol with a resolvable lemma (`s`/`e` are char offsets into `content`). `terms` contains saved terms whose lemma **or one of its Epic-20 `forms`** appears in this window's tokens; the map is keyed by the matched string (a direct lemma match wins over a form of the same string) and each entry carries `lemma` + `forms` (so the popover can show the parent dictionary form when a form token is tapped). The frontend renders spans from offsets and applies the highlight class when `token.lemma in terms && status === 'learning'`.
 
 ## 6. Tokenizer spec (`server/tokenizer.py`)
 
@@ -172,13 +172,13 @@ Return `list[Token]` with `surface`, `s`, `e` (the stripped-core span, so `text[
 Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** — primary device is a phone. Clean, modern, uncluttered (the user found Jinja UIs "ugly and clunky"; visual quality matters). Config: `output: 'export'`; dev uses `next.config` rewrites `/api/* → http://localhost:8002/api/*`.
 
 Routes:
-- `/` — book list (title, progress `current_page/page_count`), "Add book" modal: title + paste-textarea or `.txt` upload.
+- `/` — book list (title, progress `current_offset/total_chars` as a percentage), "Add book" modal: title + paste-textarea or `.txt` upload.
 - `/read/[bookId]` — the reader:
   - Renders `content` as spans using `tokens` offsets. Base text plain; **only** tokens whose lemma is in `terms` with status `learning` get a subtle highlight. No other visual affordance.
   - **Tap a token** → popover anchored to the word: surface, lemma in an **editable input**, buttons **Translate**, **Dictionary**, **Translate sentence**. Translate → `POST /api/translate` → result fills an **editable textarea**; user enriches freely; deck `<select>` (from settings, default `default_deck`); **Save** → `POST /api/terms` with the (possibly edited) lemma, textarea content, current sentence (extracted around the tap point). On save, every span on the page with that lemma updates instantly (client-side term map).
   - **Tap a highlighted token** → same popover pre-filled from the saved term; Save → `PATCH`; extra actions: mark known / ignore / delete.
   - **Text selection** (long-press drag) of a phrase → same popover with the raw selection as lemma.
-  - Page prev/next; on page change `PATCH` `current_page`. Sentence extraction: from previous sentence-end to next sentence-end around the token.
+  - Page prev/next (client-side CSS-column pages since Epic 24); on page change `PATCH` `current_offset`. Sentence extraction: from previous sentence-end to next sentence-end around the token.
 - `/terms` — table (filter: status, deck, search), inline edit, delete, "**Sync to Anki**" button showing `{added, updated, failed}` toast.
 - `/settings` — deck list editor, default deck, translator backend (deepl/claude).
 
@@ -192,7 +192,7 @@ Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
 3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields still named `Korean`/`English`/`Examples` — unchanged since Epic 21). Content (Epic 22): `Korean` = the lemma alone if it has no extra forms (unchanged simple case), else a numbered stack (`1. 승인<br>2. 승인서`); `English`/`Examples` render from `term_back_items` when the term has any — one line per back item, lettered (`1a.`/`1b.`) when its front entry has 2+ items, bare number/no label otherwise, with `Examples` also carrying the reading sentence first and the free-typed `notes` last. A term with **zero** `term_back_items` (never touched by the Epic 22 popover) renders `English`/`Examples` exactly as before Epic 22 — flat `translation`, the old `examples` JSON column + sentence — untouched legacy behavior. Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
-4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the two-way model → `updateNoteFields` with `Korean`/`English`/`Examples` (same Epic 22 rendering as above); a legacy `Basic` note (`anki_model` NULL, synced before Epic 21) → the old Front/Back path (Front also gains Epic 22's numbering when it has forms), preserving its SRS history. On success clear `anki_dirty`.
+4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the hanja model → `updateNoteFields` with its four fields; anything else → the two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above). The legacy `Basic` path was removed 2026-10-21 (no live notes used it). On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not synced (existing notes left alone).
 
 Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new, update-dirty, per-note failure isolation, Anki-down 503.

@@ -270,7 +270,7 @@ function VocabDepth({ stats }: { stats: Stats }) {
   );
 }
 
-/* ---------- Curation breakdown: what gets promoted vs. rejected (Epic 19) ---------- */
+/* ---------- Curation breakdown: what gets promoted vs. rejected ---------- */
 
 const CURATION_META: { key: keyof CurationCounts; label: string; color: string }[] = [
   { key: "promoted", label: "Promoted", color: "var(--color-accent)" },

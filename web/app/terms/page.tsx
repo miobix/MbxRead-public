@@ -16,13 +16,9 @@ export default function TermsPage() {
   const [deck, setDeck] = useState("");
   const [q, setQ] = useState("");
 
-  // Epic 22 follow-up: editing reuses the reader's full card-builder popover
-  // (dictionary/translate/forms/back_items/examples) instead of the old flat
-  // lemma/translation/notes textareas — that gap predated this epic (Epic 20/21
-  // never touched /terms either) and the user asked for parity.
+  // Editing reuses the reader's card-builder popover.
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
-  // Epic 25: on-demand hanja saves reuse the same popover, opened target-less
-  // (no existing term, no book/page) with hanjaMode on.
+  // "Add word" opens the same popover with no term or book, in hanjaMode.
   const [addingWord, setAddingWord] = useState(false);
 
   const [syncing, setSyncing] = useState(false);
@@ -142,9 +138,8 @@ export default function TermsPage() {
           className="field"
         >
           <option value="">All decks</option>
-          {/* settings.decks is a plain user-edited list — it doesn't automatically
-              include hanja_deck (a separate setting), so merge it in here too or
-              Epic 25's saves are unfilterable. */}
+          {/* hanja_deck is a separate setting, so merge it in or hanja saves can't be
+              filtered. */}
           {[...new Set([...(settings?.decks ?? []), settings?.hanja_deck].filter(
             (d): d is string => !!d
           ))].map((d) => (

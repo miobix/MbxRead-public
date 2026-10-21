@@ -1,4 +1,4 @@
-"""Article/URL extraction — thin wrapper over trafilatura. Epic 12."""
+"""Article/URL extraction — thin wrapper over trafilatura."""
 import trafilatura
 
 

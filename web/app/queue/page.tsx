@@ -102,9 +102,8 @@ export default function QueuePage() {
       });
   }, []);
 
-  // View-mode preference persists across visits; read after mount (not in the
-  // initial useState) so the static export's build-time render never touches
-  // localStorage, and written back whenever the user flips it.
+  // Read after mount, so the static export's build-time render never touches
+  // localStorage.
   useEffect(() => {
     const stored = localStorage.getItem(VIEW_MODE_KEY);
     if (stored === "cards" || stored === "list") setViewMode(stored);

@@ -9,7 +9,7 @@ export function coverageClass(coverage: number): string {
   return "text-ink";
 }
 
-// General/public difficulty bands (Epic 15) — see score_general_difficulty in
+// General difficulty bands; see score_general_difficulty in
 // server/difficulty.py for why these are lower than the personal-coverage bands.
 export function generalLevelClass(level: "easy" | "medium" | "hard"): string {
   if (level === "easy") return "text-accent";

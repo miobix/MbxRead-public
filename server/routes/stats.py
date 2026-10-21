@@ -1,11 +1,7 @@
-"""Reading stats API (Epic 16). See docs/SPEC.md section 5.
+"""Reading stats API: one aggregate blob for the stats screen.
 
-One aggregate blob for the stats screen. All day-buckets are in LOCAL time
-(`date(..., 'localtime')`) — the server runs on the user's own PC, so server-local
-is user-local — which is what makes "today" and the streak line up with the wall
-clock. Activity feeding the streak/heatmap is the UNION of two signals: days a word
-was saved (`terms.created`) and days something was read (`read_days.day`, Epic 24 —
-formerly `page_reads.read_at`, re-keyed by day when page numbers became per-device).
+Day buckets use local time (the server runs on the user's PC, so server-local is
+user-local). Active days = days a word was saved UNION days something was read.
 """
 import sqlite3
 from datetime import date, timedelta
@@ -23,14 +19,8 @@ CURATION_BUCKETS = ("promoted", "user_discarded", "expired", "pending")
 
 
 def _curation_breakdown(conn: sqlite3.Connection) -> dict:
-    """Promoted/user_discarded/expired/pending counts by topic and by feed, over
-    feed-sourced books only (feed_id IS NOT NULL — manual imports never set it, so
-    they're naturally excluded, per SPEC's "what gets read vs. what doesn't" framing
-    being about the automated pipeline specifically). status='library' counts as
-    promoted, status='candidate' as pending, and status='discarded' splits by
-    discard_reason ('user' vs 'expired') — a discarded row with no reason (e.g. a
-    pre-Epic-19 discard) isn't counted in any of the four buckets, since it's
-    genuinely ambiguous which one it belongs to."""
+    """Curation outcome counts by topic and by feed, for feed-sourced books only. A
+    discard with no reason is ambiguous, so it lands in no bucket."""
     rows = conn.execute(
         "SELECT b.topic, b.feed_id, f.name feed_name, b.status, b.discard_reason, "
         "  COUNT(*) c "
@@ -78,9 +68,7 @@ def _curation_breakdown(conn: sqlite3.Connection) -> dict:
 
 
 def _streak(active_days: set[date], today: date) -> dict:
-    """current: consecutive active days ending today (or yesterday, so a day that
-    isn't over yet doesn't prematurely break the streak). longest: the longest run
-    anywhere in the history."""
+    """current: run ending today or yesterday (today isn't over yet). longest: any run."""
     if not active_days:
         return {"current": 0, "longest": 0}
 
@@ -118,16 +106,14 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
         "SELECT COUNT(*) c FROM books WHERE read = 1 AND status = 'library'"
     ).fetchone()["c"]
 
-    # --- daily activity (word-saves + first-page-reads), local-time buckets ---
+    # --- daily activity (word saves + books read), local-time buckets ---
     words_by_day: dict[str, int] = {
         row["d"]: row["c"]
         for row in conn.execute(
             "SELECT date(created, 'localtime') d, COUNT(*) c FROM terms GROUP BY d"
         )
     }
-    # Epic 24: one row per book per day read, replacing the per-page log. The count
-    # is therefore "books read that day", not "pages" — page counts stopped being
-    # comparable once each device paginates for its own screen.
+    # Books read that day, not pages: page numbers differ per device.
     read_by_day: dict[str, int] = {
         row["d"]: row["c"]
         for row in conn.execute("SELECT day d, COUNT(*) c FROM read_days GROUP BY d")

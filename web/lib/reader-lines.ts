@@ -3,19 +3,9 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Epic 24: how many rendered lines one reader page holds.
- *
- * This is deliberately a **per-device** setting in localStorage rather than a server
- * setting: a phone fits ~20 Korean characters per line and a laptop ~27, so a single
- * shared value can only ever be right on one of them. The reader lays pages out with
- * CSS columns (`height: Nlh`), so the browser breaks after exactly this many *real*
- * lines — this is an exact count, not the estimate the retired `page_rows` /
- * `chars_per_row` pair tried to be.
- *
- * Exposed through useSyncExternalStore rather than useState + useEffect so that
- * (a) the prerendered static export and the first client render agree — the server
- * snapshot is the default, and (b) changing it on /settings updates an open reader
- * without a reload, including in another tab via the `storage` event.
+ * Rendered lines per reader page, per device (a phone and a laptop fit different
+ * amounts per line). useSyncExternalStore keeps the static export's first render in
+ * agreement and updates an open reader, even in another tab, without a reload.
  */
 const LINES_KEY = "readerLines";
 

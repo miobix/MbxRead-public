@@ -14,12 +14,14 @@ this first" is actually realistic. See `docs/README.md` for what each doc is for
 Read Korean texts → tap a word → translate (DeepL/krdict) → hand-enrich into a structured
 Anki card → save the term by dictionary form so every inflection highlights → bulk-sync to
 Anki. Content arrives two ways: manual import (paste/txt/YouTube/PDF/EPUB/subtitle
-files/article) and an automated feed roster that fetches candidates into a review Queue. A difficulty scorer
-(personal coverage + a NIKL-vocab general signal) tells you a text's cost before you commit.
-A `/stats` screen tracks reading and vocabulary growth. FastAPI + SQLite + kiwipiepy backend,
-Next.js static-export frontend served by FastAPI, phone access over Tailscale.
+files/article) and an automated feed roster (RSS + YouTube) that fetches candidates into a
+review Queue. A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
+a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
+Sino-Korean words get their own hanja deck and note type, fed by the `/hanja` and
+`/hanja-today` study skills. FastAPI + SQLite + kiwipiepy backend, Next.js static-export
+frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 317 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 326 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -42,72 +44,26 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **13** — Cold-start difficulty signal (NIKL graded vocab, `vocab_levels`)
 - [x] **14** — Curated feed roster + feeds CRUD/`/feeds` page + YouTube fetch
 - [x] **15** — Curation Queue + general-difficulty score + source-type filter
-- [x] **16** — `/stats` screen + UI makeover (page-read logging, provenance)
+- [x] **16** — `/stats` screen + UI makeover (reading log, provenance)
 - [x] **—** — EPUB import (ad-hoc, between 16 and 17)
 - [x] **17** — Fetch automation (Task Scheduler), candidate retention, "Library" terminology
 - [x] **18** — Queue browsing UX (cards/list, chips, sort/filter, length, source link)
 - [x] **19** — Promotion stats (what gets read vs. discarded/expired)
 - [x] **20** — Term forms/aliases + highlighting fix
 - [x] **21** — Dictionary click-to-add + krdict examples + two-way Anki note type
-- [x] **—** — Row-based reader pagination + Library source link + Queue filters (ad-hoc)
-- [x] **22** — Structured Front/Back/Examples card builder (+ same-day follow-up: `/terms`
-  editing parity via the shared popover, 422-error-message fix, popover decluttering)
-- [x] **—** — Pre-go-live storage/UI pass: queue-text auto-purge, **rebrand to
-  "MbxAndria"**, dark-mode `<select>` contrast fix, palette bump, Library/Queue pagination
-- [x] **23** — Go-live: cold-start `start.ps1`, Tailscale phone access, Task Scheduler fetch
-  job — all verified live
+- [x] **22** — Structured Front/Back/Examples card builder
+- [x] **—** — Pre-go-live storage/UI pass (queue-text auto-purge, rebrand, Library/Queue pagination)
+- [x] **23** — Go-live: `start.ps1`, Tailscale phone access, Task Scheduler fetch job
 - [x] **—** — Background tray launcher (ad-hoc)
-- [x] **24** — Client-side reader pagination (both stages) + Library nav/card pass
-- [x] **—** — Subtitle-file import (ad-hoc, 2026-08-18): `.srt/.vtt/.smi/.ass/.ttml`,
-  batch upload for a whole season, source `subs`. Text shaping: SubStation tags
-  stripped for every format, dash-prefixed speaker turns kept on their own lines,
-  2 s of silence becomes a paragraph break. Speaker *names* need an SDH/CC track —
-  a plain track has none to give.
-- [x] **—** — Library card edit affordance (ad-hoc, 2026-08-18): an `edit` button in the
-  card's action column opens a modal for title / topic / tags. `PATCH /books/{id}` already
-  took all three — the UI was the only gap.
-- [x] **25** — Save-a-word: on-demand hanja term entry, separate deck + note type
-  (`Korean Reader Hanja`: Korean/Hanja/English/KoreanDef, Hanja on its own line under
-  Korean on the Front — it disambiguates homographs like 제일 祭日 vs 第一, so it can't be
-  the thing under test). Entry point: "Add word" on `/terms` reuses `TokenPopover`. Verified
-  live: krdict origin/homograph display, save, and a real AnkiConnect sync. Grew out of a
-  separate Hanja-study exploration (`hanja/`, not part of the app) that tried and abandoned
-  full deck automation — see `hanja/DECISIONS.md`. Same-day follow-up (2026-09-02): the
-  `/terms` deck filter didn't include `hanja_deck`, and picking a dictionary *definition*
-  (vs. the headword itself) never captured krdict's `origin` into the Hanja field — both
-  fixed, plus a save-time guard requiring Hanja non-empty from this entry point. The Hanja
-  note type also deliberately ships with only one card direction (Korean+Hanja→English);
-  a reverse card is a manual add in Anki desktop, safe because `ensure_hanja_model()` never
-  touches an existing model.
-- [x] **26** — Multi-hanja terms (2026-09-09): a lemma now holds an *ordered list* of hanja
-  senses (시장 = 市場 market + 市長 mayor), not one spelling. `terms.hanja` is a JSON list
-  (backfilled in place, no table rebuild), a sense's meanings are its `term_back_items`
-  group, and the card renders both as numbered stacks that line up (`1. 市場 / 2. 市長`
-  against `1. market / 2. mayor`). Still **one row and one Anki note per lemma**, so
-  appending a sense updates the existing note and keeps its SRS history. A lemma that's
-  already saved no longer dead-ends on the 409: the popover checks on the Enter that fires
-  the dictionary lookup (`GET /api/terms/by-lemma`), banners what's already there, and turns
-  Save into "Append to <lemma>"; the preview shows the merged card before you commit and
-  `/terms` lists every sense after. See `docs/DECISIONS.md` for why the alternative
-  (`UNIQUE(lemma, hanja)`, one note per sense) was rejected.
-- [x] **27** — `/hanja` study skill (2026-10-02): one character per run, from the user's
-  Anki queue to saved terms. krdict origin search supplies real candidates (modifier
-  derivatives dropped by rule, shown on request), annotated with a corpus count over the
-  user's books, NIKL rank and homographs; the skill shows up to 3 per usage category and
-  appends senses through `save`, or converts a reading-saved word in place (`--convert`).
-  The `Hanja::*` Anki decks are read-only to it. Logic is
-  `server/hanja_study.py` + `scripts/hanja_study.py`; rationale in `docs/DECISIONS.md`.
-- [x] **28** — Visual redesign (2026-10-07): indigo palette (light + dark), Noto Sans KR,
-  full-line-height learning highlights, progress as metro stations (one per 10%), a
-  lemma-first word card, and one button language app-wide (solid primary per screen).
-  Frontend only; spec in SPEC Epic 28.
-- [x] **29** — Local hanja pipeline (2026-10-14): `/hanja` candidates and homographs come
-  from a vendored libhangul word list, so `char` sends no krdict request; krdict is used only
-  by `defs` for a picked word, cached, and pauses itself 30 min after any failure. New
-  `/hanja-today` skill: one call writes `hanja_output/<date>.md` (gitignored) for the
-  current study deck's characters of the day (official 훈음, 훈 word, 5-8 checked words with
-  register). Deck is `STUDY_DECK` in `server/hanja_study.py`; change it when the user moves
-  on from 4급-II.
+- [x] **24** — Client-side reader pagination + Library nav/card pass
+- [x] **—** — Subtitle-file import (`.srt/.vtt/.smi/.ass/.ttml`, batch) + Library card edit (ad-hoc)
+- [x] **25** — Save-a-word: on-demand hanja terms, own deck + `Korean Reader Hanja` note type
+- [x] **26** — Multi-hanja terms: one lemma, an ordered list of hanja senses, one note
+- [x] **27** — `/hanja` study skill (one character per run; `Hanja::*` decks read-only)
+- [x] **28** — Visual redesign (indigo palette, Noto Sans KR, metro-station progress)
+- [x] **29** — Local hanja pipeline (libhangul word list) + `/hanja-today` daily list
+- [x] **—** — Over-engineering cleanup, 2026-10-21 (dead migrations, legacy Basic sync,
+  `/pages/{n}`, scraper feed type; see `DECISIONS.md`)
 
 ## Live operational facts
 
@@ -127,30 +83,35 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   unchanged; nothing else was touched).
 - **Tailscale** address: `<machine>.<tailnet>.ts.net` — phone reaches the app at
   `http://<machine>.<tailnet>.ts.net:8002`.
-- **Reader pagination is client-side** (Epic 24). The browser breaks pages with CSS columns
-  after exactly N rendered lines; N lives in **localStorage per device** (`readerLines`,
-  default 15, editable on `/settings`) — your phone and the laptop each keep their own. The
-  footer shows a percentage, not a page number, because page numbering is now per-device.
-  Position is `books.current_offset`, a character offset, so devices stay in sync.
-- **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text (tokens
-  computed on read). Since Epic 24 `pages` is *storage only* — the reader reads
-  `GET /api/books/{id}/text?offset=`, not `/pages/{n}`. As of go-live: ~200 books / 1.14M chars / 3.7MB — nowhere near a
-  constraint. Discarded article/yt candidates have their `pages` text auto-purged (Epic 17
-  retention + the storage pass); paste/pdf/epub/txt text is kept indefinitely.
+- **Reader pagination is client-side.** The browser breaks pages with CSS columns after
+  exactly N rendered lines; N lives in **localStorage per device** (`readerLines`, default
+  15, editable on `/settings`). The footer shows a percentage, not a page number. Position is
+  `books.current_offset`, a character offset, so devices stay in sync.
+- **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text in ~1500-char
+  slices (storage only; the reader reads `GET /api/books/{id}/text?offset=`). As of go-live:
+  ~200 books / 1.14M chars / 3.7MB. Discarded article/yt candidates have their `pages` text
+  auto-purged; paste/pdf/epub/txt text is kept indefinitely.
+- **Hanja study deck** is `STUDY_DECK` in `server/hanja_study.py` (currently 4급-II); change
+  it when the user moves on. `/hanja-today` writes `hanja_output/<date>.md` (gitignored).
+- **Schema upgrades are additive only** (`_ADDED_COLUMNS` in `server/db.py`). The one-time
+  Epic 24/26 migrations were removed 2026-10-21; a `reader.db` backup older than Epic 26
+  must be opened with a checkout from before commit `6d7eb08` to upgrade it.
 
 ## Open follow-ups (not blockers)
 
+- **Two small bugs found by the 2026-10-21 audit** (for a `/code-review` pass):
+  `score_book` joins pages with `"\n"` while `/text` joins them with `""`, so a score sees
+  slightly different text than the reader; and the Claude translator is selectable in
+  Settings but `anthropic` is not in `requirements.txt`.
+- **Audit items 11–15 not done:** the term-without-back_items rendering branches in
+  `anki_sync.py` (check whether `/terms` can still create one first), `html_unescape` wrapper
+  in `import_tools/yt_subs.py`, `score_book` reusing `_book_text`, the duplicate `except` in
+  `import_subtitles`, and the one-caller `_group_key`.
 - **One feed still errors:** `김성회의 G식백과` (YouTube) hit a transient Atom-feed fetch
-  error during the go-live run, correctly isolated from the other 14 feeds. Worth a manual
-  retry to confirm it clears; reads as network/rate-limit, not a regression.
-- **Live-Anki two-way card check:** Epics 21–22 built a custom two-way note type
-  (KO→EN / EN→KO, examples on the back of both, front of neither) and numbered/lettered
-  Front/Back stacks, but were implemented without a live Anki desktop in the build
-  environment. Worth confirming once, on a real sync, that a multi-sense word's card
-  matches the popover preview and that pre-Epic-21 `Basic` notes still update in place
-  without losing SRS history.
-- **Epic 28 light mode** was built from the same tokens but only checked in dark mode
-  (the machine runs dark); worth one look on a light-mode device.
+  error during the go-live run. Worth a manual retry; reads as network/rate-limit.
+- **Live-Anki two-way card check:** worth confirming once, on a real sync, that a
+  multi-sense word's card matches the popover preview.
+- **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
 
 ## Gotcha for future dev sessions
 

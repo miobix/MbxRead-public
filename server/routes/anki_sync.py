@@ -16,11 +16,7 @@ DEFAULT_DECK = "Default"
 
 
 def _render_legacy_examples(examples: list[str], sentence: str) -> str:
-    """Pre-Epic-22 Examples rendering, for a term the structured card builder has
-    never touched (no term_back_items rows): clicked-in krdict collocations (the
-    old flat `examples` JSON column) plus the captured reading sentence, one per
-    line. Kept so an untouched term keeps syncing exactly as it did before this
-    epic — the "legacy stays as it is" guarantee extended to the Anki side."""
+    """Examples for a term without Back chips: the flat `examples` list plus the sentence."""
     parts = [*examples]
     if sentence:
         parts.append(sentence)
@@ -28,10 +24,7 @@ def _render_legacy_examples(examples: list[str], sentence: str) -> str:
 
 
 def _front_entries(conn: sqlite3.Connection, term_id: int, lemma: str) -> list[dict]:
-    """The card's Front stack: the lemma's own group first, then each extra form
-    (Epic 20), in save order. Each entry's `text` doubles as the group key used to
-    look up its term_back_items — except the lemma, whose group key is the ''
-    sentinel, so editing the lemma text never orphans its back items (Epic 22)."""
+    """The Front stack: the lemma (group '') then each form, which is its own group key."""
     return [{"text": lemma, "kind": "lemma", "group": ""}] + [
         {"text": f["text"], "kind": f["kind"], "group": f["text"]}
         for f in _forms_for(conn, term_id)
@@ -43,10 +36,7 @@ def _group_key(front_entries: list[dict], index: int) -> str:
 
 
 def _render_korean(front_entries: list[dict]) -> str:
-    """Front face. One entry (just the lemma — Epic 20's common no-forms case)
-    renders exactly as before: the bare lemma, no numbering. Two or more entries
-    render as a numbered stack, one per line, so the Back/Examples labels below
-    have something to reference (Epic 22)."""
+    """One entry renders bare; several render numbered so Back labels can point at them."""
     if len(front_entries) == 1:
         return front_entries[0]["text"]
     return "<br>".join(f"{i + 1}. {e['text']}" for i, e in enumerate(front_entries))
@@ -55,12 +45,8 @@ def _render_korean(front_entries: list[dict]) -> str:
 def _label_items(
     front_entries: list[dict], back_items: list[dict]
 ) -> list[tuple[str, dict]]:
-    """Pairs every back item with its display label. A front entry with exactly
-    one back item gets a bare number (or no label at all, if there's only one
-    front entry too — today's simple one-word-one-meaning case); a front entry
-    with several back items letters them `1a.`/`1b.` so it's unambiguous which
-    word they came from. Back and Examples both render from this same list, so
-    their labels always line up."""
+    """Label each back item: `1.` for one item per entry, `1a.`/`1b.` for several, none
+    when there is a single entry. Back and Examples share this so labels line up."""
     num_fronts = len(front_entries)
     by_group: dict[str, list[dict]] = {}
     for item in back_items:
@@ -87,12 +73,7 @@ def _render_english(labeled: list[tuple[str, dict]]) -> str:
 def _render_examples_field(
     sentence: str, labeled: list[tuple[str, dict]], notes: str
 ) -> str:
-    """Epic 22: the reading sentence, then each dict-sourced item's Korean
-    definition (its krdict example, if any, glued directly onto the end — no
-    separator — at add-time in the popover), labeled to match the Back field, then
-    the free-typed Notes block last. The three blocks (sentence / definitions /
-    notes) are blank-line separated so the captured sentence doesn't crowd the first
-    definition on the Anki card."""
+    """Sentence, labeled Korean definitions, then notes, as blank-line separated blocks."""
     definitions = [
         f"{label} {item['korean_def']}".strip()
         for label, item in labeled
@@ -105,14 +86,11 @@ def _render_examples_field(
         blocks.append(definitions)
     if notes:
         blocks.append([notes])
-    # One <br> between lines within a block, a blank line (<br><br>) between blocks.
     return "<br><br>".join("<br>".join(block) for block in blocks)
 
 
 def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str]:
-    """Korean/English/Examples for the two-way model. A term with no back_items
-    yet (never touched by the Epic 22 popover) renders English/Examples exactly as
-    it did before this epic — flat `translation`, old `examples` JSON column."""
+    """Korean/English/Examples for the two-way model."""
     front_entries = _front_entries(conn, row["id"], row["lemma"])
     korean = _render_korean(front_entries)
     back_items = _back_items_for(conn, row["id"])
@@ -127,15 +105,13 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
 
 
 def _sense_entries(senses: list[str]) -> list[dict]:
-    """Epic 26: the hanja card's label axis is the sense list, not the Front stack —
-    each spelling is its own entry, keyed by itself so its Back chips group under it."""
+    """Hanja cards label by sense, not by Front entry; each spelling is its own group."""
     return [{"text": h, "kind": "hanja", "group": h} for h in senses]
 
 
 def _regroup_to_senses(back_items: list[dict], senses: list[str]) -> list[dict]:
-    """Fold any chip whose group names no sense (the pre-Epic-26 '' lemma group that
-    escaped the backfill, or a form's group on a hanja term) into the first sense, so
-    a meaning is never silently dropped from the card."""
+    """Fold chips whose group names no sense (e.g. the '' lemma group) into the first
+    sense, so no meaning silently drops off the card."""
     known = set(senses)
     return [
         item if item["group"] in known else {**item, "group": senses[0]}
@@ -144,11 +120,8 @@ def _regroup_to_senses(back_items: list[dict], senses: list[str]) -> list[dict]:
 
 
 def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str, str]:
-    """Korean/Hanja/English/KoreanDef for the hanja model. Same building blocks as the
-    two-way model's rendering. On-demand saves have no sentence; a term converted from
-    a reading save (Epic 27) carries its book sentence into KoreanDef. Epic 26: a word with several hanja
-    senses renders them as a numbered stack in the Hanja field, and the English labels
-    line up with those numbers (one sense still renders bare, as it did in Epic 25)."""
+    """Korean/Hanja/English/KoreanDef for the hanja model; several senses render as a
+    numbered Hanja stack that the English labels line up with."""
     korean = _render_korean(_front_entries(conn, row["id"], row["lemma"]))
     senses = hanja_list(row["hanja"])
     sense_entries = _sense_entries(senses)
@@ -171,8 +144,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     except anki.AnkiError as e:
         return JSONResponse(status_code=503, content={"error": str(e)})
 
-    # Best-effort like create_deck below — if the model can't be created, the
-    # per-note addNote calls fail and land in `failed`, isolated from the rest.
+    # Best-effort: if a model is missing, its addNote calls fail per note in `failed`.
     try:
         anki.ensure_model()
     except anki.AnkiError:
@@ -214,8 +186,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     updated = 0
     failed: list[dict] = []
 
-    # New terms → the Epic 21 two-way model (Korean/English/Examples), tagged with
-    # the model name so later edits update it in place rather than the legacy path.
+    # Stamp anki_model so later edits update the right note type.
     for row in new_terms:
         try:
             if hanja_list(row["hanja"]):

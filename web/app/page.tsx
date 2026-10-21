@@ -8,9 +8,7 @@ import { GeneralScoreLine, ScoreLine } from "@/lib/score-display";
 import { SOURCES, TOPICS } from "@/lib/topics";
 import { AddBookSheet, EditBookSheet } from "./LibrarySheets";
 
-// 2026-07-24: fetch one extra row beyond the page size to detect "there's more"
-// without a separate count endpoint — a plain array response stays backward
-// compatible with every existing caller that omits limit/offset entirely.
+// One extra row beyond the page size tells us "there's more" without a count endpoint.
 const PAGE_SIZE = 30;
 
 const SORTS: { key: BookSort; label: string }[] = [
@@ -306,8 +304,7 @@ export default function HomePage() {
                 {book.title}
               </Link>
 
-              {/* A percentage of the text, not a page number: pages are per-device
-                  since Epic 24. */}
+              {/* A percentage, not a page number: pages are per-device. */}
               <div className="flex items-center gap-3">
                 <div className="h-1 flex-1 rounded-full bg-line">
                   <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />

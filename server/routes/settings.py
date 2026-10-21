@@ -9,15 +9,7 @@ from .. import db as db_module
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# Epic 24 removed `page_rows` and `chars_per_row`. Reader pagination is client-side
-# now (CSS columns, exact N rendered lines), and lines-per-page is a *per-device*
-# localStorage value — a phone and a laptop fit different amounts of text per line,
-# so a single server-side value could only ever be right on one of them. The
-# repaginate_all machinery that ran on every change went with them.
-
-# Epic 17: how many days an unpromoted/undiscarded candidate sits in the Queue
-# before the fetch job auto-discards it (see _expire_stale_candidates in
-# routes/feeds.py). Tunable from /settings.
+# Days a Queue candidate waits before the fetch job auto-discards it.
 DEFAULT_CANDIDATE_RETENTION_DAYS = 7
 
 DEFAULTS = {
@@ -25,12 +17,9 @@ DEFAULTS = {
     "default_deck": "Korean",
     "translator_backend": "deepl",
     "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-    # Epic 25: separate deck for on-demand hanja saves, distinct from the user's
-    # existing "Hanja" character-review deck — 한자어 (Sino-Korean vocabulary) is
-    # exactly what this one holds.
+    # Sino-Korean words, kept apart from the user's own Hanja::* character decks.
     "hanja_deck": "한자어",
-    # Epic 17: system-managed, not user-editable — see SettingsPut below. Stamped by
-    # POST /api/feeds/fetch (scheduled or manual) via stamp_last_fetch_attempt().
+    # System-managed: stamped by the fetch job, absent from SettingsPut.
     "last_fetch_attempt": None,
 }
 
@@ -41,9 +30,7 @@ class SettingsPut(BaseModel):
     translator_backend: str | None = None
     candidate_retention_days: int | None = Field(default=None, ge=1, le=90)
     hanja_deck: str | None = None
-    # last_fetch_attempt is deliberately NOT a field here — it's stamped internally
-    # by the fetch job, never by the user, so a PUT body can't overwrite it (an
-    # unknown field in the request body is simply ignored by pydantic).
+    # No last_fetch_attempt: pydantic drops it from a PUT body, so users can't set it.
 
 
 def _read(conn: sqlite3.Connection) -> dict:
@@ -57,10 +44,8 @@ def get_candidate_retention_days(conn: sqlite3.Connection) -> int:
 
 
 def stamp_last_fetch_attempt(conn: sqlite3.Connection) -> None:
-    """Records that a fetch was attempted, regardless of whether it succeeds —
-    called first thing in POST /api/feeds/fetch so a run that errors out partway
-    still leaves an accurate timestamp. Uses SQLite's own CURRENT_TIMESTAMP (not
-    Python's clock) to match every other TIMESTAMP column's format in this app."""
+    """Record a fetch attempt, successful or not. SQLite's clock keeps the format of
+    every other TIMESTAMP column."""
     now = conn.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
     conn.execute(
         "INSERT INTO settings (key, value) VALUES ('last_fetch_attempt', ?) "
@@ -85,5 +70,4 @@ def put_settings(body: SettingsPut, conn: sqlite3.Connection = Depends(db_module
             (key, json.dumps(value)),
         )
     conn.commit()
-    # No setting re-paginates the library any more (Epic 24) — a plain write.
     return _read(conn)

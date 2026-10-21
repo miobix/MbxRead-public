@@ -26,14 +26,8 @@ export const MAX_SELECTED_SENTENCES = 2;
 export const MAX_SELECTED_CHARS = 200;
 
 /**
- * Trims a raw selection down to its **tail** — at most the last two sentences, and
- * never more than MAX_SELECTED_CHARS.
- *
- * Selecting inside the reader's multi-column flow can hand back far more than was
- * dragged over (see the reader's `readSelection`), and the runaway is always at the
- * *head*: the end of the selection is where the drag actually finished. So keep the
- * end, drop the front. The result is still a contiguous slice of the content, so a
- * caller can locate it with `indexOf`.
+ * Keep a selection's tail (last two sentences, at most MAX_SELECTED_CHARS): a runaway
+ * selection always overshoots at the head. Still a contiguous slice, so `indexOf` works.
  */
 export function capSelection(
   text: string,

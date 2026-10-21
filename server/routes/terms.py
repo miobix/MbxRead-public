@@ -11,10 +11,8 @@ from .. import db as db_module
 router = APIRouter(prefix="/api/terms", tags=["terms"])
 
 Status = Literal["learning", "known", "ignored"]
-# A change to any of these re-syncs the Anki card. `examples` (Epic 21) is a real
-# JSON column but the value is compared as its stored JSON string, so it fits the
-# same generic dirty check as the plain text columns. `translation` also changes
-# whenever `back_items` (Epic 22) does — see the derived-mirror note on patch_term.
+# A change to any of these re-syncs the Anki card. JSON columns compare as their
+# stored strings, so they fit the same check.
 _DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples", "hanja"}
 
 
@@ -37,21 +35,14 @@ class TermCreate(BaseModel):
     status: Status = "learning"
     deck: str = ""
     sentence: str = ""
-    # Epic 20: extra surface forms this term also covers (승인서/승인하다 under 승인).
-    # Epic 22: each now carries `kind` (dict-clicked vs hand-typed) for the popover.
     forms: list[FormIn] = []
-    # Epic 21: usage examples (krdict collocations + the reading sentence) shown on
-    # the back of the Anki card. Display-only, never matched against page tokens.
     examples: list[str] = []
-    # Epic 22: the structured card builder's Back chips, grouped by `group`.
     back_items: list[BackItemIn] = []
-    # Epic 16: which book/page this term was first saved from (reader passes both).
-    # Nullable — terms saved outside the reader (e.g. from /terms) have no origin.
+    # Where the term was first saved from; None outside the reader.
     source_book_id: int | None = None
     source_page: int | None = None
-    # Epic 25/26: hanja spellings for on-demand Sino-Korean word saves, one per
-    # sense (시장 = 市場 market + 市長 mayor), ordered. Empty for every reading-flow
-    # term. Each sense's meanings are the back_items whose `group` is that spelling.
+    # One spelling per sense (시장 = 市場 + 市長); a sense's meanings are the
+    # back_items whose `group` is that spelling.
     hanja: list[str] = []
 
 
@@ -207,9 +198,8 @@ def list_terms(
 
 @router.get("/by-lemma")
 def get_term_by_lemma(lemma: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    """Exact-lemma lookup. The list endpoint's `q` is a LIKE across three columns,
-    which can't answer "is this word already saved?" — the question the popover asks
-    before it offers to append a hanja sense to an existing term (Epic 26)."""
+    """Exact-lemma lookup (the list's `q` is a fuzzy LIKE), so the popover can offer to
+    append a hanja sense to a saved word."""
     row = conn.execute("SELECT * FROM terms WHERE lemma = ?", (lemma.strip(),)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="term not found")
@@ -219,11 +209,8 @@ def get_term_by_lemma(lemma: str, conn: sqlite3.Connection = Depends(db_module.g
 @router.post("", status_code=201)
 def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
     back_items = _normalize_back_items([it.model_dump() for it in body.back_items])
-    # Epic 22: when the popover's card builder was used, `translation` is derived
-    # from the Back chips (join order = group order), not typed directly — purely so
-    # /terms' list/search/inline-edit still shows something sensible. An empty
-    # back_items list (e.g. a direct API call, or /terms-style flat creation) leaves
-    # `translation` exactly as given, unchanged from today's behavior.
+    # With Back chips, `translation` mirrors them so /terms search and listing still
+    # work; without, it is kept as given.
     translation = "; ".join(it["text"] for it in back_items) if back_items else body.translation
     try:
         cur = conn.execute(
@@ -262,8 +249,7 @@ def patch_term(
     row = _get_term_or_404(conn, term_id)
     fields = body.model_dump(exclude_unset=True)
 
-    # `forms` is not a terms column — pull it out and persist it separately. It's a
-    # dirty trigger like translation/deck (it changes the Anki card's Korean face).
+    # Not a terms column: stored separately, but still marks the card dirty.
     forms_provided = "forms" in fields
     new_forms = (
         _normalize_forms(fields.pop("forms") or [], fields.get("lemma", row["lemma"]))
@@ -271,9 +257,7 @@ def patch_term(
         else None
     )
 
-    # `back_items` is not a terms column either — same treatment. Epic 22: whenever
-    # the popover sends a (complete, replace-all) back_items array, `translation` is
-    # re-derived from it, overriding anything separately sent — see create_term.
+    # Same for back_items, which also re-derive `translation` (see create_term).
     back_items_provided = "back_items" in fields
     new_back_items = (
         _normalize_back_items(fields.pop("back_items") or []) if back_items_provided else None
@@ -283,14 +267,10 @@ def patch_term(
             "; ".join(it["text"] for it in new_back_items) if new_back_items else ""
         )
 
-    # `examples` IS a column (JSON), but the value arrives as a list — normalize and
-    # re-encode it back into `fields` so the generic UPDATE + dirty check below both
-    # handle it (it's in _DIRTY_TRIGGER_FIELDS; the DB stores its JSON string).
+    # JSON columns arrive as lists; re-encode so the generic UPDATE and dirty check work.
     if "examples" in fields:
         fields["examples"] = json.dumps(_normalize_strings(fields["examples"] or []))
 
-    # Same treatment as `examples`: a real column whose value arrives as a list, so
-    # re-encode it here and the generic UPDATE + dirty check below both just work.
     if "hanja" in fields:
         fields["hanja"] = json.dumps(_normalize_strings(fields["hanja"] or []), ensure_ascii=False)
 
@@ -341,10 +321,8 @@ class HanjaConvert(BaseModel):
 def convert_to_hanja(
     term_id: int, body: HanjaConvert, conn: sqlite3.Connection = Depends(db_module.get_db)
 ):
-    """Turn a reading-saved term into a hanja term in place (Epic 27). Same row, so the
-    reader still highlights it and its sentence/examples/source survive; sync state is
-    reset so the next sync adds a fresh Hanja-model note. The old Anki note is not
-    touched (the response names it)."""
+    """Turn a reading-saved term into a hanja term in place, keeping its highlight and
+    history. Sync state resets so a Hanja note is added; the old note is left alone."""
     row = _get_term_or_404(conn, term_id)
     if hanja_list(row["hanja"]):
         raise HTTPException(status_code=409, detail="term already has hanja; append a sense")

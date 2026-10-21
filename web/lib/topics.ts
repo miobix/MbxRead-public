@@ -1,5 +1,4 @@
-// Shared taxonomy used by the home filter, the add-book modal, and the /feeds
-// editor. Epic 14 added ideas/science/tech alongside the original set.
+// Shared by the home filter, the add-book modal, and the /feeds editor.
 export const TOPICS = [
   "gaming",
   "ideas",
