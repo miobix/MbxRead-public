@@ -1547,3 +1547,30 @@ checked against the live `reader.db` (read-only) before it went.
 - **No old-backup restores (user, 2026-10-21).** The live DB has moved on since deployment and
   the user won't restore a pre-cleanup backup, so there is no stale-schema guard in
   `init_db`. Future reviews: findings that need a pre-cleanup `reader.db` are out of scope.
+
+## 2026-10-21 — Hardening pass after the cleanup
+
+Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since July),
+`scripts/fetch_feeds.log` (4 runs), `translate_cache.sqlite3`, live `reader.db` (read-only).
+
+- **Solid ground (checked, nothing found):** 0 tracebacks; the only 5xx are designed 503s
+  (5 krdict-paused, 2 Anki-closed). krdict never caches a failed response, its cooldown is
+  not stuck, and the cache is 900 rows / 3.9 MB from one hanja session (growth is use-driven,
+  no expiry needed). DeepL cache is 141 rows. Settings rows match DEFAULTS (no drift);
+  `requirements.txt` is fully `==`-pinned and `web/package-lock.json` exists. Fresh-DB init
+  runs on every test (temp sqlite), so the first-run path is exercised continuously.
+  Per-request DB connections close in `finally`; the fetch job isolates per-feed failures.
+- **Noise, by design:** 1,178 404s are `GET /api/terms/by-lemma` answering "not saved yet";
+  10 are Chrome devtools probes; 1 is the removed `/pages/{n}` (my own smoke test).
+- **Fixed:** `server.log` was append-only forever and the tray leaked one file handle per
+  restart. The tray now rotates the log at start past 5 MB (one `server.log.1` kept, also
+  gitignored) and closes its handle after launch. yt-dlp progress bars no longer land in the
+  log (`noprogress`). The tray docstring said Task Scheduler; it is a Startup shortcut.
+  STATUS's "feed still errors" follow-up was stale: that feed fetched fine on 07-25..27.
+- **Proposed, not done (in STATUS):** 473 stale candidates because expiry only runs inside
+  the paused fetch; yt-dlp's Python 3.10 deprecation and missing JS runtime; Next.js
+  prefetch 404s (~720, a naming mismatch between the client and the static export).
+- **Minor, noted only:** `fetch_feeds.log` shows Korean feed names as mojibake (PowerShell
+  5.1 decodes the JSON as ANSI); the tray has no watchdog if uvicorn dies (no crash seen in
+  the log); the tray icon still reads "MA" in the old orange; the `import_tools` CLIs
+  overwrite their output file without asking.

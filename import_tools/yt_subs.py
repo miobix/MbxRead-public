@@ -32,6 +32,7 @@ def fetch_subs(url: str) -> tuple[str, str, str, int | None]:
             "subtitlesformat": "vtt",
             "outtmpl": str(Path(tmp) / "%(id)s.%(ext)s"),
             "quiet": True,
+            "noprogress": True,
         }
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)

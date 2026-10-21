@@ -102,8 +102,15 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - **Claude translator is selectable but not installable:** Settings offers it, but
   `anthropic` is not in `requirements.txt`. Unused today (DeepL in settings and `.env`, no
   Anthropic key); the user deferred adding the dependency (2026-10-21).
-- **One feed still errors:** `김성회의 G식백과` (YouTube) hit a transient Atom-feed fetch
-  error during the go-live run. Worth a manual retry; reads as network/rate-limit.
+- **473 stale Queue candidates.** Expiry only runs inside the feed fetch, which has been
+  paused since 2026-07-27, so candidates from July sit in the Queue (with their text). The
+  user decides: run one fetch, expire them without fetching, or leave them.
+- **yt-dlp on Python 3.10.** yt-dlp warns that 3.10 is deprecated and that YouTube needs a
+  JS runtime (deno); the pin (2026.07.04) works today, but a future yt-dlp upgrade, the
+  usual fix when YouTube breaks, will need the venv rebuilt on Python 3.11+.
+- **Next.js prefetch 404s.** Client navigation asks for `/x/__next.x.__PAGE__.txt`; the
+  static export writes `/x/__next.x/__PAGE__.txt`. Navigation falls back to a full page
+  load (works, slower). Fix in FastAPI's static serving or a Next config, when it matters.
 - **Live-Anki two-way card check:** worth confirming once, on a real sync, that a
   multi-sense word's card matches the popover preview.
 - **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
