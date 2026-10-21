@@ -151,6 +151,16 @@ def test_pdf_import_extract_failure_returns_502(client, monkeypatch):
     assert resp.json() == {"error": "cannot open broken document"}
 
 
+def test_pdf_import_empty_text_returns_502(client, monkeypatch):
+    monkeypatch.setattr(imports_route, "extract_pdf", lambda content, page_range: "  \n")
+
+    resp = client.post(
+        "/api/import/pdf", files={"file": ("scan.pdf", b"%PDF image only", "application/pdf")}
+    )
+    assert resp.status_code == 502
+    assert resp.json() == {"error": "No extractable text in this PDF."}
+
+
 def test_epub_import_creates_book(client, monkeypatch):
     monkeypatch.setattr(
         imports_route, "extract_epub", lambda content: "이펍 본문 내용입니다."

@@ -10,6 +10,7 @@ same convention as `routes/translate.py`.
 import hashlib
 import sqlite3
 from pathlib import Path
+from typing import Callable
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -33,6 +34,44 @@ class UrlImport(BaseModel):
     url: str
     topic: str = ""
     tags: list[str] = []
+
+
+def _split_tags(tags: str) -> list[str]:
+    return [t.strip() for t in tags.split(",") if t.strip()]
+
+
+async def _import_file(
+    conn: sqlite3.Connection,
+    file: UploadFile,
+    extract: Callable[[bytes], str],
+    source: str,
+    title: str,
+    topic: str,
+    tags: str,
+):
+    content = await file.read()
+    try:
+        text = extract(content)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": str(e)})
+    if not text.strip():
+        return JSONResponse(
+            status_code=502, content={"error": f"No extractable text in this {source.upper()}."}
+        )
+    try:
+        return insert_book(
+            conn,
+            title=title.strip() or Path(file.filename or f"untitled.{source}").stem,
+            text=text,
+            source=source,
+            topic=topic,
+            tags=_split_tags(tags),
+            source_ref=f"{source}:{hashlib.sha256(content).hexdigest()}",
+        )
+    except DuplicateSourceRef:
+        raise HTTPException(
+            status_code=409, detail=f"this {source.upper()} has already been imported"
+        )
 
 
 @router.post("/youtube", status_code=201)
@@ -87,27 +126,10 @@ async def import_pdf(
     pages: str = Form(""),
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    content = await file.read()
     page_range = parse_page_range(pages) if pages else None
-    try:
-        text = extract_pdf(content, page_range)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": str(e)})
-    book_title = title.strip() or Path(file.filename or "untitled.pdf").stem
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    digest = hashlib.sha256(content).hexdigest()
-    try:
-        return insert_book(
-            conn,
-            title=book_title,
-            text=text,
-            source="pdf",
-            topic=topic,
-            tags=tag_list,
-            source_ref=f"pdf:{digest}",
-        )
-    except DuplicateSourceRef:
-        raise HTTPException(status_code=409, detail="this PDF has already been imported")
+    return await _import_file(
+        conn, file, lambda c: extract_pdf(c, page_range), "pdf", title, topic, tags
+    )
 
 
 @router.post("/epub", status_code=201)
@@ -118,30 +140,7 @@ async def import_epub(
     tags: str = Form(""),
     conn: sqlite3.Connection = Depends(db_module.get_db),
 ):
-    content = await file.read()
-    try:
-        text = extract_epub(content)
-    except Exception as e:
-        return JSONResponse(status_code=502, content={"error": str(e)})
-    if not text.strip():
-        return JSONResponse(
-            status_code=502, content={"error": "No extractable text in this EPUB."}
-        )
-    book_title = title.strip() or Path(file.filename or "untitled.epub").stem
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    digest = hashlib.sha256(content).hexdigest()
-    try:
-        return insert_book(
-            conn,
-            title=book_title,
-            text=text,
-            source="epub",
-            topic=topic,
-            tags=tag_list,
-            source_ref=f"epub:{digest}",
-        )
-    except DuplicateSourceRef:
-        raise HTTPException(status_code=409, detail="this EPUB has already been imported")
+    return await _import_file(conn, file, extract_epub, "epub", title, topic, tags)
 
 
 @router.post("/subtitles", status_code=201)
@@ -165,7 +164,7 @@ async def import_subtitles(
     file is uploaded — for a batch each book is titled from its own filename.
     """
     ordered = sorted(files, key=lambda f: (f.filename or "").lower())
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = _split_tags(tags)
     imported: list[dict] = []
     skipped: list[dict] = []
     failed: list[dict] = []
