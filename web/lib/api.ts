@@ -158,14 +158,6 @@ export type TextWindow = {
   terms: Record<string, TermSummary>;
 };
 
-export type Page = {
-  page_no: number;
-  page_count: number;
-  content: string;
-  tokens: Token[];
-  terms: Record<string, TermSummary>;
-};
-
 export type DictEntry = {
   word: string;
   pos: string;
@@ -331,9 +323,6 @@ export const api = {
       status?: BookStatus;
     }
   ) => request<Book>(`/books/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-
-  getPage: (bookId: number, pageNo: number) =>
-    request<Page>(`/books/${bookId}/pages/${pageNo}`),
 
   getText: (bookId: number, offset: number) =>
     request<TextWindow>(`/books/${bookId}/text?offset=${Math.max(0, Math.floor(offset))}`),

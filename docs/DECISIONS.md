@@ -1494,3 +1494,6 @@ checked against the live `reader.db` (read-only) before it went.
   note is on `Korean Reader 2-way` or `Korean Reader Hanja`), so `add_note`,
   `update_note_fields`, `_render_back` and the sync's fallback branch were dead. A dirty
   term whose `anki_model` is not the hanja model now updates as a two-way note.
+- **`GET /api/books/{id}/pages/{n}` removed.** Nothing has called it since Epic 24 moved the
+  reader to `/text`. Its tests now hit `/text`, which shares the same token/highlight code.
+  `pages` stays as the storage table.

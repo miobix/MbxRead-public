@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS terms (
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 -- Epic 20: extra surface forms a single term also covers (e.g. 승인서/승인하다 under
--- lemma 승인). Each form both highlights in the reader (matched in books.get_page
+-- lemma 승인). Each form both highlights in the reader (matched in books.get_text
 -- alongside the term's own lemma) and renders on the Korean face of the Anki card.
 -- `lemma` stays the one clean dictionary form so tokenizer matching is unaffected;
 -- these are the aliases. Plain CREATE TABLE (like `pages`/`page_reads`); ON DELETE
@@ -162,7 +162,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "feed_id": "INTEGER",
         "discard_reason": "TEXT",
         # 2026-07-24: "most recently opened" sort for the Library. Stamped every
-        # time a page is actually viewed (routes/books.py's get_page), not on
+        # time text is actually viewed (routes/books.py's get_text), not on
         # create/patch, so it reflects reading activity rather than list churn.
         "last_opened": "TIMESTAMP",
     },
@@ -171,7 +171,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # the "Add entry" form? Existing rows default to 'manual' — they were all
         # typed into the old free-text "Also highlight" input, which is exactly what
         # they are. Drives chip color/behavior in the popover; matching against page
-        # tokens (books.get_page) doesn't care about it.
+        # tokens (books.get_text) doesn't care about it.
         "kind": "TEXT NOT NULL DEFAULT 'manual'",
     },
 }
