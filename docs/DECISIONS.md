@@ -1504,3 +1504,6 @@ checked against the live `reader.db` (read-only) before it went.
   The fetcher never had scraper logic and nothing read the difficulty range (0 live rows
   used either). The DB columns and CHECK stay, since removing them needs a table rebuild for
   no gain. `skipped_feed_types` went with scraper (it could only ever be 0).
+- **PDF and EPUB imports share `_import_file`.** The two routes were the same function. One
+  behaviour change: a PDF with no extractable text (an image-only scan) now gets the EPUB's
+  502 "No extractable text" instead of becoming an empty book.
