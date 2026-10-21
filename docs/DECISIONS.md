@@ -1574,3 +1574,18 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   5.1 decodes the JSON as ANSI); the tray has no watchdog if uvicorn dies (no crash seen in
   the log); the tray icon still reads "MA" in the old orange; the `import_tools` CLIs
   overwrite their output file without asking.
+- **Follow-ups acted on (user, same day).** 473 stale Queue candidates expired through the
+  app's own `_expire_stale_candidates` (recorded as `expired`, text purged), then VACUUM:
+  `reader.db` 7.6 MB -> 1.1 MB; pre-change backup kept outside the repo. Next.js prefetch
+  404s fixed by a `StaticFiles` subclass that retries `__next.<seg>.<file>.txt` as
+  `__next.<seg>/<file>.txt` (test with a temp export dir). `fetch_feeds.ps1` decodes the
+  response bytes as UTF-8 (PowerShell 5.1 read the charset-less JSON as Latin-1).
+- **Tray: new icon and a crash log.** The "MA" monogram (old name, old orange) is now an
+  open book under a ㅎ in the app's indigo, drawn from shapes so it needs no font. A
+  watchdog thread logs any uvicorn exit the tray didn't ask for to `scripts/crash.log`
+  (with the last 30 `server.log` lines) and restarts it, giving up after 3 crashes in 10
+  minutes so a startup failure can't loop. The tray's own exceptions go there too, since
+  pythonw has no stderr. Safe with the restart-tray skill: it kills the tray first, and the
+  watchdog polls every 5 s.
+- **Python upgrade queued** in STATUS: the venv is 3.10.11; target 3.14 or the most stable
+  version at the time (yt-dlp has deprecated 3.10).
