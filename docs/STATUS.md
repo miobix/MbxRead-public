@@ -116,7 +116,9 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   learned outside Korean schooling, so early-school basics can be missing (found: didn't know 자모,
   자음, 모음, 받침…). Wants to look into this layer later: everyday terms a Korean picks up in
   elementary school (grammar/linguistics words, school-subject vocabulary, and similar). First 11
-  saved as terms 1040–1050 (deck `Korean`, Hangul structure words). No feature or scope decided yet.
+  saved as terms 1040–1050 (deck `Korean`, Hangul structure words). Another example of the level:
+  the names of each 자모 (기역, 니은, 디귿, 리을, 쌍기역…), also unknown; deliberately not saved as
+  cards, it only illustrates the kind of content. No feature or scope decided yet.
 
 ## Gotcha for future dev sessions
 
