@@ -1,6 +1,8 @@
 """Terms API. See docs/SPEC.md section 5."""
 import json
+import re
 import sqlite3
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -358,3 +360,54 @@ def delete_term(term_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
     _get_term_or_404(conn, term_id)
     conn.execute("DELETE FROM terms WHERE id = ?", (term_id,))
     conn.commit()
+
+
+# /hanja-today's word lists, one hanja_output/<date>.md per day.
+HANJA_OUTPUT = Path(__file__).resolve().parents[2] / "hanja_output"
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def parse_hanja_list(text: str) -> list[dict]:
+    """'## 端 · 끝 단' sections: the note lines under the heading, then the table rows."""
+    sections: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("## "):
+            sections.append({"heading": line[3:], "char": line[3:].split(" ")[0], "notes": [], "words": []})
+        elif not sections or not line:
+            continue
+        elif line.startswith("|"):
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) >= 4 and cells[0] != "word" and not cells[0].startswith("-"):
+                word, hanja, meaning, register = cells[:4]
+                sections[-1]["words"].append({"word": word, "hanja": hanja, "meaning": meaning, "register": register})
+        else:
+            sections[-1]["notes"].append(line)
+    return sections
+
+
+def _saved_status(conn: sqlite3.Connection, word: str, hanja: str) -> str | None:
+    """'anki' = this sense is synced, 'saved' = in the DB but not synced yet, None = not saved."""
+    row = conn.execute("SELECT hanja, anki_note_id, anki_dirty FROM terms WHERE lemma = ?", (word,)).fetchone()
+    if row is None or hanja not in hanja_list(row["hanja"]):
+        return None
+    return "anki" if row["anki_note_id"] and not row["anki_dirty"] else "saved"
+
+
+@router.get("/hanja-lists")
+def hanja_lists():
+    if not HANJA_OUTPUT.is_dir():
+        return []
+    return sorted((p.stem for p in HANJA_OUTPUT.glob("*.md") if _DATE.fullmatch(p.stem)), reverse=True)
+
+
+@router.get("/hanja-lists/{date}")
+def hanja_list_for_date(date: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
+    path = HANJA_OUTPUT / f"{date}.md"
+    if not _DATE.fullmatch(date) or not path.is_file():
+        raise HTTPException(status_code=404, detail="no word list for that date")
+    sections = parse_hanja_list(path.read_text(encoding="utf-8"))
+    for s in sections:
+        for w in s["words"]:
+            w["status"] = _saved_status(conn, w["word"], w["hanja"])
+    return sections

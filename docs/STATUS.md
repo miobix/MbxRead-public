@@ -18,10 +18,10 @@ files/article) and an automated feed roster (RSS + YouTube) that fetches candida
 review Queue. A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
 Sino-Korean words get their own hanja deck and note type, fed by the `/hanja` and
-`/hanja-today` study skills. FastAPI + SQLite + kiwipiepy backend, Next.js static-export
+`/hanja-today` study skills (Terms > Add batch loads a `/hanja-today` list). FastAPI + SQLite + kiwipiepy backend, Next.js static-export
 frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 329 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 331 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -64,6 +64,7 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **29** — Local hanja pipeline (libhangul word list) + `/hanja-today` daily list
 - [x] **—** — Over-engineering cleanup, 2026-10-21 (dead migrations, legacy Basic sync,
   `/pages/{n}`, scraper feed type; see `DECISIONS.md`)
+- [x] **30** — Add batch: `/terms/batch` saves words from a `/hanja-today` list
 
 ## Live operational facts
 

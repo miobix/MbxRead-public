@@ -1589,3 +1589,20 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   watchdog polls every 5 s.
 - **Python upgrade queued** in STATUS: the venv is 3.10.11; target 3.14 or the most stable
   version at the time (yt-dlp has deprecated 3.10).
+
+## 2026-10-28 — Epic 30: Add batch from a /hanja-today list
+
+- **Why:** the user read each day's list, then copy-pasted 2-3 words one by one into Terms >
+  Add word. `/terms/batch` loads a list by date with an Add button per word that opens the
+  same popover, word and hanja prefilled. krdict stays a manual click (user's request).
+- **One check for "already in Anki" and "just added":** both mean the `terms` row for that
+  lemma lists that hanja; `anki_note_id` set and not dirty shows "In Anki", otherwise
+  "Saved". Matching is per hanja, so a homograph with other hanja stays addable. No
+  AnkiConnect call: words added to Anki by hand are not detected, and the page works with
+  Anki closed.
+- **The md's meaning is not prefilled:** it is Claude's unverified gloss; krdict is the source.
+- **Parser reads the first four table cells** because the 2026-10-22 list has a fifth
+  column; all seven existing lists parse every row. The skill's SKILL.md now says the page
+  depends on its format.
+- Endpoints live in `routes/terms.py` (no new router); `hanja_output/` is read from disk,
+  so the page also works from the phone over Tailscale.

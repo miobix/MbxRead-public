@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/lib/back-link";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type AnkiSyncResult, type Settings, type Term, type TermStatus } from "@/lib/api";
 import { TokenPopover } from "../read/TokenPopover";
@@ -76,13 +77,16 @@ export default function TermsPage() {
 
       <div className="flex items-center justify-between gap-2">
         <h1 className="page-title">Terms</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           <button
             onClick={() => setAddingWord(true)}
             className="btn-secondary"
           >
             Add word
           </button>
+          <Link href="/terms/batch" className="btn-secondary">
+            Add batch
+          </Link>
           <button
             onClick={sync}
             disabled={syncing}

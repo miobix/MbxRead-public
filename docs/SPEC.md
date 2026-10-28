@@ -19,7 +19,7 @@ Agreed decisions:
 
 ## 2. Existing code (reuse, do not rewrite)
 
-Repo root: `C:\Work\PyCharmProjects\MbxRead` (venv at `.venv`, Python 3.10, Windows).
+Repo root: `C:\Personal\MbxRead` (venv at `.venv`, Python 3.10, Windows).
 
 | Path | Role | Action |
 |---|---|---|
@@ -695,6 +695,37 @@ the item actions in a "⋯" menu; sort became a select and the filters fold behi
 "Filters" button. The Add to Library and Edit details modals became one `Sheet` pattern:
 title with a close ×, stacked full-width fields with labels and hints, topic as chips,
 a styled file picker, import types as a 3×2 grid, wide Cancel/primary footer buttons.
+
+### Epic 30 — Add batch: save words from a `/hanja-today` list in the app
+
+Scoped 2026-10-28. The user read each day's `hanja_output/<date>.md`, picked 2-3 words and
+copy-pasted each one into Terms > Add word. The list now loads in the app.
+
+**Scope:**
+
+1. **`server/routes/terms.py`**: `GET /api/terms/hanja-lists` (dates of
+   `hanja_output/YYYY-MM-DD.md`, newest first) and `GET /api/terms/hanja-lists/{date}`
+   (404 on an unknown or malformed date): one section per `## 字 · 훈음` heading with its
+   note lines (Card, 훈, Trap) and its table rows (first four cells, so older lists with an
+   extra column parse). Each word carries `status`: `anki` when a term with that lemma has
+   that hanja and is synced (`anki_note_id` set, not dirty), `saved` when it has it but is
+   not synced, else `null`. A same-lemma term with other hanja does not count.
+2. **`/terms/batch`** ("Add batch" next to "Add word"): date select defaulting to the
+   newest list, a banner counting already-saved words, words grouped by character, and an
+   Add button per word that opens the Add word popover in hanja mode with the word and hanja
+   prefilled (`TokenPopover` `initialHanja`). The user runs the krdict lookup themselves;
+   the md's meaning is not prefilled (unverified). Saved or synced words show a disabled
+   "Saved" / "In Anki" button; the list reloads after each save.
+
+Not detected: words added to Anki by hand outside MbxRead (no AnkiConnect call, so the page
+works with Anki closed).
+
+**Tests:** parse (notes, rows, header/separator skipped, extra column), `anki` / `saved` /
+`null` including a same-lemma term with other hanja, date listing ignores non-date files,
+404 for unknown and malformed dates.
+
+**Accept:** pytest green, `npm run build` and `npm run lint` clean, every real list parses
+all its rows.
 
 ## 11. End-to-end verification (after Epic 8)
 
