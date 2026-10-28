@@ -1614,3 +1614,11 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   click" in the Epic 30 entry. The reader and Add word keep the manual button.
 - The mount effect carries a `set-state-in-effect` lint disable: it is a one-shot fetch, and
   the busy flag is its only synchronous setState.
+
+## 2026-10-28 — Hardening and skill pass after Epic 30
+
+- **Checked, nothing to fix:** the date in `/api/terms/hanja-lists/{date}` must match
+  `YYYY-MM-DD` before any path is built (malformed and traversal-shaped dates 404, tested);
+  the endpoints keep no state between requests; `hanja_output/` grows ~6 KB a day
+  (128 KB now, gitignored), not worth retention. Every existing list parses every row.
+- **Skill pass:** no procedure was repeated or painful this session; no candidates.
