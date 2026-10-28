@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
   type BackItem,
@@ -42,6 +42,7 @@ export function TokenPopover({
   hanjaMode,
   hanjaDeck,
   initialHanja,
+  autoLookup,
   onClose,
   onSaved,
   onDeleted,
@@ -58,6 +59,8 @@ export function TokenPopover({
   hanjaDeck?: string;
   // Prefills the hanja input when adding from a /hanja-today list.
   initialHanja?: string;
+  // Runs the dictionary lookup on open (Add batch always starts with krdict).
+  autoLookup?: boolean;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
@@ -259,6 +262,13 @@ export function TokenPopover({
       setBusy(null);
     }
   };
+
+  useEffect(() => {
+    // One lookup on open; its busy flag is the only synchronous setState.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (autoLookup) lookupDictionary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const save = async () => {
     const trimmedLemma = lemma.trim();

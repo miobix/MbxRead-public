@@ -111,6 +111,7 @@ export default function AddBatchPage() {
           hanjaMode
           hanjaDeck={settings?.hanja_deck}
           initialHanja={adding.hanja}
+          autoLookup
           onClose={() => setAdding(null)}
           onSaved={() => load(date)}
           onDeleted={() => {}}
