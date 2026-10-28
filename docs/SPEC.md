@@ -713,8 +713,8 @@ copy-pasted each one into Terms > Add word. The list now loads in the app.
 2. **`/terms/batch`** ("Add batch" next to "Add word"): date select defaulting to the
    newest list, a banner counting already-saved words, words grouped by character, and an
    Add button per word that opens the Add word popover in hanja mode with the word and hanja
-   prefilled (`TokenPopover` `initialHanja`). The user runs the krdict lookup themselves;
-   the md's meaning is not prefilled (unverified). Saved or synced words show a disabled
+   prefilled (`TokenPopover` `initialHanja`) and runs the krdict lookup on open
+   (`autoLookup`, user's follow-up the same day); the md's meaning is not prefilled (unverified). Saved or synced words show a disabled
    "Saved" / "In Anki" button; the list reloads after each save.
 
 Not detected: words added to Anki by hand outside MbxRead (no AnkiConnect call, so the page

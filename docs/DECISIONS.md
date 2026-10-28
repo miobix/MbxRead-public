@@ -1606,3 +1606,11 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   depends on its format.
 - Endpoints live in `routes/terms.py` (no new router); `hanja_output/` is read from disk,
   so the page also works from the phone over Tailscale.
+
+## 2026-10-28 — Add batch looks up krdict on open
+
+- The user always starts with krdict on this page, so Add now opens the popover with the
+  lookup already running (`TokenPopover` `autoLookup`). Supersedes "krdict stays a manual
+  click" in the Epic 30 entry. The reader and Add word keep the manual button.
+- The mount effect carries a `set-state-in-effect` lint disable: it is a one-shot fetch, and
+  the busy flag is its only synchronous setState.
