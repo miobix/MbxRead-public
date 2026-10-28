@@ -192,7 +192,7 @@ def list_terms(
         query += " AND (lemma LIKE ? OR translation LIKE ? OR notes LIKE ?)"
         like = f"%{q}%"
         params.extend([like, like, like])
-    query += " ORDER BY id"
+    query += " ORDER BY id DESC"
 
     rows = conn.execute(query, params).fetchall()
     return [_term_dict(conn, row) for row in rows]

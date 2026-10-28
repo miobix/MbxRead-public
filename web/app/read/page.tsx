@@ -495,15 +495,17 @@ function renderContent(
   tokens.forEach((tok, i) => {
     if (tok.s > cursor) nodes.push(content.slice(cursor, tok.s));
 
-    const isLearning = terms[tok.lemma]?.status === "learning";
+    const status = terms[tok.lemma]?.status;
     // Vertical padding on an inline span paints the full line-box height without
     // moving any text, so the column breaks measured above are unaffected.
     const mark =
       i === tapped
         ? "bg-accent text-accent-ink rounded-[2px] py-0.5"
-        : isLearning
+        : status === "learning"
           ? "bg-highlight rounded-[2px] py-0.5"
-          : undefined;
+          : status === "known"
+            ? "underline decoration-dotted decoration-accent/50 underline-offset-4"
+            : undefined;
     nodes.push(
       <span key={i} data-token-index={i} className={mark}>
         {content.slice(tok.s, tok.e)}

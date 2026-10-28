@@ -13,6 +13,7 @@ from .terms import _back_items_for, _forms_for, hanja_list
 router = APIRouter(prefix="/api/anki", tags=["anki"])
 
 DEFAULT_DECK = "Default"
+MATURE_DAYS = 21
 
 
 def _render_legacy_examples(examples: list[str], sentence: str) -> str:
@@ -222,5 +223,19 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
         except anki.AnkiError as e:
             failed.append({"lemma": row["lemma"], "error": str(e)})
 
+    promoted = 0
+    synced = conn.execute(
+        "SELECT id, anki_note_id FROM terms WHERE status = 'learning' AND anki_note_id IS NOT NULL"
+    ).fetchall()
+    if synced:
+        try:
+            intervals = anki.min_intervals([row["anki_note_id"] for row in synced])
+        except anki.AnkiError:
+            intervals = {}
+        for row in synced:
+            if intervals.get(row["anki_note_id"], 0) >= MATURE_DAYS:
+                conn.execute("UPDATE terms SET status = 'known' WHERE id = ?", (row["id"],))
+                promoted += 1
+
     conn.commit()
-    return {"added": added, "updated": updated, "failed": failed}
+    return {"added": added, "updated": updated, "failed": failed, "promoted": promoted}

@@ -21,7 +21,7 @@ Sino-Korean words get their own hanja deck and note type, fed by the `/hanja` an
 `/hanja-today` study skills (Terms > Add batch loads a `/hanja-today` list). FastAPI + SQLite + kiwipiepy backend, Next.js static-export
 frontend served by FastAPI, phone access over Tailscale.
 
-**Test suite: 331 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 335 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -65,6 +65,8 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **—** — Over-engineering cleanup, 2026-10-21 (dead migrations, legacy Basic sync,
   `/pages/{n}`, scraper feed type; see `DECISIONS.md`)
 - [x] **30** — Add batch: `/terms/batch` saves words from a `/hanja-today` list
+- [x] **31** — Sync marks Anki-mature terms `known` (dotted underline in reader); Terms
+  newest first, 50 at a time
 
 ## Live operational facts
 

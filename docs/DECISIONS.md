@@ -1622,3 +1622,23 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   the endpoints keep no state between requests; `hanja_output/` grows ~6 KB a day
   (128 KB now, gitignored), not worth retention. Every existing list parses every row.
 - **Skill pass:** no procedure was repeated or painful this session; no candidates.
+
+## 2026-10-28 — Epic 31: Anki decides "known"; Terms list browsable
+
+- **Why:** status only changed by hand, so all 1,153 terms were `learning` and the status
+  filter, the reader's highlight rule and the stats "known" count meant nothing. The user
+  studies in Anki, so Anki's maturity is the signal.
+- **Mature = shortest card interval ≥ 21 days**, Anki's own threshold. Shortest across the
+  note's cards, so a two-way note needs both directions learned. One-way: a lapse never
+  demotes (user agreed; simpler, and an edited known term stays known).
+- **Known terms keep syncing edits.** The dirty-update step never filtered on status, so no
+  code change, only a test and a SPEC correction (it claimed known terms were not synced).
+- **Reader keeps known words visible** as a dotted underline: the user wants to see words
+  they have worked on, without the full highlight. Picked underline over a paler fill
+  (two fills are hard to tell apart in dark mode); no mockup, user chose directly.
+- **Promotion is best-effort:** an AnkiConnect error there leaves terms as they are and the
+  sync still reports its adds/updates.
+- **Terms page: "Show more" instead of numbered pages.** Newest first puts today's words on
+  top, and search/filters are already server-side, so the list is mostly browsed from the
+  top. Client-side slice over the full response: 1,153 rows is a small payload; move the
+  limit to the API if it gets slow.

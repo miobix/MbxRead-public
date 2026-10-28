@@ -119,6 +119,13 @@ def test_list_terms_filters_by_status(client):
     assert lemmas == ["가다"]
 
 
+def test_list_terms_newest_first(client):
+    _create(client, lemma="입다")
+    _create(client, lemma="가다")
+
+    assert [t["lemma"] for t in client.get("/api/terms").json()] == ["가다", "입다"]
+
+
 def test_list_terms_filters_by_deck(client):
     _create(client, lemma="입다", deck="Korean")
     _create(client, lemma="가다", deck="Verbs")

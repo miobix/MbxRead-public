@@ -13,6 +13,7 @@ def _mock_model(monkeypatch):
     monkeypatch.setattr(anki, "ensure_model", lambda: None)
     monkeypatch.setattr(anki, "ensure_hanja_model", lambda: None)
     monkeypatch.setattr(anki, "move_note_to_deck", lambda note_id, deck: None)
+    monkeypatch.setattr(anki, "min_intervals", lambda note_ids: {})
 
 
 def test_sync_down_returns_503_and_touches_nothing(client, monkeypatch):
@@ -51,7 +52,7 @@ def test_sync_adds_new_learning_term(client, monkeypatch):
     resp = client.post("/api/anki/sync")
 
     assert resp.status_code == 200
-    assert resp.json() == {"added": 1, "updated": 0, "failed": []}
+    assert resp.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert deck_calls == ["Korean"]
     # The captured reading sentence goes into Examples (card back), not the front.
     assert add_calls == [("Korean", "입다", "to wear", "오늘 옷을 입다.")]
@@ -88,7 +89,7 @@ def test_sync_korean_face_stacks_extra_forms_legacy_back(client, monkeypatch):
     )
     resp = client.post("/api/anki/sync")
 
-    assert resp.json() == {"added": 1, "updated": 0, "failed": []}
+    assert resp.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert add_calls == [
         (
             "Korean",
@@ -243,7 +244,7 @@ def test_sync_adds_new_hanja_term(client, monkeypatch):
     )
     resp = client.post("/api/anki/sync")
 
-    assert resp.json() == {"added": 1, "updated": 0, "failed": []}
+    assert resp.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert hanja_add_calls == [
         ("한자어", "제일", "第一", "the most", "가장<br><br>homograph of 祭日")
     ]
@@ -263,7 +264,7 @@ def test_sync_updates_dirty_hanja_term(client, monkeypatch):
 
     term = _create(client, lemma="제일", translation="the most", deck="한자어", hanja=["第一"])
     first = client.post("/api/anki/sync")
-    assert first.json() == {"added": 1, "updated": 0, "failed": []}
+    assert first.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
 
     client.patch(f"/api/terms/{term['id']}", json={"hanja": ["祭日"]})
 
@@ -277,7 +278,7 @@ def test_sync_updates_dirty_hanja_term(client, monkeypatch):
     monkeypatch.setattr(anki, "update_note_model", lambda *a: model_update_calls.append(a))
 
     second = client.post("/api/anki/sync")
-    assert second.json() == {"added": 0, "updated": 1, "failed": []}
+    assert second.json() == {"added": 0, "updated": 1, "failed": [], "promoted": 0}
     assert hanja_update_calls == [(9001, "제일", "祭日", "the most", "")]
     assert model_update_calls == []
 
@@ -355,7 +356,7 @@ def test_sync_hanja_less_term_still_routes_through_two_way_model(client, monkeyp
     term = _create(client)
     resp = client.post("/api/anki/sync")
 
-    assert resp.json() == {"added": 1, "updated": 0, "failed": []}
+    assert resp.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert hanja_add_calls == []
     assert len(model_add_calls) == 1
 
@@ -455,7 +456,7 @@ def test_sync_updates_new_model_term(client, monkeypatch):
 
     term = _create(client)
     first = client.post("/api/anki/sync")
-    assert first.json() == {"added": 1, "updated": 0, "failed": []}
+    assert first.json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
 
     client.patch(f"/api/terms/{term['id']}", json={"translation": "to put on"})
 
@@ -467,7 +468,7 @@ def test_sync_updates_new_model_term(client, monkeypatch):
     )
 
     second = client.post("/api/anki/sync")
-    assert second.json() == {"added": 0, "updated": 1, "failed": []}
+    assert second.json() == {"added": 0, "updated": 1, "failed": [], "promoted": 0}
     assert update_model_calls == [(999, "입다", "to put on", "")]
 
     assert client.get("/api/terms").json()[0]["anki_dirty"] is False
@@ -512,7 +513,7 @@ def test_sync_ignores_known_and_ignored_terms(client, monkeypatch):
     _create(client, lemma="무시단어", status="ignored")
 
     resp = client.post("/api/anki/sync")
-    assert resp.json() == {"added": 0, "updated": 0, "failed": []}
+    assert resp.json() == {"added": 0, "updated": 0, "failed": [], "promoted": 0}
     assert add_calls == []
 
 
@@ -574,7 +575,7 @@ def test_sync_converted_reading_term_adds_a_hanja_note_carrying_the_sentence(cli
         },
     )
     assert resp.status_code == 200
-    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": []}
+    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert calls == [("한자어", "입다", "着用", "wear", "그는 옷을 입었다.<br><br>옷을 걸치다.")]
 
 
@@ -592,7 +593,7 @@ def test_sync_moves_a_dirty_terms_cards_to_its_deck(client, monkeypatch):
     assert moves == []
 
     client.patch(f"/api/terms/{term['id']}", json={"deck": "Other"})
-    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": []}
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": [], "promoted": 0}
     assert moves == [(4242, "Other")]
 
 
@@ -611,14 +612,14 @@ def test_sync_readds_a_reading_term_moved_to_the_hanja_deck_as_a_hanja_note(clie
     model_updates = []
     monkeypatch.setattr(anki, "update_note_model", lambda *a: model_updates.append(a))
 
-    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": []}
+    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert hanja_adds == [("한자어", "풍경", "風景", "scenery", "")]
     assert model_updates == []
     saved = client.get("/api/terms").json()[0]
     assert saved["anki_note_id"] == 9001
     assert saved["anki_dirty"] is False
 
-    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 0, "failed": []}
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 0, "failed": [], "promoted": 0}
 
 
 def test_sync_leaves_a_hanja_bearing_term_outside_the_hanja_deck_on_its_note(client, monkeypatch):
@@ -632,7 +633,7 @@ def test_sync_leaves_a_hanja_bearing_term_outside_the_hanja_deck_on_its_note(cli
     monkeypatch.setattr(anki, "update_note_model", lambda *a: None)
     monkeypatch.setattr(anki, "add_note_hanja", lambda *a: 1 / 0)
 
-    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": []}
+    assert client.post("/api/anki/sync").json() == {"added": 0, "updated": 1, "failed": [], "promoted": 0}
     assert client.get("/api/terms").json()[0]["anki_note_id"] == 4242
 
 
@@ -654,3 +655,57 @@ def test_move_note_to_deck_skips_cards_already_in_the_deck_or_a_subdeck(monkeypa
     anki.move_note_to_deck(77, "한자어")
     assert calls[0] == ("findCards", {"query": "nid:77"})
     assert calls[-1] == ("changeDeck", {"cards": [1], "deck": "한자어"})
+
+
+def test_min_intervals_takes_shortest_card_per_note(monkeypatch):
+    def fake_invoke(action, **params):
+        if action == "findCards":
+            assert params == {"query": "nid:7,8"}
+            return [1, 2, 3]
+        return [
+            {"cardId": 1, "note": 7, "interval": 30},
+            {"cardId": 2, "note": 7, "interval": 12},
+            {"cardId": 3, "note": 8, "interval": 40},
+        ]
+
+    monkeypatch.setattr(anki, "_invoke", fake_invoke)
+    assert anki.min_intervals([7, 8]) == {7: 12, 8: 40}
+
+
+def test_sync_promotes_mature_notes_to_known(client, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    note_ids = iter([101, 102])
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: next(note_ids))
+    mature = _create(client, lemma="입다")
+    young = _create(client, lemma="가다")
+    client.post("/api/anki/sync")
+
+    monkeypatch.setattr(anki, "min_intervals", lambda ids: {101: 21, 102: 20})
+    assert client.post("/api/anki/sync").json()["promoted"] == 1
+
+    statuses = {t["id"]: t["status"] for t in client.get("/api/terms").json()}
+    assert statuses == {mature["id"]: "known", young["id"]: "learning"}
+
+    # A known term's edits still reach its Anki note.
+    client.patch(f"/api/terms/{mature['id']}", json={"translation": "to put on"})
+    updates = []
+    monkeypatch.setattr(anki, "update_note_model", lambda note_id, *a: updates.append(note_id))
+    assert client.post("/api/anki/sync").json()["updated"] == 1
+    assert updates == [101]
+
+
+def test_sync_promotion_failure_does_not_fail_sync(client, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    monkeypatch.setattr(anki, "add_note_model", lambda *a: 101)
+
+    def boom(ids):
+        raise anki.AnkiError("cardsInfo failed")
+
+    monkeypatch.setattr(anki, "min_intervals", boom)
+    _create(client)
+    assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
+    assert client.get("/api/terms").json()[0]["status"] == "learning"
