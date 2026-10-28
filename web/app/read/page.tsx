@@ -504,7 +504,7 @@ function renderContent(
         : status === "learning"
           ? "bg-highlight rounded-[2px] py-0.5"
           : status === "known"
-            ? "underline decoration-dotted decoration-accent/50 underline-offset-4"
+            ? "underline decoration-dotted decoration-2 decoration-accent/50 underline-offset-4"
             : undefined;
     nodes.push(
       <span key={i} data-token-index={i} className={mark}>
