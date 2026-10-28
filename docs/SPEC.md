@@ -174,7 +174,7 @@ Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** 
 Routes:
 - `/` — book list (title, progress `current_offset/total_chars` as a percentage), "Add book" modal: title + paste-textarea or `.txt` upload.
 - `/read/[bookId]` — the reader:
-  - Renders `content` as spans using `tokens` offsets. Base text plain; **only** tokens whose lemma is in `terms` with status `learning` get a subtle highlight; `known` gets a faint dotted underline (Epic 31). No other visual affordance.
+  - Renders `content` as spans using `tokens` offsets. Base text plain; **only** tokens whose lemma is in `terms` with status `learning` get a subtle highlight; `known` gets a 2px dotted accent underline at 50% (Epic 31). No other visual affordance.
   - **Tap a token** → popover anchored to the word: surface, lemma in an **editable input**, buttons **Translate**, **Dictionary**, **Translate sentence**. Translate → `POST /api/translate` → result fills an **editable textarea**; user enriches freely; deck `<select>` (from settings, default `default_deck`); **Save** → `POST /api/terms` with the (possibly edited) lemma, textarea content, current sentence (extracted around the tap point). On save, every span on the page with that lemma updates instantly (client-side term map).
   - **Tap a highlighted token** → same popover pre-filled from the saved term; Save → `PATCH`; extra actions: mark known / ignore / delete.
   - **Text selection** (long-press drag) of a phrase → same popover with the raw selection as lemma.

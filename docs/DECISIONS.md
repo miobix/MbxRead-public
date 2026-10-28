@@ -1642,3 +1642,13 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   top, and search/filters are already server-side, so the list is mostly browsed from the
   top. Client-side slice over the full response: 1,153 rows is a small payload; move the
   limit to the API if it gets slow.
+
+## 2026-10-28 — Epic 31 follow-up, hardening and skill pass
+
+- **Underline thickened to 2px** (`decoration-2`) after the user read it live: dotted and
+  the color were right, 1px was too faint.
+- **Checked:** first live sync promoted terms from one `findCards` + `cardsInfo` over every
+  synced note (~1,150) inside the 5 s AnkiConnect timeout. If that ever times out, the
+  promotion is skipped quietly and the sync still succeeds (tested); batch the note ids
+  then. No new state, loops or growing files.
+- **Skill pass:** nothing repeated or painful this session; no candidates.
