@@ -403,3 +403,63 @@ def test_delete_term(client):
 
 def test_delete_missing_term_404(client):
     assert client.delete("/api/terms/999").status_code == 404
+
+
+_HANJA_MD = """# Hanja 4급-II, 2026-10-28
+
+Words: libhangul word list (local), each one checked.
+
+## 端 · 끝 단 (new)
+
+Card: 끝 단 · official: 끝 단 · match
+Trap: 일단 c14 is 一旦, not 一端.
+
+| word | hanja | meaning | register |
+|---|---|---|---|
+| 극단 | 極端 | extreme | both |
+| 첨단 | 尖端 | cutting edge | both |
+| 이단 | 異端 | heresy | news/official | * |
+
+## 血 · 피 혈 (new)
+
+| word | hanja | meaning | register |
+|---|---|---|---|
+| 혈액 | 血液 | blood | both |
+"""
+
+
+def test_hanja_lists_parse_and_saved_status(client, db_path, tmp_path, monkeypatch):
+    from server.routes import terms
+
+    monkeypatch.setattr(terms, "HANJA_OUTPUT", tmp_path)
+    (tmp_path / "2026-10-28.md").write_text(_HANJA_MD, encoding="utf-8")
+    (tmp_path / "2026-10-27.md").write_text("", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("", encoding="utf-8")
+    assert client.get("/api/terms/hanja-lists").json() == ["2026-10-28", "2026-10-27"]
+
+    synced = _create(client, lemma="극단", hanja=["極端"]).json()["id"]
+    _create(client, lemma="첨단", hanja=["尖端"])
+    _create(client, lemma="이단", hanja=["二段"])  # same word, other hanja
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE terms SET anki_note_id = 1, anki_dirty = 0 WHERE id = ?", (synced,))
+    conn.commit()
+    conn.close()
+
+    sections = client.get("/api/terms/hanja-lists/2026-10-28").json()
+    assert [s["char"] for s in sections] == ["端", "血"]
+    assert sections[0]["heading"] == "端 · 끝 단 (new)"
+    assert sections[0]["notes"] == ["Card: 끝 단 · official: 끝 단 · match", "Trap: 일단 c14 is 一旦, not 一端."]
+    assert sections[0]["words"][0] == {
+        "word": "극단", "hanja": "極端", "meaning": "extreme", "register": "both", "status": "anki"
+    }
+    assert [w["status"] for w in sections[0]["words"]] == ["anki", "saved", None]
+    assert sections[1]["notes"] == []
+    assert sections[1]["words"][0]["word"] == "혈액"
+
+
+def test_hanja_list_unknown_or_bad_date_404(client, tmp_path, monkeypatch):
+    from server.routes import terms
+
+    monkeypatch.setattr(terms, "HANJA_OUTPUT", tmp_path)
+    assert client.get("/api/terms/hanja-lists/2026-01-01").status_code == 404
+    assert client.get("/api/terms/hanja-lists/..%2Freader").status_code == 404

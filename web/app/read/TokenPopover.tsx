@@ -41,6 +41,7 @@ export function TokenPopover({
   translatorBackend,
   hanjaMode,
   hanjaDeck,
+  initialHanja,
   onClose,
   onSaved,
   onDeleted,
@@ -55,6 +56,8 @@ export function TokenPopover({
   hanjaMode?: boolean;
   // Hanja is required only when saving to this deck; pure Korean words go elsewhere.
   hanjaDeck?: string;
+  // Prefills the hanja input when adding from a /hanja-today list.
+  initialHanja?: string;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
@@ -78,7 +81,7 @@ export function TokenPopover({
   // `hanjaList` = senses committed so far (시장 = 市場 + 市長), `hanja` = the one in the
   // input; a sense's meanings are the Back chips grouped under it.
   const [hanjaList, setHanjaList] = useState<string[]>(target.existing?.hanja ?? []);
-  const [hanja, setHanja] = useState("");
+  const [hanja, setHanja] = useState(initialHanja ?? "");
   const [addingHanja, setAddingHanja] = useState(false);
   // An existing term found by lemma while adding a new word — the save turns into
   // an append onto it rather than a create that the UNIQUE lemma would refuse.

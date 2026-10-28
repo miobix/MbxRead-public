@@ -119,6 +119,15 @@ export type TermSummary = {
   hanja: string[];
 };
 
+// One character's section of a /hanja-today list. status: "anki" = synced,
+// "saved" = in the DB but not synced yet, null = not saved.
+export type HanjaListSection = {
+  char: string;
+  heading: string;
+  notes: string[];
+  words: { word: string; hanja: string; meaning: string; register: string; status: "anki" | "saved" | null }[];
+};
+
 export type Term = {
   id: number;
   lemma: string;
@@ -359,6 +368,10 @@ export const api = {
       return null;
     }
   },
+
+  hanjaLists: () => request<string[]>("/terms/hanja-lists"),
+
+  hanjaList: (date: string) => request<HanjaListSection[]>(`/terms/hanja-lists/${date}`),
 
   listTerms: (params?: { status?: TermStatus; deck?: string; q?: string }) => {
     const sp = new URLSearchParams();
