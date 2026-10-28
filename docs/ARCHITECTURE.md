@@ -269,7 +269,7 @@ position without sharing a pagination.
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call). Epic 29: every krdict response is cached in `translate_cache.sqlite3` (`krdict_cache`, no expiry) and the first failed request pauses krdict for 30 min (`krdict_state`); during the pause this returns 503 `{error}` — **implemented (Epic 3, examples Epic 21)** |
-| POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}]}` — **implemented (Epic 6)** |
+| POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}], promoted}` — **implemented (Epic 6)**; `promoted` = notes mature in Anki (shortest interval ≥ 21 d) flipped to `known` (Epic 31) |
 | GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, hanja_deck, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. The migration that purged their stored rows ran and was removed 2026-10-21 |
 | PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge. No setting re-paginates anything as of Epic 24 — `repaginate_all` is gone — so this is a plain write — **implemented (Epic 7; `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
@@ -674,7 +674,8 @@ Routes:
   `lib/sheet.tsx` (`Sheet`, `Field`, `TopicPicker` chips, `FilePicker`).
 - `/read/?id=<bookId>` — **implemented (Epic 4 rendering, Epic 5 tooltip flow).**
   `app/read/page.tsx`. Renders `content` as spans using `tokens` offsets; only
-  tokens whose lemma is in `terms` with status `learning` get a highlight
+  tokens whose lemma is in `terms` with status `learning` get a highlight (`known`: a
+  faint dotted underline, Epic 31)
   (`bg-highlight` with vertical padding, so it fills the line height without moving
   text; the tapped token turns solid accent while its popover is open, Epic 28).
   Prev/next moves one CSS column and `PATCH`es `current_offset` (best-effort — a

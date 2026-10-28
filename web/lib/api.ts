@@ -171,6 +171,7 @@ export type AnkiSyncResult = {
   added: number;
   updated: number;
   failed: { lemma: string; error: string }[];
+  promoted: number;
 };
 
 export type Settings = {

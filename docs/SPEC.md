@@ -174,12 +174,12 @@ Next.js (latest stable), App Router, TypeScript, Tailwind CSS. **Mobile-first** 
 Routes:
 - `/` — book list (title, progress `current_offset/total_chars` as a percentage), "Add book" modal: title + paste-textarea or `.txt` upload.
 - `/read/[bookId]` — the reader:
-  - Renders `content` as spans using `tokens` offsets. Base text plain; **only** tokens whose lemma is in `terms` with status `learning` get a subtle highlight. No other visual affordance.
+  - Renders `content` as spans using `tokens` offsets. Base text plain; **only** tokens whose lemma is in `terms` with status `learning` get a subtle highlight; `known` gets a faint dotted underline (Epic 31). No other visual affordance.
   - **Tap a token** → popover anchored to the word: surface, lemma in an **editable input**, buttons **Translate**, **Dictionary**, **Translate sentence**. Translate → `POST /api/translate` → result fills an **editable textarea**; user enriches freely; deck `<select>` (from settings, default `default_deck`); **Save** → `POST /api/terms` with the (possibly edited) lemma, textarea content, current sentence (extracted around the tap point). On save, every span on the page with that lemma updates instantly (client-side term map).
   - **Tap a highlighted token** → same popover pre-filled from the saved term; Save → `PATCH`; extra actions: mark known / ignore / delete.
   - **Text selection** (long-press drag) of a phrase → same popover with the raw selection as lemma.
   - Page prev/next (client-side CSS-column pages since Epic 24); on page change `PATCH` `current_offset`. Sentence extraction: from previous sentence-end to next sentence-end around the token.
-- `/terms` — table (filter: status, deck, search), inline edit, delete, "**Sync to Anki**" button showing `{added, updated, failed}` toast.
+- `/terms` — table (filter: status, deck, search), newest first, 50 at a time with "Show more" (Epic 31), inline edit, delete, "**Sync to Anki**" button showing `{added, updated, failed, promoted}` toast.
 - `/settings` — deck list editor, default deck, translator backend (deepl/claude).
 
 Keep dependencies minimal: Next + Tailwind only; no state library (React context/props suffice), no component kit. Small shared `lib/api.ts` fetch wrapper.
@@ -193,7 +193,8 @@ Sync algorithm:
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
 3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields still named `Korean`/`English`/`Examples` — unchanged since Epic 21). Content (Epic 22): `Korean` = the lemma alone if it has no extra forms (unchanged simple case), else a numbered stack (`1. 승인<br>2. 승인서`); `English`/`Examples` render from `term_back_items` when the term has any — one line per back item, lettered (`1a.`/`1b.`) when its front entry has 2+ items, bare number/no label otherwise, with `Examples` also carrying the reading sentence first and the free-typed `notes` last. A term with **zero** `term_back_items` (never touched by the Epic 22 popover) renders `English`/`Examples` exactly as before Epic 22 — flat `translation`, the old `examples` JSON column + sentence — untouched legacy behavior. Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
 4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the hanja model → `updateNoteFields` with its four fields; anything else → the two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above). The legacy `Basic` path was removed 2026-10-21 (no live notes used it). On success clear `anki_dirty`.
-5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not synced (existing notes left alone).
+5. Promote (Epic 31): for `learning` terms with a note, `findCards` + `cardsInfo`; a note whose shortest card interval is ≥ 21 days (Anki's "mature") becomes `known`. Best-effort: an AnkiConnect error here promotes nothing and does not fail the sync. Never demoted automatically.
+6. Return counts `{added, updated, failed, promoted}`. Never delete Anki notes. `known`/`ignored` terms are never *added*; a term that already has a note still gets its edits pushed (step 4 ignores status).
 
 Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new, update-dirty, per-note failure isolation, Anki-down 503.
 
@@ -726,6 +727,25 @@ works with Anki closed).
 
 **Accept:** pytest green, `npm run build` and `npm run lint` clean, every real list parses
 all its rows.
+
+### Epic 31 — Anki decides "known"; Terms list browsable
+
+Scoped 2026-10-28. All 1,153 terms were `learning` (status only changed by hand) and the
+Terms page rendered all of them, oldest first.
+
+**Scope:**
+
+1. **Promotion on sync** (section 8 step 5): `anki.min_intervals(note_ids)`; mature notes
+   (shortest card interval ≥ `MATURE_DAYS` = 21) flip to `known`; sync returns `promoted`.
+2. **Reader:** `known` words get a faint dotted accent underline instead of no mark (the
+   user wants to still see words they have studied, quieter than `learning`).
+3. **Terms page:** `GET /api/terms` sorts `id DESC`; the page shows 50 with "Show more" and
+   an "N of M" line, reset on filter change. Sync toast shows the promoted count.
+
+**Tests:** shortest interval per note, promote at 21 and not 20, a known term's edit still
+updates its note, promotion error leaves sync green, list newest first.
+
+**Accept:** pytest green, `npm run build` and `npm run lint` clean.
 
 ## 11. End-to-end verification (after Epic 8)
 

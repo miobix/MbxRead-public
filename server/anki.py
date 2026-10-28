@@ -53,6 +53,16 @@ def ping() -> None:
     _invoke("version")
 
 
+def min_intervals(note_ids: list[int]) -> dict[int, int]:
+    """Shortest review interval (days) across each note's cards."""
+    cards = _invoke("findCards", query="nid:" + ",".join(map(str, note_ids)))
+    out: dict[int, int] = {}
+    for card in _invoke("cardsInfo", cards=cards):
+        note = card["note"]
+        out[note] = min(out.get(note, card["interval"]), card["interval"])
+    return out
+
+
 def create_deck(deck: str) -> None:
     _invoke("createDeck", deck=deck)
 

@@ -7,6 +7,7 @@ import { api, type AnkiSyncResult, type Settings, type Term, type TermStatus } f
 import { TokenPopover } from "../read/TokenPopover";
 
 const STATUSES: TermStatus[] = ["learning", "known", "ignored"];
+const PAGE_SIZE = 50;
 
 export default function TermsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -16,6 +17,7 @@ export default function TermsPage() {
   const [status, setStatus] = useState<TermStatus | "">("");
   const [deck, setDeck] = useState("");
   const [q, setQ] = useState("");
+  const [shown, setShown] = useState(PAGE_SIZE);
 
   // Editing reuses the reader's card-builder popover.
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
@@ -36,7 +38,10 @@ export default function TermsPage() {
     const handle = setTimeout(() => {
       api
         .listTerms({ status: status || undefined, deck: deck || undefined, q: q || undefined })
-        .then(setTerms)
+        .then((t) => {
+          setTerms(t);
+          setShown(PAGE_SIZE);
+        })
         .catch((e) => setError(e instanceof Error ? e.message : "Failed to load terms."));
     }, 250);
     return () => clearTimeout(handle);
@@ -109,6 +114,12 @@ export default function TermsPage() {
               </>
             )}
             .
+            {syncResult.promoted > 0 && (
+              <>
+                {" "}
+                <b>{syncResult.promoted}</b> now known (mature in Anki).
+              </>
+            )}
           </p>
           {syncResult.failed.length > 0 && (
             <ul className="list-disc list-inside text-danger">
@@ -167,8 +178,14 @@ export default function TermsPage() {
 
       {terms?.length === 0 && <p className="text-muted">No terms match.</p>}
 
+      {!!terms?.length && (
+        <p className="text-xs text-muted">
+          {Math.min(shown, terms.length)} of {terms.length}, newest first
+        </p>
+      )}
+
       <ul className="flex flex-col gap-2">
-        {terms?.map((term) => (
+        {terms?.slice(0, shown).map((term) => (
           <li
             key={term.id}
             onClick={() => setEditingTerm(term)}
@@ -192,6 +209,12 @@ export default function TermsPage() {
           </li>
         ))}
       </ul>
+
+      {terms && shown < terms.length && (
+        <button onClick={() => setShown((n) => n + PAGE_SIZE)} className="btn-secondary self-center">
+          Show more
+        </button>
+      )}
 
       {editingTerm && (
         <TokenPopover
