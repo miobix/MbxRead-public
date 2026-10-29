@@ -1652,3 +1652,18 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   promotion is skipped quietly and the sync still succeeds (tested); batch the note ids
   then. No new state, loops or growing files.
 - **Skill pass:** nothing repeated or painful this session; no candidates.
+
+## 2026-10-29 — /hanja-today fixes today's Anki cards
+
+- **First write to the `Hanja::*` decks, narrowly scoped.** The user asked `/hanja-today`
+  to do the card edits they were making by hand: official 훈음 first in `name` (card
+  reading kept after ` / `, typos replaced), and `*훈: English` lines under the `examples`
+  image. `fix_today` writes only those two fields, only on today's notes (re-read from
+  Anki, anything else refused), and only with `--apply` after a previewed plan. The read
+  guard `ANKI_READ_ACTIONS` stays on every other path.
+- **A/B/C classification is Claude's judgment, not code**: 훈 differs → keep both; only 음
+  differs → typo, take the official. The preview step exists because "typo" is a guess.
+- **Idempotent 훈 lines:** skipped when the examples already hold a `*` line, so reruns and
+  cards the user already edited are left alone. Format copied from the user's 112 edited
+  notes (`<br>*해하다: harm, damage`). The dry-run output is kept as
+  `hanja_output/<date>-anki.json`, the undo record (AnkiConnect has no undo).
