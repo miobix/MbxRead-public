@@ -643,7 +643,7 @@ batch for the characters of their current study deck.
    `_get`: SQLite response cache, and a 30 min pause after the first failure (timeout,
    non-200, unparseable or `<error>` XML) during which nothing is sent and
    `KrdictUnavailable` is raised. `/api/dict` maps it to 503.
-4. **CLI**: `today [--deck]`, `check <word> <hanja>…`; `char` no longer probes krdict.
+4. **CLI**: `today [--deck] [--ahead N]` (added 2026-10-30, see DECISIONS), `check <word> <hanja>…`; `char` no longer probes krdict.
 5. **`.claude/skills/hanja-today/SKILL.md`**: one call, writes
    `hanja_output/<date>.md` (gitignored): card name vs official 훈음, the 훈 as a
    dictionary-form word with English, 5-8 words per character with register. Every word

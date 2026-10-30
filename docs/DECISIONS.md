@@ -1667,3 +1667,14 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   cards the user already edited are left alone. Format copied from the user's 112 edited
   notes (`<br>*해하다: harm, damage`). The dry-run output is kept as
   `hanja_output/<date>-anki.json`, the undo record (AnkiConnect has no undo).
+
+## 2026-10-30 — /hanja-today `--ahead N`
+
+- **Why:** the user was away for the weekend and asked for 10-31 and 11-01 on 10-30. That
+  took a one-off script (next queue slice + `fix_fields` without the today guard). `today`
+  and `fix` now take `--ahead N`; the fix guard checks the note against that day's set.
+- **Day N** = new cards `[new_count + (N-1)*perDay, +perDay)` in queue order, Card 1 only.
+  `new.perDay` comes from `getDeckConfig` (joins the read-only allowlist). Correct only if
+  the user does exactly one day's new cards per day; the skill says to state that.
+- The one-off 10-31/11-01 writes (20 notes, undo records in `hanja_output/`) were approved
+  explicitly and match what `--ahead 1/2` now returns (re-preview: 0 pending).
