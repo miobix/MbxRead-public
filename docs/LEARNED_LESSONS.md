@@ -48,7 +48,7 @@ no longer true.
 
 ## 4. Ephemeral planning docs have a lifecycle that ENDS.
 
-`NEXT_STAGE_OPTIONS.md` and `HANJA_STUDY_OPTIONS.md` were thinking docs. The moment their
+`NEXT_STAGE_OPTIONS.md` was a thinking doc. The moment its
 decision was made, they became dead weight in `docs/`. The decision itself belongs in
 `DECISIONS.md`; the options doc gets **moved to `archive/` (or deleted — git remembers)**.
 Name a doc's *kind* in its opening line so "this one is ephemeral" is explicit from day one.

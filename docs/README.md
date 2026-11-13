@@ -30,7 +30,7 @@ The four kinds:
   the doc-hygiene and dev-cycle practices worth reusing on the next project.
 - **`archive/`** — *Ephemeral, retired.* Planning/thinking docs that have served their
   purpose. Kept for provenance (git has them too); not part of the live doc set. Currently:
-  `NEXT_STAGE_OPTIONS.md`, `HANJA_STUDY_OPTIONS.md`.
+  `NEXT_STAGE_OPTIONS.md`, `EPIC_24_CLIENT_PAGINATION.md`.
 
 ## Adding a new doc
 

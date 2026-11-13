@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   api,
   type BackItem,
@@ -27,8 +27,8 @@ const dictShade = (i: number) => DICT_SHADES[Math.min(i, DICT_SHADES.length - 1)
 
 const LEMMA_GROUP = "";
 
-// Rough rendered width in em, so the lemma input hugs its text and the hanja field
-// can sit beside it: Hangul/Hanja are about 1em wide, everything else about 0.6em.
+// Rough rendered width in em, so the lemma input hugs its text: Hangul/Hanja are
+// about 1em wide, everything else about 0.6em.
 const textEm = (text: string) =>
   [...text].reduce((w, ch) => w + (/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af]/.test(ch) ? 1 : 0.6), 0);
 
@@ -39,10 +39,6 @@ export function TokenPopover({
   decks,
   defaultDeck,
   translatorBackend,
-  hanjaMode,
-  hanjaDeck,
-  initialHanja,
-  autoLookup,
   onClose,
   onSaved,
   onDeleted,
@@ -53,14 +49,6 @@ export function TokenPopover({
   decks: string[];
   defaultDeck: string;
   translatorBackend?: string;
-  // "Add word" on /terms, or editing a term that already has hanja.
-  hanjaMode?: boolean;
-  // Hanja is required only when saving to this deck; pure Korean words go elsewhere.
-  hanjaDeck?: string;
-  // Prefills the hanja input when adding from a /hanja-today list.
-  initialHanja?: string;
-  // Runs the dictionary lookup on open (Add batch always starts with krdict).
-  autoLookup?: boolean;
   onClose: () => void;
   onSaved: (term: Term) => void;
   onDeleted: (term: TermSummary) => void;
@@ -68,8 +56,8 @@ export function TokenPopover({
   const isEditing = target.existing !== null;
   // Phrases are translate-only: a multi-word span has no single dictionary lemma.
   const isPhrase = target.isPhrase;
-  // Include the deck the save will use (the term's, or defaultDeck such as
-  // hanja_deck), which may not be in the user's `decks` list.
+  // Include the deck the save will use (the term's, or defaultDeck), which may not be
+  // in the user's `decks` list.
   const deckOptions = [...new Set([...decks, target.existing?.deck, defaultDeck])].filter(
     (d): d is string => !!d
   );
@@ -81,15 +69,9 @@ export function TokenPopover({
   const [forms, setForms] = useState<FormEntry[]>(target.existing?.forms ?? []);
   const [backItems, setBackItems] = useState<BackItem[]>(target.existing?.back_items ?? []);
   const [notes, setNotes] = useState(target.existing?.notes ?? "");
-  // `hanjaList` = senses committed so far (시장 = 市場 + 市長), `hanja` = the one in the
-  // input; a sense's meanings are the Back chips grouped under it.
-  const [hanjaList, setHanjaList] = useState<string[]>(target.existing?.hanja ?? []);
-  const [hanja, setHanja] = useState(initialHanja ?? "");
-  const [addingHanja, setAddingHanja] = useState(false);
   // An existing term found by lemma while adding a new word — the save turns into
   // an append onto it rather than a create that the UNIQUE lemma would refuse.
   const [appendTo, setAppendTo] = useState<Term | null>(null);
-  const showHanja = hanjaMode || hanjaList.length > 0;
   const [dictEntries, setDictEntries] = useState<DictEntry[] | null>(null);
   const [manualFront, setManualFront] = useState("");
   const [manualBack, setManualBack] = useState("");
@@ -104,33 +86,13 @@ export function TokenPopover({
 
   const groupKeyFor = (text: string) => (text === lemma.trim() ? LEMMA_GROUP : text);
 
-  // The sense list as it stands: committed senses plus whatever is in the input.
-  const senses = [...new Set([...hanjaList, hanja.trim()].filter(Boolean))];
   // The term this save will write to: the tapped/edited one, or one found by lemma.
   const targetTerm: TermSummary | Term | null = target.existing ?? appendTo;
-
-  // In hanja mode a Back chip belongs to a *sense*, not to the lemma or a form —
-  // that grouping is what pairs each meaning with its hanja on the Anki card.
-  const senseGroupFor = (origin: string) => origin.trim() || hanja.trim() || LEMMA_GROUP;
-
-  const addSense = (text: string) => {
-    const value = text.trim();
-    if (!value) return;
-    setHanjaList((prev) => (prev.includes(value) ? prev : [...prev, value]));
-    setHanja(value);
-  };
-
-  const removeSense = (text: string) => {
-    setHanjaList((prev) => prev.filter((h) => h !== text));
-    setBackItems((prev) => prev.filter((b) => b.group !== text));
-    setHanja((prev) => (prev.trim() === text ? "" : prev));
-  };
 
   // Fold an already-saved term into this popover so the save becomes an append.
   // Merges rather than replaces: anything already typed here survives.
   const adoptExisting = (term: Term) => {
     setAppendTo(term);
-    setHanjaList((prev) => [...new Set([...term.hanja, ...prev])]);
     setForms((prev) => [
       ...term.forms,
       ...prev.filter((f) => !term.forms.some((e) => e.text === f.text)),
@@ -176,21 +138,11 @@ export function TokenPopover({
   const addDictHeadword = (entry: DictEntry) => {
     const text = entry.word.trim();
     if (!text) return;
-    // On a hanja term the headword is the lemma itself; what this click picks is
-    // which *sense* (which hanja) the definition belongs to.
-    if (showHanja) {
-      const group = senseGroupFor(entry.origin);
-      if (entry.origin) addSense(entry.origin);
-      if (entry.definitions[0]) addDictSense(group, entry.definitions[0], entry.examples[0]);
-      return;
-    }
     const group = groupKeyFor(text);
     if (group !== LEMMA_GROUP && !forms.some((f) => f.text === group)) {
       setForms((prev) => [...prev, { text: group, kind: "dict" }]);
     }
     if (entry.definitions[0]) addDictSense(group, entry.definitions[0], entry.examples[0]);
-    // The click is the homograph disambiguation — overwrite whatever was there.
-    if (entry.origin) setHanja(entry.origin);
   };
 
   const addManualEntry = () => {
@@ -230,12 +182,11 @@ export function TokenPopover({
     setError(null);
     try {
       const { translation: result } = await api.translate(lemma.trim(), translatorBackend);
-      const group = showHanja ? senseGroupFor("") : LEMMA_GROUP;
       setBackItems((prev) => {
-        if (prev.some((b) => b.group === group && b.kind === "translate" && b.text === result)) {
+        if (prev.some((b) => b.group === LEMMA_GROUP && b.kind === "translate" && b.text === result)) {
           return prev;
         }
-        return [...prev, { group, kind: "translate", text: result, korean_def: "" }];
+        return [...prev, { group: LEMMA_GROUP, kind: "translate", text: result, korean_def: "" }];
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Translation failed.");
@@ -249,12 +200,6 @@ export function TokenPopover({
     setBusy("dict");
     setError(null);
     try {
-      // The same keystroke answers "is this word already saved?", so a
-      // homograph shows the append offer before any chips are picked.
-      if (hanjaMode && !targetTerm) {
-        const found = await api.termByLemma(lemma.trim());
-        if (found) adoptExisting(found);
-      }
       setDictEntries(await api.dictLookup(lemma.trim()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dictionary lookup failed.");
@@ -263,31 +208,16 @@ export function TokenPopover({
     }
   };
 
-  useEffect(() => {
-    // One lookup on open; its busy flag is the only synchronous setState.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (autoLookup) lookupDictionary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const save = async () => {
     const trimmedLemma = lemma.trim();
     if (!trimmedLemma) {
       setError("Lemma can't be empty.");
       return;
     }
-    // A blank hanja field here would silently save to the two-way model instead.
-    if (hanjaMode && deck === hanjaDeck && senses.length === 0) {
-      setError("Hanja can't be empty — look it up or type it in.");
-      return;
-    }
     setBusy("save");
     setError(null);
     // An empty back_items array would blank a chip-less term's translation on save.
     const backItemsPayload = backItems.length > 0 ? backItems : undefined;
-    // Never send hanja from a plain reading-flow save — only /terms' hanjaMode
-    // (or editing a term that already has one) touches this field.
-    const hanjaPayload = showHanja ? senses : undefined;
     try {
       const term = targetTerm
         ? await api.patchTerm(targetTerm.id, {
@@ -299,7 +229,6 @@ export function TokenPopover({
             notes,
             forms,
             back_items: backItemsPayload,
-            hanja: hanjaPayload,
           })
         : await api.createTerm({
             lemma: trimmedLemma,
@@ -313,7 +242,6 @@ export function TokenPopover({
             // Where the word was first saved, for per-book stats.
             source_book_id: bookId ?? undefined,
             source_page: pageNo ?? undefined,
-            hanja: hanjaPayload,
           });
       onSaved(term);
       onClose();
@@ -373,10 +301,14 @@ export function TokenPopover({
     return `${shade || "bg-dict-1"} text-dict-ink`;
   };
 
-  const backItemsFor = (group: string) => backItems.filter((b) => b.group === group);
+  // Pre-Epic-32 hanja chips are grouped by a spelling no front entry has; show them
+  // under the lemma, as the Anki sync does.
+  const frontGroups = new Set([LEMMA_GROUP, ...forms.map((f) => f.text)]);
+  const backItemsFor = (group: string) =>
+    backItems.filter((b) => (frontGroups.has(b.group) ? b.group : LEMMA_GROUP) === group);
   const backIndexOf = (item: BackItem) => backItems.indexOf(item);
 
-  // The "→ meaning meaning" run of one preview row (front-entry and per-sense rows).
+  // The "→ meaning meaning" run of one front entry's preview row.
   const backRow = (group: string) => {
     const items = backItemsFor(group);
     return (
@@ -431,7 +363,7 @@ export function TokenPopover({
                   lookupDictionary();
                 }
               }}
-              autoFocus={hanjaMode && !isEditing}
+              autoFocus={!isEditing && !target.lemma}
               placeholder="Dictionary form"
               aria-label="Dictionary form (lemma)"
               style={{ width: `${Math.max(3, textEm(lemma)) + 0.5}em` }}
@@ -439,38 +371,12 @@ export function TokenPopover({
                 isPhrase ? "text-xl" : "text-[32px]"
               }`}
             />
-            {/* Once a sense exists its row shows it below, so an empty field here
-                would read as a missing value: offer a link until it's wanted. */}
-            {showHanja &&
-              (hanjaList.length === 0 || addingHanja || hanja ? (
-                <input
-                  value={hanja}
-                  onChange={(e) => setHanja(e.target.value)}
-                  onBlur={(e) => {
-                    addSense(e.target.value);
-                    if (!e.target.value.trim()) setAddingHanja(false);
-                  }}
-                  autoFocus={addingHanja}
-                  placeholder={senses.length > 0 ? "Another hanja" : "Hanja"}
-                  aria-label="Hanja"
-                  className="min-w-0 flex-1 bg-transparent text-xl text-muted border-b border-border focus:border-accent focus:text-ink focus:outline-none focus-visible:outline-none transition-colors"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAddingHanja(true)}
-                  className="btn-link shrink-0 self-center text-xs"
-                >
-                  + Add hanja
-                </button>
-              ))}
           </div>
         </div>
 
         {appendTo && (
           <p className="rounded border border-border bg-paper px-3 py-2 text-sm">
             <b>{appendTo.lemma}</b> is already saved
-            {appendTo.hanja.length > 0 && <> as {appendTo.hanja.join(", ")}</>}
             {appendTo.translation && <> ({appendTo.translation})</>}. Saving adds to it.
           </p>
         )}
@@ -522,24 +428,6 @@ export function TokenPopover({
               </div>
             );
           })}
-          {/* One row per hanja sense, numbered the same on the card's Back. */}
-          {showHanja &&
-            senses.map((sense) => (
-              <div key={`sense-${sense}`} className="py-2 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 shrink-0 bg-manual text-manual-ink">
-                  {sense}
-                  <button
-                    type="button"
-                    onClick={() => removeSense(sense)}
-                    aria-label={`Remove ${sense}`}
-                    className="opacity-80 hover:opacity-100"
-                  >
-                    ×
-                  </button>
-                </span>
-                {backRow(sense)}
-              </div>
-            ))}
         </div>
 
         {!isPhrase && dictEntries && (
@@ -564,15 +452,7 @@ export function TokenPopover({
                     <li key={j}>
                       <button
                         type="button"
-                        onClick={() => {
-                          const group = showHanja
-                            ? senseGroupFor(entry.origin)
-                            : groupKeyFor(entry.word.trim());
-                          addDictSense(group, d, entry.examples[0]);
-                          // Picking a sense disambiguates the homograph as much as
-                          // clicking the headword, so the hanja comes along too.
-                          if (entry.origin && showHanja) addSense(entry.origin);
-                        }}
+                        onClick={() => addDictSense(groupKeyFor(entry.word.trim()), d, entry.examples[0])}
                         className="text-left text-muted hover:text-ink transition-colors"
                         title="Add this definition to Back"
                       >
@@ -619,20 +499,18 @@ export function TokenPopover({
             own front group, never merged into the lemma. */}
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Add your own</span>
-          {/* On a hanja term, Back chips hang off a sense, so the single input adds a
-              meaning to the sense being built instead of a new front form. */}
-          {isPhrase || showHanja ? (
+          {isPhrase ? (
             <div className="flex gap-2">
               <input
                 value={manualBack}
                 onChange={(e) => setManualBack(e.target.value)}
-                placeholder={showHanja ? "A meaning" : "A translation"}
+                placeholder="A translation"
                 className="field flex-1 min-w-0"
               />
               <button
                 type="button"
                 onClick={() => {
-                  addBackText(manualBack, showHanja ? senseGroupFor("") : LEMMA_GROUP);
+                  addBackText(manualBack, LEMMA_GROUP);
                   setManualBack("");
                 }}
                 className="btn-secondary"

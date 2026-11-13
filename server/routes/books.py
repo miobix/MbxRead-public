@@ -15,7 +15,7 @@ from ..difficulty import (
 )
 from ..paging import snap_back, snap_forward, split_pages
 from ..tokenizer import tokenize
-from .terms import _back_items_for, _forms_for, hanja_list
+from .terms import _back_items_for, _forms_for
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -296,7 +296,6 @@ def _term_summary(row: sqlite3.Row) -> dict:
         "forms": [],
         "examples": json.loads(row["examples"]),
         "back_items": [],
-        "hanja": hanja_list(row["hanja"]),
     }
 
 
@@ -307,7 +306,7 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
     if lemmas:
         placeholders = ", ".join("?" for _ in lemmas)
         rows = conn.execute(
-            f"SELECT id, lemma, translation, notes, status, deck, examples, hanja FROM terms "
+            f"SELECT id, lemma, translation, notes, status, deck, examples FROM terms "
             f"WHERE lemma IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()
@@ -316,7 +315,7 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
         # A term also lights up via its forms; a direct lemma match wins over a form.
         form_rows = conn.execute(
             f"SELECT tf.form, t.id, t.lemma, t.translation, t.notes, t.status, t.deck, "
-            f"t.examples, t.hanja FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
+            f"t.examples FROM term_forms tf JOIN terms t ON t.id = tf.term_id "
             f"WHERE tf.form IN ({placeholders})",
             tuple(lemmas),
         ).fetchall()

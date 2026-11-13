@@ -1694,3 +1694,29 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   the real migration.
 - **RAG uses public-domain Korean texts only;** imported books are copyrighted.
 - **API keys are bring-your-own** via `.env` (never committed, `.env.example` lists them).
+
+## 2026-11-13 — Epic 32: remove in-app hanja and the scheduled fetch (roadmap unit 0)
+
+- **Removed:** the `Korean Reader Hanja` note type and its sync path, the `hanja_deck`
+  setting, the multi-sense popover UI, `POST /api/terms/{id}/convert-to-hanja`,
+  `GET /api/terms/hanja-lists[/{date}]`, the Add batch page (`/terms/batch`), and
+  `scripts/fetch_feeds.ps1` with its README setup steps. Feeds, the manual fetch, retention
+  and the Queue are unchanged.
+- **Columns stay, nothing destructive.** `terms.hanja` is still created (default `'[]'`) so
+  fresh and old DBs share one schema and no user data is dropped; the API no longer reads,
+  writes or returns it (a `hanja` key in a request is ignored). A stale `hanja_deck` row
+  in `settings` is echoed by `GET /api/settings` and otherwise unused. krdict's hanja
+  (`origin`) still shows in the dictionary list.
+- **Already-synced hanja notes are skipped on update.** Their fields (Korean/Hanja/English/
+  KoreanDef) differ from the two-way model, so a two-way `updateNoteFields` would fail on
+  every sync. They stay as they are in Anki and still count for mature → `known`.
+  Re-adding them as two-way notes was rejected: it leaves duplicate cards in Anki.
+- **Old sense chips fold into the lemma.** A pre-32 term's Back chips are grouped by hanja
+  spelling, which matches no front entry; `_render_two_way` and the popover now place such
+  chips under the lemma, so no meaning silently drops off a card or out of view.
+- **Terms > Add word stays** as a plain add into `default_deck`. It was the hanja entry
+  point, but adding a word without a book is useful on its own. `/by-lemma` stays too:
+  the popover's "already saved, add to it" answer to a 409 uses it for every save.
+- **Fetching is manual only.** The scheduled job was Windows-specific and a single-machine
+  concern; scheduling, if wanted again, belongs to whatever runs the app once it is
+  containerised (later roadmap units).

@@ -1,8 +1,6 @@
 """Terms API. See docs/SPEC.md section 5."""
 import json
-import re
 import sqlite3
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,7 +13,7 @@ router = APIRouter(prefix="/api/terms", tags=["terms"])
 Status = Literal["learning", "known", "ignored"]
 # A change to any of these re-syncs the Anki card. JSON columns compare as their
 # stored strings, so they fit the same check.
-_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples", "hanja"}
+_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples"}
 
 
 class FormIn(BaseModel):
@@ -43,9 +41,6 @@ class TermCreate(BaseModel):
     # Where the term was first saved from; None outside the reader.
     source_book_id: int | None = None
     source_page: int | None = None
-    # One spelling per sense (시장 = 市場 + 市長); a sense's meanings are the
-    # back_items whose `group` is that spelling.
-    hanja: list[str] = []
 
 
 class TermPatch(BaseModel):
@@ -58,7 +53,6 @@ class TermPatch(BaseModel):
     forms: list[FormIn] | None = None
     examples: list[str] | None = None
     back_items: list[BackItemIn] | None = None
-    hanja: list[str] | None = None
 
 
 def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
@@ -76,10 +70,6 @@ def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
 def _normalize_strings(values: list[str]) -> list[str]:
     """Trim, drop blanks, and dedupe while keeping order."""
     return list(dict.fromkeys(s for v in values if (s := v.strip())))
-
-
-def hanja_list(value: str | None) -> list[str]:
-    return json.loads(value or "[]")
 
 
 def _normalize_back_items(items: list[dict]) -> list[dict]:
@@ -162,7 +152,6 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "updated": row["updated"],
         "source_book_id": row["source_book_id"],
         "source_page": row["source_page"],
-        "hanja": hanja_list(row["hanja"]),
     }
 
 
@@ -201,7 +190,7 @@ def list_terms(
 @router.get("/by-lemma")
 def get_term_by_lemma(lemma: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
     """Exact-lemma lookup (the list's `q` is a fuzzy LIKE), so the popover can offer to
-    append a hanja sense to a saved word."""
+    add to a word that is already saved."""
     row = conn.execute("SELECT * FROM terms WHERE lemma = ?", (lemma.strip(),)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="term not found")
@@ -217,8 +206,8 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
     try:
         cur = conn.execute(
             "INSERT INTO terms (lemma, translation, notes, status, deck, sentence, "
-            "examples, source_book_id, source_page, hanja) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "examples, source_book_id, source_page) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 body.lemma,
                 translation,
@@ -229,7 +218,6 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 json.dumps(_normalize_strings(body.examples)),
                 body.source_book_id,
                 body.source_page,
-                json.dumps(_normalize_strings(body.hanja), ensure_ascii=False),
             ),
         )
     except sqlite3.IntegrityError:
@@ -273,9 +261,6 @@ def patch_term(
     if "examples" in fields:
         fields["examples"] = json.dumps(_normalize_strings(fields["examples"] or []))
 
-    if "hanja" in fields:
-        fields["hanja"] = json.dumps(_normalize_strings(fields["hanja"] or []), ensure_ascii=False)
-
     if not fields and not forms_provided and not back_items_provided:
         return _term_dict(conn, row)
 
@@ -313,101 +298,8 @@ def patch_term(
     return _term_dict(conn, _get_term_or_404(conn, term_id))
 
 
-class HanjaConvert(BaseModel):
-    hanja: str
-    back_items: list[BackItemIn]
-    deck: str
-
-
-@router.post("/{term_id}/convert-to-hanja")
-def convert_to_hanja(
-    term_id: int, body: HanjaConvert, conn: sqlite3.Connection = Depends(db_module.get_db)
-):
-    """Turn a reading-saved term into a hanja term in place, keeping its highlight and
-    history. Sync state resets so a Hanja note is added; the old note is left alone."""
-    row = _get_term_or_404(conn, term_id)
-    if hanja_list(row["hanja"]):
-        raise HTTPException(status_code=409, detail="term already has hanja; append a sense")
-    senses = _normalize_strings([body.hanja])
-    if not senses:
-        raise HTTPException(status_code=422, detail="hanja can't be empty")
-    items = _normalize_back_items([{**it.model_dump(), "group": senses[0]} for it in body.back_items])
-    conn.execute(
-        "UPDATE terms SET deck = ?, hanja = ?, translation = ?, status = 'learning', "
-        "anki_note_id = NULL, anki_model = NULL, anki_dirty = 0, updated = CURRENT_TIMESTAMP "
-        "WHERE id = ?",
-        (
-            body.deck,
-            json.dumps(senses, ensure_ascii=False),
-            "; ".join(it["text"] for it in items),
-            term_id,
-        ),
-    )
-    _set_back_items(conn, term_id, items)
-    conn.commit()
-    return {
-        **_term_dict(conn, _get_term_or_404(conn, term_id)),
-        "previous": {
-            "anki_note_id": row["anki_note_id"],
-            "deck": row["deck"],
-            "status": row["status"],
-        },
-    }
-
-
 @router.delete("/{term_id}", status_code=204)
 def delete_term(term_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
     _get_term_or_404(conn, term_id)
     conn.execute("DELETE FROM terms WHERE id = ?", (term_id,))
     conn.commit()
-
-
-# /hanja-today's word lists, one hanja_output/<date>.md per day.
-HANJA_OUTPUT = Path(__file__).resolve().parents[2] / "hanja_output"
-_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-
-
-def parse_hanja_list(text: str) -> list[dict]:
-    """'## 端 · 끝 단' sections: the note lines under the heading, then the table rows."""
-    sections: list[dict] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("## "):
-            sections.append({"heading": line[3:], "char": line[3:].split(" ")[0], "notes": [], "words": []})
-        elif not sections or not line:
-            continue
-        elif line.startswith("|"):
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            if len(cells) >= 4 and cells[0] != "word" and not cells[0].startswith("-"):
-                word, hanja, meaning, register = cells[:4]
-                sections[-1]["words"].append({"word": word, "hanja": hanja, "meaning": meaning, "register": register})
-        else:
-            sections[-1]["notes"].append(line)
-    return sections
-
-
-def _saved_status(conn: sqlite3.Connection, word: str, hanja: str) -> str | None:
-    """'anki' = this sense is synced, 'saved' = in the DB but not synced yet, None = not saved."""
-    row = conn.execute("SELECT hanja, anki_note_id, anki_dirty FROM terms WHERE lemma = ?", (word,)).fetchone()
-    if row is None or hanja not in hanja_list(row["hanja"]):
-        return None
-    return "anki" if row["anki_note_id"] and not row["anki_dirty"] else "saved"
-
-
-@router.get("/hanja-lists")
-def hanja_lists():
-    if not HANJA_OUTPUT.is_dir():
-        return []
-    return sorted((p.stem for p in HANJA_OUTPUT.glob("*.md") if _DATE.fullmatch(p.stem)), reverse=True)
-
-
-@router.get("/hanja-lists/{date}")
-def hanja_list_for_date(date: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    path = HANJA_OUTPUT / f"{date}.md"
-    if not _DATE.fullmatch(date) or not path.is_file():
-        raise HTTPException(status_code=404, detail="no word list for that date")
-    sections = parse_hanja_list(path.read_text(encoding="utf-8"))
-    for s in sections:
-        for w in s["words"]:
-            w["status"] = _saved_status(conn, w["word"], w["hanja"])
-    return sections

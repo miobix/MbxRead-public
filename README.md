@@ -6,8 +6,6 @@ inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAP
 SQLite + kiwipiepy backend, Next.js frontend (static export), one server, phone access
 via Tailscale.
 
-This replaces the earlier Lute-based setup — Lute is fully retired.
-
 ## Daily use
 
 **Runs in the background automatically** — `scripts/tray_app.py` starts at every
@@ -88,35 +86,17 @@ neither the app nor port 8002 is ever exposed to the public internet.
 - **PDF**: `.venv\Scripts\python import_tools\pdf_text.py book.pdf --pages 1-30` →
   `.txt`. Paste the result into the app.
 
-## Automated content fetching (Task Scheduler)
+## Fetching content
 
-The Queue (`/queue`) pulls new candidates from your feeds on demand via the "Fetch new
-candidates" button (`POST /api/feeds/fetch`). To also run this automatically on a
-schedule, register `scripts/fetch_feeds.ps1` as a Windows Task Scheduler action:
+The Queue (`/queue`) pulls new candidates from your feeds with the "Fetch new
+candidates" button (`POST /api/feeds/fetch`). Fetching is manual; there is no
+scheduled job.
 
-1. Open **Task Scheduler** → **Create Task…** (not "Create Basic Task" — you need the
-   full dialog for the arguments below).
-2. **General**: name it e.g. `MbxRead fetch feeds`.
-3. **Triggers** → **New…**: Daily, pick a time (e.g. 6:00 AM), recur every 1 day.
-4. **Actions** → **New…**: Program/script `powershell.exe`; arguments:
-   `-WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path\to\MbxRead\scripts\fetch_feeds.ps1"`
-   (adjust the path to where you cloned this repo). `-WindowStyle Hidden` is what
-   stops a console window from flashing up when the task fires.
-5. **Conditions**: uncheck "Start the task only if the computer is on AC power" if this
-   machine should still fetch on battery.
-
-The script assumes **the server is already running** — it just POSTs to the existing
-`/api/feeds/fetch` endpoint on `localhost:8002`, exactly like the manual button. Its
-result (or error) is appended to `scripts/fetch_feeds.log`; Task Scheduler's own run
-history also shows failures, since the script exits non-zero on one.
-
-Two related settings, editable in `/settings`:
-- **Queue candidate retention** — how many days an unpromoted, undiscarded candidate
-  sits in the Queue before the fetch job auto-discards it (default 7 days). Checked on
-  every fetch call, scheduled or manual.
-- The timestamp of the last fetch *attempt* (scheduled or manual) is tracked
-  internally (`GET /api/settings` → `last_fetch_attempt`) and will be surfaced on the
-  Queue page itself in a later pass.
+- **Queue candidate retention** (in `/settings`): how many days an unpromoted,
+  undiscarded candidate sits in the Queue before a fetch auto-discards it (default
+  7 days). Checked on every fetch.
+- The time of the last fetch *attempt* is stored (`GET /api/settings` →
+  `last_fetch_attempt`) and shown on the Queue page.
 
 ## Switching translation backends
 
@@ -131,7 +111,6 @@ web/                    Next.js frontend, built to web/out and served by server/
 translate_svc/          DeepL/Claude translation + cache + krdict, imported as a library
 import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
-scripts/fetch_feeds.ps1 Task Scheduler action for automated feed fetching (see above)
 scripts/tray_app.py     daily-use launcher: server + tray icon, starts at logon, no console
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
 ANKI.md                 Anki sync setup and daily-use guide
