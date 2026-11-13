@@ -1720,3 +1720,27 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
 - **Fetching is manual only.** The scheduled job was Windows-specific and a single-machine
   concern; scheduling, if wanted again, belongs to whatever runs the app once it is
   containerised (later roadmap units).
+
+## 2026-11-13 — Unit 1: Dockerfile for the API
+
+- **Python 3.14.10** (`python:3.14.10-slim-trixie`, pinned by digest). yt-dlp has deprecated
+  3.10, and every native dep ships an `abi3` or cp314 wheel, so slim needs no compiler; a
+  missing wheel would fail the build loudly. The full suite (282) passes on it in a
+  throwaway container. The local venv stays on 3.10 until the follow-up in STATUS.
+- **API only.** `web/out` is left out; `main.py` already skips the static mount without
+  it. How the web is served is a compose decision (unit 2), not baked in here.
+- **`MBXREAD_DATA_DIR`** (default repo root) moves both SQLite files, so a non-root
+  process writes only to `/data` and local behaviour is unchanged. One env var rather
+  than one per file: both files are the app's state and move together. The one-line
+  default is repeated in `server/db.py` and `translate_svc/config.py` instead of shared,
+  so the server's DB module doesn't import the translator package.
+- **`.dockerignore` is an allowlist**, so `.env`, `reader.db` or any new stray file can't
+  reach the build context even when nobody updates the ignore list.
+- **Requirements split in two:** `requirements.txt` (runtime, what the image installs) and
+  `requirements-dev.txt` (`-r` it, plus pytest and the Windows tray's pystray/pillow). A
+  third file for the tray alone was not worth it: both extras are only ever installed on
+  the dev machine.
+- **Single stage.** No build tools are installed, so a multi-stage build would save
+  almost nothing; ~507 MB is mostly `kiwipiepy_model` (105 MB), pymupdf and numpy.
+- **Non-root `app` (uid 10001)**, code owned by root and read-only; healthcheck uses
+  `urllib` because slim has no curl.

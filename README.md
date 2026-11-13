@@ -77,6 +77,22 @@ opening anything to the public internet.
 Both devices need Tailscale running and signed into the same account for this to work;
 neither the app nor port 8002 is ever exposed to the public internet.
 
+## Run with Docker (API only)
+
+```
+docker build -t mbxread-api .
+docker run -d --name mbxread -p 8002:8002 --env-file .env -v mbxread-data:/data mbxread-api
+```
+
+- The API answers at `http://localhost:8002/api` (`/api/health` for a check). The web UI
+  is not in this image yet (roadmap unit 2), so `/` returns 404.
+- Your data (`reader.db`, the translation cache) lives in the `mbxread-data` volume. Outside
+  Docker, `MBXREAD_DATA_DIR` moves those files too (default: the repo root).
+- Anki sync can't reach desktop Anki from the container yet (unit 2); it answers "Anki is
+  not running".
+- Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
+  pytest and the tray's `pystray`/`pillow`). The image installs `requirements.txt` only.
+
 ## Importing texts
 
 - **Paste or upload**: in the app, "+ Add" → paste text or upload a `.txt` file.
@@ -113,6 +129,9 @@ import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
 scripts/tray_app.py     daily-use launcher: server + tray icon, starts at logon, no console
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
+Dockerfile              API image (see "Run with Docker"); .dockerignore is an allowlist
+requirements.txt        runtime deps (what the image installs)
+requirements-dev.txt    + pytest and the Windows tray deps, for local use
 ANKI.md                 Anki sync setup and daily-use guide
 .env                    your API keys (copy from .env.example)
 reader.db               your books/pages/terms — never committed
