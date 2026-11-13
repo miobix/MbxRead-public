@@ -23,9 +23,10 @@ phone access over Tailscale.
 **Test suite: 282 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
-## Epic checklist
+## Checklist: epics 0–32 (solo development)
 
 Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECISIONS.md`.
+Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 
 - [x] **0** — Repo, scaffolding, docs; app factory + lifespan DB init
 - [x] **1** — Tokenizer (kiwipiepy wrapper, lemma-based, table-driven tests)
@@ -148,13 +149,9 @@ Translation already calls DeepL/Claude, so the router has a real job.
   when YouTube breaks, needs this first. yt-dlp also warns that YouTube wants a JS runtime
   (deno); check that at the same time.
 - **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
-- **Content idea: "basic and likely to miss" Korean (user, 2026-10-23).** The user is fluent but
-  learned outside Korean schooling, so early-school basics can be missing (found: didn't know 자모,
-  자음, 모음, 받침…). Wants to look into this layer later: everyday terms a Korean picks up in
-  elementary school (grammar/linguistics words, school-subject vocabulary, and similar). First 11
-  saved as terms 1040–1050 (deck `Korean`, Hangul structure words). Another example of the level:
-  the names of each 자모 (기역, 니은, 디귿, 리을, 쌍기역…), also unknown; deliberately not saved as
-  cards, it only illustrates the kind of content. No feature or scope decided yet.
+- **Content idea: early-school basics (2026-10-23).** Everyday terms a Korean picks up in
+  elementary school: grammar and linguistics words (자모, 자음, 모음, 받침…), the names of each
+  자모 (기역, 니은, 디귿…), school-subject vocabulary. No feature or scope decided yet.
 
 ## Gotcha for future dev sessions
 
