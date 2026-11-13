@@ -9,7 +9,7 @@ from .. import db as db_module
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# Days a Queue candidate waits before the fetch job auto-discards it.
+# Days a Queue candidate waits before a fetch auto-discards it.
 DEFAULT_CANDIDATE_RETENTION_DAYS = 7
 
 DEFAULTS = {
@@ -17,9 +17,7 @@ DEFAULTS = {
     "default_deck": "Korean",
     "translator_backend": "deepl",
     "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-    # Sino-Korean words, kept apart from the user's own Hanja::* character decks.
-    "hanja_deck": "한자어",
-    # System-managed: stamped by the fetch job, absent from SettingsPut.
+    # System-managed: stamped by POST /api/feeds/fetch, absent from SettingsPut.
     "last_fetch_attempt": None,
 }
 
@@ -29,7 +27,6 @@ class SettingsPut(BaseModel):
     default_deck: str | None = None
     translator_backend: str | None = None
     candidate_retention_days: int | None = Field(default=None, ge=1, le=90)
-    hanja_deck: str | None = None
     # No last_fetch_attempt: pydantic drops it from a PUT body, so users can't set it.
 
 

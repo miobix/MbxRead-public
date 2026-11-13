@@ -1,7 +1,6 @@
 "use client";
 
 import { BackLink } from "@/lib/back-link";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type AnkiSyncResult, type Settings, type Term, type TermStatus } from "@/lib/api";
 import { TokenPopover } from "../read/TokenPopover";
@@ -21,7 +20,7 @@ export default function TermsPage() {
 
   // Editing reuses the reader's card-builder popover.
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
-  // "Add word" opens the same popover with no term or book, in hanjaMode.
+  // "Add word" opens the same popover with no term or book.
   const [addingWord, setAddingWord] = useState(false);
 
   const [syncing, setSyncing] = useState(false);
@@ -89,9 +88,6 @@ export default function TermsPage() {
           >
             Add word
           </button>
-          <Link href="/terms/batch" className="btn-secondary">
-            Add batch
-          </Link>
           <button
             onClick={sync}
             disabled={syncing}
@@ -153,11 +149,7 @@ export default function TermsPage() {
           className="field"
         >
           <option value="">All decks</option>
-          {/* hanja_deck is a separate setting, so merge it in or hanja saves can't be
-              filtered. */}
-          {[...new Set([...(settings?.decks ?? []), settings?.hanja_deck].filter(
-            (d): d is string => !!d
-          ))].map((d) => (
+          {(settings?.decks ?? []).map((d) => (
             <option key={d} value={d}>
               {d}
             </option>
@@ -194,9 +186,6 @@ export default function TermsPage() {
             <div className="flex items-center justify-between">
               <span className="font-medium">
                 {term.lemma}
-                {term.hanja.length > 0 && (
-                  <span className="text-muted font-normal"> {term.hanja.join(" · ")}</span>
-                )}
               </span>
               <span className="text-xs text-muted">
                 {term.status}
@@ -235,7 +224,6 @@ export default function TermsPage() {
               forms: editingTerm.forms,
               examples: editingTerm.examples,
               back_items: editingTerm.back_items,
-              hanja: editingTerm.hanja,
             },
           }}
           bookId={null}
@@ -261,10 +249,8 @@ export default function TermsPage() {
           bookId={null}
           pageNo={null}
           decks={settings?.decks ?? []}
-          defaultDeck={settings?.hanja_deck || settings?.default_deck || ""}
+          defaultDeck={settings?.default_deck ?? ""}
           translatorBackend={settings?.translator_backend}
-          hanjaMode
-          hanjaDeck={settings?.hanja_deck}
           onClose={() => setAddingWord(false)}
           onSaved={() => refresh()}
           onDeleted={() => {}}

@@ -1,4 +1,4 @@
-"""Feeds API: the roster CRUD and the fetch job that fills the Queue with candidates.
+"""Feeds API: the roster CRUD and the fetch that fills the Queue with candidates.
 
 Items are deduped on source_ref before the expensive fetch, and failures are isolated
 per feed and per item so one bad source never blocks the rest.
@@ -111,7 +111,7 @@ def delete_feed(feed_id: int, conn: sqlite3.Connection = Depends(db_module.get_d
     conn.commit()
 
 
-# --- Fetch job ---
+# --- Fetch ---
 
 
 def _already_imported(conn: sqlite3.Connection, source_ref: str) -> bool:

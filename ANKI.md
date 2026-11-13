@@ -6,9 +6,8 @@ for the full technical spec; this is the practical how-to.
 
 ## One-time setup
 
-1. **Anki desktop**, with the **AnkiConnect** add-on (code `2055492159`). If
-   you've used the old Lute setup, this is already installed — nothing to redo.
-2. That's it. Unlike the Lute setup, you do **not** need to add anything to
+1. **Anki desktop**, with the **AnkiConnect** add-on (code `2055492159`).
+2. That's it. You do **not** need to add anything to
    AnkiConnect's `webCorsOriginList` config. That CORS allowlist only applies to
    requests sent *from a browser* (with an `Origin` header); MbxRead's
    sync call goes server-to-server (the FastAPI backend calling AnkiConnect

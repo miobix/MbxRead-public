@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS terms (
   anki_note_id INTEGER,                          -- NULL until first sync
   anki_dirty INTEGER NOT NULL DEFAULT 0,         -- 1 = edited since last sync
   examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence (card back only)
-  anki_model TEXT,                               -- Epic 21: two-way or hanja model name (legacy 'Basic' path removed 2026-10-21)
+  anki_model TEXT,                               -- Epic 21: note type the term was synced as ('Korean Reader Hanja' on pre-Epic-32 hanja notes)
+  hanja TEXT NOT NULL DEFAULT '[]',              -- Epic 25/26; stored, unused since Epic 32 (never written)
   created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -192,7 +193,7 @@ Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or AnkiConnect missing)"}`.
 2. For each deck referenced by pending terms: `createDeck` (idempotent).
 3. New: terms `status='learning' AND anki_note_id IS NULL` → `addNote` on the **Epic 21 custom two-way model** `"Korean Reader 2-way"` (`ensure_model()` creates it once, guarded on `modelNames`; fields still named `Korean`/`English`/`Examples` — unchanged since Epic 21). Content (Epic 22): `Korean` = the lemma alone if it has no extra forms (unchanged simple case), else a numbered stack (`1. 승인<br>2. 승인서`); `English`/`Examples` render from `term_back_items` when the term has any — one line per back item, lettered (`1a.`/`1b.`) when its front entry has 2+ items, bare number/no label otherwise, with `Examples` also carrying the reading sentence first and the free-typed `notes` last. A term with **zero** `term_back_items` (never touched by the Epic 22 popover) renders `English`/`Examples` exactly as before Epic 22 — flat `translation`, the old `examples` JSON column + sentence — untouched legacy behavior. Store the returned id **and stamp `anki_model`**, clear dirty. On per-note error (e.g. duplicate) record in `failed`, continue.
-4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → branch on `anki_model`: the hanja model → `updateNoteFields` with its four fields; anything else → the two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above). The legacy `Basic` path was removed 2026-10-21 (no live notes used it). On success clear `anki_dirty`.
+4. Dirty: `anki_dirty=1 AND anki_note_id NOT NULL` → the two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above). Epic 32: notes whose `anki_model` is the removed `Korean Reader Hanja` are skipped and left as they are in Anki; Back chips whose group matches no front entry render under the lemma. The legacy `Basic` path was removed 2026-10-21 (no live notes used it). On success clear `anki_dirty`.
 5. Promote (Epic 31): for `learning` terms with a note, `findCards` + `cardsInfo`; a note whose shortest card interval is ≥ 21 days (Anki's "mature") becomes `known`. Best-effort: an AnkiConnect error here promotes nothing and does not fail the sync. Never demoted automatically.
 6. Return counts `{added, updated, failed, promoted}`. Never delete Anki notes. `known`/`ignored` terms are never *added*; a term that already has a note still gets its edits pushed (step 4 ignores status).
 
@@ -279,6 +280,8 @@ start + Tailscale go-live moves to a later epic.)*
 
 ### Epic 17 — Fetch automation, candidate retention, terminology pass (Cycle 2)
 
+*Epic 32 removed item 1 (`scripts/fetch_feeds.ps1` and the Task Scheduler job); fetching is manual only. Items 2–5 stand.*
+
 Planned 2026-07-23 (see `docs/DECISIONS.md`); not yet started. Scope, in order:
 
 1. **Task Scheduler wiring.** New `scripts/fetch_feeds.ps1`: minimal script, `Invoke-RestMethod -Uri http://localhost:8002/api/feeds/fetch -Method Post`, appends the JSON response + a timestamp to `scripts/fetch_feeds.log` (plain append, no rotation — personal-app scale), exits non-zero on any exception so Task Scheduler's own run history shows failures. No new Python code — reuses the existing endpoint exactly as the Queue's manual "Fetch new candidates" button does. README gets a new section with the exact Task Scheduler steps (daily trigger, 24h interval per the user's choice, action = this script). **Assumption, confirmed by the user:** the server is expected to be up continuously (Tailscale-hosted), so hitting the API directly is sufficient — no standalone DB-only fetch path needed.
@@ -355,309 +358,21 @@ Done 2026-07-24. The user found the popover's translation textarea disorganized 
 
 **Accept:** `pytest` + `npm run build`/`lint` green; a word with 2+ dictionary senses shows numbered/lettered chips in the popover matching what syncs to Anki; a manual entry is independent and orange; a pre-existing (legacy) term still displays and syncs exactly as before.
 
-### Epic 25 — Save-a-word: on-demand hanja term entry (separate deck + note type)
+### Epic 25 — Save-a-word: hanja terms (removed)
 
-Done (2026-09-02). Scoped 2026-09-02; re-scoped the same day in a planning session with the
-user (the changes below supersede the first draft, which sent these words to the shared
-reading deck with no hanja stored).
+**Removed in Epic 32** (in-app hanja feature dropped; see `docs/DECISIONS.md`). Full text in git history.
 
-**Motivation:** the user's separate Hanja study track (see `hanja/DECISIONS.md`) surfaces
-new Sino-Korean words from their own study material (a character's origin story + sample
-compound words) that they want to save for Anki review. Typing each one manually into
-`/terms` is too slow to bother with, and an automated "generate a deck from every word
-decomposable from studied hanja" approach was explored and deliberately abandoned (see that
-file: the volume compounds unsustainably, and no available signal — krdict grade, hanja
-composition, usage frequency — tracks what actually makes a word *worth* learning). This
-epic is the lightweight middle ground: a fast, on-demand "I found this word, save it" flow,
-driven by typing the 한글 form from memory (recall practice in itself), with krdict's hanja
-spelling shown to pick the right homograph. No level/hanja-grade tracking.
+### Epic 26 — Multi-hanja terms (removed)
 
-**Decisions from the planning session:**
+**Removed in Epic 32** (in-app hanja feature dropped; see `docs/DECISIONS.md`). Full text in git history.
 
-- **These words go to their own deck**, separate from the reading-flow deck, chosen via a
-  new `hanja_deck` setting.
-- **The hanja spelling is a first-class Anki field** (the user wants to practice *reading*
-  the hanja, so it must not be hidden in notes). New note type, fields
-  `Korean` / `Hanja` / `English` / `KoreanDef`. The last field is deliberately named
-  `KoreanDef`, not `Examples` (user request: its content is the krdict Korean definition;
-  extra example sentences are not the point of this deck).
-- **Card templates are deliberately undecided.** The app creates the note type once with a
-  minimal starter template; the user shapes the cards in Anki desktop later. The
-  create-once `ensure_model` pattern (guard on `modelNames`) guarantees the app never
-  overwrites their template edits.
-- **Entry point: reuse `TokenPopover`** via an "Add word" button on `/terms`. No new
-  dictionary UI: the popover already has an editable lemma input, a Dictionary button, sense
-  chips that build `back_items` in the right shape, and a book-less create path (`/terms`
-  already opens it with `bookId={null}`).
+### Epic 27 — Hanja study skill (removed)
 
-**Scope:**
+**Removed in Epic 32** (a study skill outside the app; not part of this repo). Full text in git history.
 
-1. **`translate_svc/krdict.py`** — `lookup()`'s returned entry dict gains an `origin` field
-   (`item.findtext("origin", "")`, the hanja spelling krdict already returns per entry,
-   currently discarded). Purely additive; existing callers are unaffected by the extra key.
-2. **`server/db.py`** — `_ADDED_COLUMNS["terms"]` gains `"hanja": "TEXT NOT NULL DEFAULT
-   ''"` (idempotent PRAGMA-guarded ALTER, same as every prior column).
-3. **`server/routes/terms.py`** — `hanja` accepted on create (`TermIn`) and patch, returned
-   in the term dict, trimmed like other text fields. A hanja change is a dirty trigger like
-   any other card-content change.
-4. **`server/routes/settings.py`** — `DEFAULTS` gains `"hanja_deck": "한자어"`;
-   `SettingsPut` gains `hanja_deck: str | None`. Same merge-over-defaults mechanics as
-   `default_deck`. The default name is deliberate: the user already has a main "Hanja"
-   deck for character reviews, so this deck must not be named anything that collides with
-   it, and 한자어 (the Korean word for Sino-Korean vocabulary) is exactly what it holds.
-   Editable on `/settings`; sync's existing `create_deck` auto-creates it in Anki.
-5. **`server/anki.py`** — `HANJA_MODEL_NAME = "Korean Reader Hanja"`;
-   `ensure_hanja_model()` (create-once, guarded on `modelNames`, fields
-   `["Korean", "Hanja", "English", "KoreanDef"]`, one simple starter template: Front
-   `{{Korean}}<br>{{Hanja}}` — Korean above, Hanja on its own line below, both on the
-   Front since the whole point of the hanja field is to tell homographs (e.g. 제일
-   祭日 vs 第一) apart, so it can't be the thing under test — Back showing English +
-   KoreanDef (confirmed live against the user's Anki during the epic; they shape it
-   further in Anki desktop from there);
-   `add_note_hanja(deck, korean, hanja, english, korean_def) -> int` and
-   `update_note_hanja(note_id, …)`, mirroring the existing two-way-model helpers.
-6. **`server/routes/anki_sync.py`** — best-effort `ensure_hanja_model()` alongside the
-   existing `ensure_model()` call. New-term loop: `row["hanja"]` non-empty →
-   `add_note_hanja(...)`, stamp `anki_model = HANJA_MODEL_NAME`; otherwise unchanged.
-   Dirty-term loop: new branch for `anki_model == HANJA_MODEL_NAME` →
-   `update_note_hanja(...)`. Rendering reuses the existing helpers: Korean =
-   `_render_korean(front_entries)`, English = `_render_english(labeled)`, KoreanDef =
-   `_render_examples_field(sentence, labeled, notes)` (sentence is `''` for these saves;
-   notes ride along as the final block). `korean_def` as captured by the popover may have a
-   krdict example glued on; kept as-is, removable via the chip's ×.
-7. **`web/lib/api.ts`** — `DictEntry` gains `origin: string`; `Term`/`TermSummary` gain
-   `hanja: string`; `Settings` gains `hanja_deck: string`; `createTerm`/`patchTerm`
-   payloads accept `hanja`.
-8. **`web/app/read/TokenPopover.tsx`** — (a) dict-entry list renders `entry.origin` next to
-   the headword and POS (e.g. `제일 第一 명사` vs `제일 祭日 명사` — both are real krdict
-   entries, confirmed during the `hanja/` exploration); this is the homograph
-   disambiguation, and appears in the reading flow too as a display-only bonus. (b) New
-   optional prop (e.g. `hanjaMode?: boolean`). When true, or when editing a term whose
-   `existing.hanja` is set: show an editable Hanja input under the lemma input;
-   `addDictHeadword` on an entry with an origin fills it (overwriting — the click *is* the
-   disambiguation choice), stays hand-editable; `save()` includes `hanja` in the
-   create/patch payload. Reading-flow saves (no `hanjaMode`, no existing hanja) never send
-   it, so the reading deck is untouched.
-9. **`web/app/terms/page.tsx`** — "Add word" button next to "Sync to Anki" → opens
-   `TokenPopover` with `target={{surface: "", lemma: "", sentence: "", isPhrase: false,
-   existing: null}}`, `bookId={null}`, `pageNo={null}`, `hanjaMode`, and `defaultDeck` =
-   `settings.hanja_deck || settings.default_deck`. `onSaved` → the existing `refresh()`
-   (the id-mapping `handleSaved` only covers edits). Minor nicety: show a term's hanja next
-   to its lemma in the list rows when present. `sentence`/`source_book_id`/`source_page`
-   all omitted (`terms` already allows a source-less save).
-10. **`web/app/settings/page.tsx`** — a "Hanja deck" control alongside the existing
-    default-deck one, PUT through the extended `SettingsPut`.
+### Epic 29 — Hanja word-list pipeline (removed)
 
-**Tests** (offline/mocked per section 9 conventions):
-
-- `test_krdict.py`: `<origin>` added to `SEARCH_XML`, assert `entry["origin"]` (and `""`
-  when the element is absent).
-- `test_terms.py`: hanja roundtrip on create/patch/GET; patching hanja sets `anki_dirty`.
-- `test_settings.py`: `hanja_deck` default + PUT roundtrip.
-- `test_anki_sync.py`: new term with hanja → `add_note_hanja` called with the four rendered
-  fields and `anki_model` stamped `HANJA_MODEL_NAME`; dirty hanja term →
-  `update_note_hanja`; `ensure_hanja_model` idempotency (mirror the existing
-  `ensure_model` tests); a hanja-less term still routes exactly as today.
-
-**Accept:** `pytest` + `npm run build`/`npm run lint` green; on `/terms`, Add word → typing
-제일 → Dictionary shows the 第一 and 祭日 entries as separate choices with hanja visible;
-picking one fills the Hanja input and clicking Save creates a `terms` row with the right
-lemma/hanja/back_items, no `source_book_id`, deck = the hanja deck; Sync creates a note on
-the `Korean Reader Hanja` type with all four fields populated, in the hanja deck; a
-reading-flow save still syncs to the two-way model exactly as before. Live smoke against
-Anki desktop at the end (the note type lands once, templates then editable in Anki).
-
-### Epic 26 — Multi-hanja terms: one lemma, N senses, append-on-collision
-
-Scoped 2026-09-09 in a planning session with the user.
-
-**Motivation:** Sino-Korean homographs share a 한글 lemma. 시장 is 市場 (market) *and* 市長
-(mayor); 제일 is 第一 *and* 祭日. Epic 25 stored one `hanja` string per term and `terms.lemma`
-is `UNIQUE`, so the second one was refused outright with a 409 the popover rendered as a
-dead red error. The user wants **one entry per lemma that accumulates hanja senses** (not
-capped at two), and wants the collision to be an *offer to append*, not a denial.
-
-**Decisions from the planning session:**
-
-- **One term row and one Anki note per lemma**, holding an ordered list of hanja senses.
-  Rejected the alternative (relax `UNIQUE(lemma)` to `(lemma, hanja)`, one note per sense):
-  it needs a full SQLite table rebuild to drop an implicit autoindex, forces a tie-break in
-  the reader's lemma→term map (`books._terms_for_lemmas` keys by lemma), and needs
-  `allowDuplicate` on the Anki side because Anki dedupes on the first field. One note per
-  lemma sidesteps all three, and appending a sense to an already-synced word *updates* that
-  note, so its SRS history survives.
-- **`terms.hanja` becomes a JSON list**, following `terms.examples` (Epic 21) rather than
-  introducing a `term_senses` table. Order is the sense order; no table rebuild, just a
-  value-level backfill.
-- **A sense's meanings are its `term_back_items` group.** `group_key` already groups Back
-  chips by front entry (`''` = the lemma, else a form's text); for a hanja term the group
-  key is the hanja spelling. That reuses the whole Epic 22 chip builder and the Anki label
-  renderer instead of building a parallel structure.
-- **Collision is detected before the save**, on the same Enter that fires the dictionary
-  lookup, via a new exact-lemma endpoint. The 409 path stays as a fallback for a cold Save,
-  and lands in the identical append state — so both routes end at the same button.
-- **Preview before, check after.** The popover's Front→Back preview already promises to be
-  a true WYSIWYG of the Anki render; it renders the *merged* card (existing senses + the one
-  being added) before you commit. After saving, `/terms` rows list every sense.
-
-**Scope:**
-
-1. **`server/db.py`** — `_ADDED_COLUMNS["terms"]["hanja"]` default becomes `'[]'` (fresh
-   DBs). New `_backfill_hanja_json`, run from `_apply_migrations`, idempotent and
-   value-level (no table rebuild): `''` → `[]`, `'第一'` → `["第一"]`, anything already
-   JSON left alone. It also moves each migrated term's lemma-group Back chips
-   (`term_back_items.group_key = ''`) into that single hanja's group, so an Epic 25 term
-   comes out in the new shape with its meanings attached to its sense.
-2. **`server/routes/terms.py`** — `hanja: list[str]` on `TermCreate`/`TermPatch` and in the
-   term dict. `_normalize_hanja` trims, drops blanks and dedupes while keeping order (same
-   contract as `_normalize_examples`). Stored as its JSON string, so the existing generic
-   UPDATE and the `_DIRTY_TRIGGER_FIELDS` comparison both keep working unchanged (exactly
-   how `examples` is handled). New `GET /api/terms/by-lemma?lemma=…` → the full term dict
-   or 404, the exact-match lookup the append flow needs (the list endpoint only does LIKE).
-3. **`server/routes/anki_sync.py`** — `_front_entries` entries carry their own `group`, and
-   `_group_key` reads it instead of hardcoding index 0 → `''`; behaviour for the two-way
-   model is identical. `_render_hanja` now returns the Hanja *field* too: the sense list
-   runs through `_render_korean`, so one sense renders bare (Epic 25 behaviour preserved)
-   and several render as a numbered stack. Back chips are grouped by sense, with any chip
-   whose group matches no sense folded into the first (lossless, defensive), then labeled
-   by the existing `_label_items` — so Hanja `1. 市場 / 2. 市長` and English `1. market /
-   2. mayor` always line up. Model routing switches on the parsed list being non-empty.
-4. **`web/lib/api.ts`** — `Term`/`TermSummary.hanja` and the create/patch payloads become
-   `string[]`; new `termByLemma(lemma)` returning `Term | null` (404 → null).
-5. **`web/app/read/TokenPopover.tsx`** — `hanjaList` (senses committed so far) alongside the
-   existing single `hanja` input (the sense being built). In hanja mode a dictionary
-   definition click groups its chip under that entry's `origin`, so picking senses from two
-   homograph entries builds two groups. `lookupDictionary` also checks for an existing term
-   by lemma; a hit seeds the popover from it (senses, chips, forms, notes, deck — merged,
-   never clobbering what's already typed), shows an "already saved" banner listing the
-   existing senses, and relabels the primary button "Append to <lemma>". Save PATCHes the
-   existing id in that state, POSTs otherwise; a 409 from the POST path fetches the term and
-   drops into the same state instead of erroring. The preview renders one row per sense.
-6. **`web/app/terms/page.tsx`** — a row shows every sense (`市場 · 市長`).
-
-**Tests** (offline/mocked per section 9 conventions):
-
-- `test_terms.py`: hanja list roundtrip on create/patch/GET; normalization (blank/dupe/
-  whitespace); dirty-flag on a changed list and no dirty on an identical one; `by-lemma`
-  hit and 404.
-- `test_db.py` (or wherever migrations are covered): a pre-Epic-26 row with `hanja='第一'`
-  backfills to `["第一"]` with its `''`-group back items regrouped under `第一`; `''`
-  backfills to `[]`; running init twice changes nothing.
-- `test_anki_sync.py`: two-sense term → `add_note_hanja` gets the numbered Hanja stack and
-  matching labeled English; one-sense term still renders bare (Epic 25 regression);
-  hanja-less term still routes to the two-way model.
-
-**Accept:** `pytest` + `npm run build`/`npm run lint` green; on `/terms`, Add word → 시장 →
-Enter shows "already saved, 市場 (market)" with an Append button, picking 市長's definition
-adds a second sense, the preview shows both rows, and Append writes one term whose sync
-updates the existing note to the two-numbered-stack card.
-
-### Epic 27 — `/hanja` study skill: one character at a time, from analysis to saved terms
-
-Scoped 2026-10-02, after a live trial on 競 in the same session.
-
-**Motivation:** the user studies a new hanja character in Anki each day (goal: reading
-characters; learning words is the bonus). The loop around it ran through Gemini, namu.wiki
-and one-at-a-time entry on `/terms`, and pulled them out of the Anki run. The judgment
-(formation, usage tiers, flags) is an LLM conversation, so it is a **skill**; the
-deterministic parts live in a small tested module the skill calls.
-
-**Decisions from the trial:**
-
-- **krdict first** (superseded by Epic 29: candidates are now local, krdict only for picked
-  words). Candidates come from krdict's origin search (every word is real, with a
-  verified `origin`), never from the LLM. The LLM may add words krdict lacks, saved as
-  `manual` and marked unverified.
-- **Filter by rule, rank by measurement.** Drop modifier derivatives (하다/되다/적/률/화/자/
-  장/력/심/성/사/국/의식…) *only when the stem is also in the pool*, multi-word phrases and
-  non-hanja origins; the dropped list is always shown so any can be asked back. Survivors
-  carry krdict grade, NIKL grade/rank (`vocab_levels`), a corpus count over `pages.content`
-  (substring, approximate) and an `in_db` flag.
-- **Top 3 per usage category**, not a difficulty filter (krdict grade is learner difficulty,
-  unrelated to worth): everyday, news/official, up to 3 each (fewer if thin), ranked within
-  category by corpus count then NIKL. The flagged tier (archaic / sounds odd aloud) is a
-  one-line skip list. Grade stays a displayed column only.
-- **Homographs surface from krdict** (경기 = 競技/景氣/驚氣) so a pick can append a sense.
-- **Anki card check is read-only.** Compare the card's `name` field to the dataset 훈음 and
-  report any disagreement (and an empty `Formation` field) with both values. The user's
-  `Hanja::*` decks are never modified by this tooling, names included; any edit is made by
-  the user, in Anki, when they see fit. No write helper exists in the module.
-
-**Scope:**
-
-1. **`translate_svc/krdict.py`** — `search_by_origin(char)`: advanced origin search,
-   length-bucketed when the unbucketed query is truncated.
-2. **`server/data/hanja_grade.csv`** — copy of `hanja/hanja_grade_dataset.csv` (source and
-   known gaps 率/椄 in DECISIONS).
-3. **`server/hanja_study.py`** — dataset load + 훈음, candidate filter/dedupe/annotate,
-   `trim_gloss` (dedupe, cap 3), `clean_origin` (strip 하다/히 suffix, first of `A/B`),
-   per-character breakdown, read-only Anki queue/card/name-comparison helpers, `save_word`
-   (create, or append a sense through `by-lemma` + PATCH, idempotent).
-4. **`scripts/hanja_study.py`** — thin JSON CLI: `char`, `defs`, `save`, `anki-queue`.
-5. **`.claude/skills/hanja/SKILL.md`** — the conversation; indexed from `CLAUDE.md`.
-
-**Tests** (offline, mocked HTTP/AnkiConnect, temp sqlite): dataset parse; filter keeps a
-stem-less word (경매) and drops a derived one (경쟁력) only when 경쟁 is present; trim_gloss;
-clean_origin; name comparison; `save_word` create vs append vs idempotent repeat; every
-AnkiConnect action the module sends is a read (`findNotes`/`findCards`/`notesInfo`/
-`cardsInfo`), asserted by a test.
-
-**Accept:** pytest green; `char 競` returns the dataset row, the Anki card comparison,
-candidates and dropped list; `save` of a homograph appends instead of 409.
-
-**Same-day follow-up: convert a reading-saved term.** A lemma saved while reading (Korean
-deck, 2-way note, no hanja) that is later found via its hanja used to dead-end: appending hanja
-left it a 2-way note, because the sync picks the card layout from `anki_model`. New
-`POST /api/terms/{id}/convert-to-hanja {hanja, back_items, deck}` converts the row in place
-(409 if it already has hanja): deck, hanja and Back chips replaced, `status` set to
-`learning`, `anki_note_id`/`anki_model` cleared so the next sync adds a Hanja-model note.
-Sentence, examples, notes, forms and book source are kept, and `_render_hanja` now folds the
-sentence into KoreanDef. The old Anki note is left untouched and its id is returned. In the
-tooling, `save` reports `reading_term` and writes nothing until run with `--convert`;
-`char` marks such words `in_db.from_reading` instead of hiding them; `save --dry-run` now
-reports what it would do. Tests: convert keeps context and resets sync state, forces
-`learning`, 409/404, `save` without `--convert` is a no-op, and a sync of a converted term
-adds a hanja note carrying the sentence.
-
-### Epic 29 — Local hanja pipeline: no krdict for candidates, plus `/hanja-today`
-
-Scoped 2026-10-14. A `char` run sent 1 to 7 origin searches plus one lookup per candidate
-(homographs) with no cache and no stop on failure, which got this PC's IP blocked on
-2026-10-02. The user wants krdict used only for words chosen for Anki, and a one-call daily
-batch for the characters of their current study deck.
-
-**Scope:**
-
-1. **`server/data/hanja_words.txt.gz`**: libhangul `data/hanja/hanja.txt` (BSD, header
-   kept) @ `717409ce61524bb3d8426060a384822f21354c62`, trimmed to `word:hanja` lines with an
-   all-hangul word of 2+ syllables and an all-hanja origin of the same length (238,047
-   pairs, 1.8 MB gzipped).
-2. **`server/hanja_study.py`**: `load_words`, `words_with`, local `homographs` (every other
-   spelling of the same hangul), `search` with no network (words with a NIKL grade, corpus
-   hit or DB row are `candidates`, the rest `rare`), `check_words`, `name_matches` (strict
-   card-vs-dataset 훈음), `anki_today` (deck's Card 1s introduced today, plus
-   today's remaining new cards by `getDeckStats.new_count` in queue order) and
-   `today_report`. `getDeckStats` joins the read-only Anki allowlist. `anki-queue` now
-   excludes `Hanja::Pending*`.
-3. **`translate_svc/krdict.py`**: `search_by_origin` removed. All requests go through
-   `_get`: SQLite response cache, and a 30 min pause after the first failure (timeout,
-   non-200, unparseable or `<error>` XML) during which nothing is sent and
-   `KrdictUnavailable` is raised. `/api/dict` maps it to 503.
-4. **CLI**: `today [--deck] [--ahead N]` (added 2026-10-30, see DECISIONS), `check <word> <hanja>…`; `char` no longer probes krdict.
-5. **`.claude/skills/hanja-today/SKILL.md`**: one call, writes
-   `hanja_output/<date>.md` (gitignored): card name vs official 훈음, the 훈 as a
-   dictionary-form word with English, 5-8 words per character with register. Every word
-   passes `check`. Official names come from `hanja_grade.csv`; namu.wiki only for a
-   character the dataset lacks.
-
-**Tests:** gzipped list loads; vendored list holds 競技/景氣/競爭 and only all-hanja origins;
-`search` and `today_report` make no `httpx.get`; `anki_today` order, dedupe, deck-scoped
-queries and read-only actions; `name_matches` strict; `check_words` exact; krdict cache hit,
-pause after a timeout and after `<error>` XML (not cached), cached words still served during
-the pause, `/api/dict` 503.
-
-**Accept:** pytest green; `char 競` and `today` run with zero krdict requests; one real
-`/hanja-today` file written for 2026-10-14.
+**Removed in Epic 32** (a study pipeline outside the app; not part of this repo). Full text in git history.
 
 ### Epic 28 — Visual redesign: indigo palette, Noto Sans KR, metro-line progress
 
@@ -673,7 +388,7 @@ a generic default.
   serif (thin strokes blur similar jamo, ㅈ/ㅊ, ㅇ/ㅎ, ㅐ/ㅔ). Same Hangul as Pretendard.
 - **From Metro:** learning-word highlight fills the whole line height; reading progress
   is a line of stations, one every 10%, the reader on the nearest, exact % under it.
-- **Word card:** the lemma is the largest element (hanja beside it when shown),
+- **Word card:** the lemma is the largest element,
   Translate/Dictionary are underlined text actions, Save is the one solid button.
 - **Buttons:** each screen's main action is a solid primary button (Add text, Save,
   Sync to Anki, Promote, ...). Alternatives are outlined, in-flow actions are links.
@@ -697,36 +412,9 @@ the item actions in a "⋯" menu; sort became a select and the filters fold behi
 title with a close ×, stacked full-width fields with labels and hints, topic as chips,
 a styled file picker, import types as a 3×2 grid, wide Cancel/primary footer buttons.
 
-### Epic 30 — Add batch: save words from a `/hanja-today` list in the app
+### Epic 30 — Add batch (removed)
 
-Scoped 2026-10-28. The user read each day's `hanja_output/<date>.md`, picked 2-3 words and
-copy-pasted each one into Terms > Add word. The list now loads in the app.
-
-**Scope:**
-
-1. **`server/routes/terms.py`**: `GET /api/terms/hanja-lists` (dates of
-   `hanja_output/YYYY-MM-DD.md`, newest first) and `GET /api/terms/hanja-lists/{date}`
-   (404 on an unknown or malformed date): one section per `## 字 · 훈음` heading with its
-   note lines (Card, 훈, Trap) and its table rows (first four cells, so older lists with an
-   extra column parse). Each word carries `status`: `anki` when a term with that lemma has
-   that hanja and is synced (`anki_note_id` set, not dirty), `saved` when it has it but is
-   not synced, else `null`. A same-lemma term with other hanja does not count.
-2. **`/terms/batch`** ("Add batch" next to "Add word"): date select defaulting to the
-   newest list, a banner counting already-saved words, words grouped by character, and an
-   Add button per word that opens the Add word popover in hanja mode with the word and hanja
-   prefilled (`TokenPopover` `initialHanja`) and runs the krdict lookup on open
-   (`autoLookup`, user's follow-up the same day); the md's meaning is not prefilled (unverified). Saved or synced words show a disabled
-   "Saved" / "In Anki" button; the list reloads after each save.
-
-Not detected: words added to Anki by hand outside MbxRead (no AnkiConnect call, so the page
-works with Anki closed).
-
-**Tests:** parse (notes, rows, header/separator skipped, extra column), `anki` / `saved` /
-`null` including a same-lemma term with other hanja, date listing ignores non-date files,
-404 for unknown and malformed dates.
-
-**Accept:** pytest green, `npm run build` and `npm run lint` clean, every real list parses
-all its rows.
+**Removed in Epic 32** (in-app hanja feature dropped; see `docs/DECISIONS.md`). Full text in git history.
 
 ### Epic 31 — Anki decides "known"; Terms list browsable
 

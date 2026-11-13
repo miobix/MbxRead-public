@@ -97,7 +97,7 @@ export type TermStatus = "learning" | "known" | "ignored";
 // A Front chip besides the lemma (which is always entry 0, from `lemma`).
 export type FormEntry = { text: string; kind: "dict" | "manual" };
 
-// A Back chip. `group` is '' (the lemma), a form's text, or a hanja sense's spelling.
+// A Back chip. `group` is '' (the lemma) or a form's text.
 // `korean_def` feeds the Anki Examples field, never the Back.
 export type BackItem = {
   group: string;
@@ -116,16 +116,6 @@ export type TermSummary = {
   forms: FormEntry[];
   examples: string[];
   back_items: BackItem[];
-  hanja: string[];
-};
-
-// One character's section of a /hanja-today list. status: "anki" = synced,
-// "saved" = in the DB but not synced yet, null = not saved.
-export type HanjaListSection = {
-  char: string;
-  heading: string;
-  notes: string[];
-  words: { word: string; hanja: string; meaning: string; register: string; status: "anki" | "saved" | null }[];
 };
 
 export type Term = {
@@ -143,7 +133,6 @@ export type Term = {
   anki_dirty: boolean;
   created: string;
   updated: string;
-  hanja: string[];
 };
 
 // `offset` may precede the requested one (snapped to a sentence start); token offsets
@@ -179,7 +168,6 @@ export type Settings = {
   default_deck: string;
   translator_backend: "deepl" | "claude";
   candidate_retention_days: number;
-  hanja_deck: string;
   // System-managed (stamped by POST /api/feeds/fetch) — read-only in the UI, see
   // SettingsPut on the backend, which deliberately has no field for this.
   last_fetch_attempt: string | null;
@@ -337,7 +325,6 @@ export const api = {
     back_items?: BackItem[];
     source_book_id?: number;
     source_page?: number;
-    hanja?: string[];
   }) => request<Term>("/terms", { method: "POST", body: JSON.stringify(body) }),
 
   patchTerm: (
@@ -354,7 +341,6 @@ export const api = {
         | "forms"
         | "examples"
         | "back_items"
-        | "hanja"
       >
     >
   ) => request<Term>(`/terms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -369,10 +355,6 @@ export const api = {
       return null;
     }
   },
-
-  hanjaLists: () => request<string[]>("/terms/hanja-lists"),
-
-  hanjaList: (date: string) => request<HanjaListSection[]>(`/terms/hanja-lists/${date}`),
 
   listTerms: (params?: { status?: TermStatus; deck?: string; q?: string }) => {
     const sp = new URLSearchParams();

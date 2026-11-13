@@ -26,22 +26,19 @@ MbxRead/
       imports.py           Epic 12: YouTube/PDF/article import endpoints
   server/tests/            pytest suite
   translate_svc/           used as a library (translators.py, cache.py, krdict.py,
-                           config.py) — main.py (Lute's HTML tooltip page) deleted
-                           in Epic 8, Lute is fully retired
+                           config.py)
   web/                     Next.js app (TypeScript, Tailwind, output: 'export')
   import_tools/            yt_subs.py / pdf_text.py — still runnable standalone CLIs,
                            now also imported as libraries by routes/imports.py (Epic 12)
   docs/                    living design docs (see Executor conventions)
   requirements.txt         direct Python deps
-  scripts/fetch_feeds.ps1  Task Scheduler action: POSTs /api/feeds/fetch — Epic 17
   start.ps1                single-server launcher — rewritten in Epic 8
   reader.db                app data — never commit
 ```
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
   `fastapi`, `uvicorn`, `httpx` already in `.venv`.
-- Port **8002**, `--host 0.0.0.0` (Tailscale/LAN reachable). Lute used to keep 5001/8001
-  during the transition; those are free now that Lute is retired (Epic 8).
+- Port **8002**, `--host 0.0.0.0` (Tailscale/LAN reachable).
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
 
@@ -125,8 +122,8 @@ CREATE TABLE IF NOT EXISTS terms (
   source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
   source_page INTEGER,                           -- Epic 16: page it was first saved from
   examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence, shown on the Anki card back only
-  anki_model TEXT,                               -- Epic 21: two-way or hanja model name (legacy 'Basic' path removed 2026-10-21)
-  hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25, list since Epic 26: JSON list of hanja spellings, one per sense (시장 = 市場 + 市長); '[]' = a plain reading-flow term
+  anki_model TEXT,                               -- Epic 21: note type the term was synced as; 'Korean Reader Hanja' on pre-Epic-32 hanja notes, which sync now skips
+  hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25/26 hanja senses; stored, unused since Epic 32 (kept so existing DBs keep their data, never written)
 );
 -- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
 -- Highlights in the reader (matched alongside the lemma in get_text) and renders on the
@@ -142,8 +139,8 @@ CREATE TABLE IF NOT EXISTS term_forms (
 -- Epic 22: the popover's structured Front/Back card builder — one row per Back chip.
 -- `group_key` '' = the lemma's own group, else a term_forms.form value — a stable id,
 -- not a live join on lemma text, so editing the lemma never orphans its back items.
--- Epic 26: on a hanja term the group is instead the hanja spelling of the sense the
--- chip belongs to, which is what pairs each meaning with its spelling on the card.
+-- Pre-Epic-32 hanja terms may hold a group that is a hanja spelling, matching no form;
+-- sync and the popover show such chips under the lemma.
 -- `korean_def` (kind='dict' only) is krdict's Korean definition with any example
 -- glued directly onto the end (no separator); feeds the Anki `Examples` field only.
 CREATE TABLE IF NOT EXISTS term_back_items (
@@ -263,14 +260,14 @@ position without sharing a pagination.
 | ~~GET `/api/books/{id}/pages/{n}`~~ | – | removed 2026-10-21 (unused since Epic 24; `/text` serves the reader) |
 | GET `/api/books/{id}/text?offset=&window=` | – | `{offset, total_chars, content, tokens, terms}` — the reader's own source of text as of **Epic 24**. A character-addressed slice; both ends snap **outward** to a sentence/newline boundary, so `offset` in the response may precede the one requested. Token offsets are relative to `content` (absolute = `offset + token.s`). `window` defaults to 20k chars and is capped at 50k. Stamps `last_opened` (moved here from the pages endpoint) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` — **implemented (Epic 3)** |
-| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists — since Epic 26 the popover answers that by offering to append onto the existing term rather than surfacing the error); `hanja` (Epic 25, a list since Epic 26) = one spelling per sense; `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
+| POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], examples?, back_items?: [{group,kind,text,korean_def}], source_book_id?, source_page?}` | created term (409 if lemma exists — since Epic 26 the popover answers that by offering to append onto the existing term rather than surfacing the error); a `hanja` key is ignored since Epic 32; `forms` (Epic 20, `kind` added Epic 22) = highlight aliases, `examples` (Epic 21) = legacy card-back usage examples (superseded by `back_items` for new terms, see below), `back_items` (Epic 22) = the structured card builder's Back chips — when non-empty, `translation` is derived from it (`"; ".join(text)`) rather than taken from the request; `source_*` capture where a word was first saved — **implemented (Epic 3, forms Epic 20, examples Epic 21, back_items Epic 22)** |
 | PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` — **implemented (Epic 3, back_items Epic 22)** |
-| GET `/api/terms/by-lemma` | `?lemma=` | the term with exactly that lemma, or 404 — the "is this word already saved?" check behind Epic 26's append-instead-of-409 flow (the list endpoint's `q` is a LIKE across three columns and can't answer it) — **implemented (Epic 26)** |
+| GET `/api/terms/by-lemma` | `?lemma=` | the term with exactly that lemma, or 404 — the "is this word already saved?" check behind the popover's append-instead-of-409 flow (the list endpoint's `q` is a LIKE across three columns and can't answer it) — **implemented (Epic 26)** |
 | DELETE `/api/terms/{id}` | – | 204 — **implemented (Epic 3)** |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) — **implemented (Epic 3)** |
 | GET `/api/dict?word=…` | – | krdict entries `[{word, pos, target_code, definitions, examples}]` — Epic 21 adds `target_code` + `examples` (from a per-entry krdict `view` call). Epic 29: every krdict response is cached in `translate_cache.sqlite3` (`krdict_cache`, no expiry) and the first failed request pauses krdict for 30 min (`krdict_state`); during the pause this returns 503 `{error}` — **implemented (Epic 3, examples Epic 21)** |
 | POST `/api/anki/sync` | – | `{added, updated, failed:[{lemma, error}], promoted}` — **implemented (Epic 6)**; `promoted` = notes mature in Anki (shortest interval ≥ 21 d) flipped to `known` (Epic 31) |
-| GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, hanja_deck, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. The migration that purged their stored rows ran and was removed 2026-10-21 |
+| GET `/api/settings` | – | `{decks, default_deck, translator_backend, candidate_retention_days, last_fetch_attempt}` — **implemented (Epic 7; `candidate_retention_days`/`last_fetch_attempt` Epic 17; `hanja_deck` removed Epic 32, a stale stored row is echoed but unused)**. `page_size` (Epic 16) → `page_rows`/`chars_per_row` (2026-07-24) → **all removed in Epic 24**, when lines-per-page became a per-device localStorage value. The migration that purged their stored rows ran and was removed 2026-10-21 |
 | PUT `/api/settings` | any subset except `last_fetch_attempt` (system-managed, see below) | full settings dict after merge. No setting re-paginates anything as of Epic 24 — `repaginate_all` is gone — so this is a plain write — **implemented (Epic 7; `candidate_retention_days` Epic 17)** |
 | POST `/api/import/youtube` | `{url, topic?, tags?}` | created book (source `yt`, `source_ref="yt:<video_id>"`, `duration_seconds` from yt-dlp's own metadata); 502 `{error}` if no Korean subs / fetch fails; 409 on re-import — **implemented (Epic 12, `duration_seconds` Epic 18)** |
 | POST `/api/import/article` | `{url, topic?, tags?}` | created book (source `article`, `source_ref="article:<url>"`); 502 `{error}` if fetch/extract fails; 409 on re-import — **implemented (Epic 12)** |
@@ -492,6 +489,8 @@ user's real `reader.db`, per the standing convention. **Not verified in a browse
 the already-owed Epics 4-13 pass.
 
 **Epic 17 status:** fetch automation, candidate retention, and a terminology pass.
+*(Epic 32 removed `scripts/fetch_feeds.ps1` and the scheduled job; fetching is manual
+only. Retention and `last_fetch_attempt` below are unchanged.)*
 `scripts/fetch_feeds.ps1` (new) is the Task Scheduler action — a one-shot
 `Invoke-RestMethod` POST to the already-existing `/api/feeds/fetch`, logging its
 result (or error) to `scripts/fetch_feeds.log`; no new server code is needed for
@@ -788,8 +787,7 @@ reasoning in `docs/DECISIONS.md` 2026-07-21):**
 ## Anki sync spec (`server/anki.py` + `routes/anki_sync.py`, Epic 6 — implemented)
 
 AnkiConnect at `http://127.0.0.1:8765` (POST JSON `{action, version: 6, params}`);
-Anki desktop with the AnkiConnect add-on (code 2055492159) is already installed from
-the Lute setup.
+needs Anki desktop with the AnkiConnect add-on (code 2055492159).
 
 Sync algorithm:
 1. `version` ping — if unreachable, return 503 `{error: "Anki is not running (or
@@ -813,9 +811,11 @@ Sync algorithm:
    old `examples` JSON column + sentence. Store the returned id **and stamp
    `anki_model` with the model name**, clear dirty. On per-note error (e.g. duplicate)
    record in `failed`, continue.
-4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL` → **branch by `anki_model`**:
-   the hanja model → `updateNoteFields` with its four fields; anything else → the
-   two-way model's `Korean`/`English`/`Examples` (same Epic 22 rendering as above).
+4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL AND anki_model IS NOT 'Korean
+   Reader Hanja'` → the two-way model's `Korean`/`English`/`Examples` (same Epic 22
+   rendering as above). **Epic 32:** notes synced as the removed hanja model are skipped
+   (their fields differ, so an update would fail every sync) and stay as they are in Anki.
+   Back chips whose group matches no front entry (old hanja senses) render under the lemma.
    The legacy `Basic` Front/Back path was removed 2026-10-21 (no live notes used it).
    Every updated note is also moved to the term's deck. On success clear `anki_dirty`.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not
