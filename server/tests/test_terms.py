@@ -31,43 +31,20 @@ def test_create_term_defaults(client):
     assert body["updated"]
 
 
-def test_create_term_defaults_hanja_empty(client):
-    resp = _create(client)
-    assert resp.json()["hanja"] == []
-
-
-def test_create_and_patch_round_trip_hanja(client):
-    term_id = _create(client, lemma="제일", hanja=[" 第一 "]).json()["id"]
-    resp = client.get("/api/terms")
-    assert [t["hanja"] for t in resp.json() if t["id"] == term_id] == [["第一"]]
-
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": [" 祭日 "]})
-    assert resp.status_code == 200
-    assert resp.json()["hanja"] == ["祭日"]
-
-
-def test_hanja_list_keeps_order_and_drops_blanks_and_dupes(client):
-    """Epic 26: one lemma, several senses (시장 = 市場 market + 市長 mayor)."""
-    resp = _create(client, lemma="시장", hanja=["市場", " ", "市長", "市場"])
-    assert resp.json()["hanja"] == ["市場", "市長"]
-
-
-def test_append_a_hanja_sense_to_an_existing_term(client):
+def test_hanja_is_ignored_in_and_absent_from_terms(client, db_path):
+    """Epic 32: the column stays for old DBs but the API neither writes nor returns it."""
     term_id = _create(client, lemma="시장", hanja=["市場"]).json()["id"]
-    resp = client.patch(
-        f"/api/terms/{term_id}",
-        json={
-            "hanja": ["市場", "市長"],
-            "back_items": [_back("市場", "dict", "market"), _back("市長", "dict", "mayor")],
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.json()["hanja"] == ["市場", "市長"]
-    assert resp.json()["translation"] == "market; mayor"
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT hanja FROM terms WHERE id = ?", (term_id,)).fetchone()[0] == "[]"
+    conn.execute("UPDATE terms SET hanja = '[\"市場\"]' WHERE id = ?", (term_id,))
+    conn.commit()
+    conn.close()
+    assert "hanja" not in client.patch(f"/api/terms/{term_id}", json={"hanja": ["市長"]}).json()
+    assert "hanja" not in client.get("/api/terms").json()[0]
 
 
 def test_get_term_by_lemma(client):
-    term_id = _create(client, lemma="시장", hanja=["市場"]).json()["id"]
+    term_id = _create(client, lemma="시장").json()["id"]
     resp = client.get("/api/terms/by-lemma", params={"lemma": " 시장 "})
     assert resp.status_code == 200
     assert resp.json()["id"] == term_id
@@ -75,32 +52,6 @@ def test_get_term_by_lemma(client):
 
 def test_get_term_by_lemma_404_when_unsaved(client):
     assert client.get("/api/terms/by-lemma", params={"lemma": "시장"}).status_code == 404
-
-
-def test_patch_hanja_after_sync_marks_dirty(client, db_path):
-    term_id = _create(client, hanja=["第一"]).json()["id"]
-
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
-    conn.commit()
-    conn.close()
-
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": ["祭日"]})
-    assert resp.status_code == 200
-    assert resp.json()["anki_dirty"] is True
-
-
-def test_patch_same_hanja_after_sync_does_not_mark_dirty(client, db_path):
-    term_id = _create(client, hanja=["第一"]).json()["id"]
-
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
-    conn.commit()
-    conn.close()
-
-    resp = client.patch(f"/api/terms/{term_id}", json={"hanja": ["第一"]})
-    assert resp.status_code == 200
-    assert resp.json()["anki_dirty"] is False
 
 
 def test_create_term_duplicate_lemma_409(client):
@@ -410,63 +361,3 @@ def test_delete_term(client):
 
 def test_delete_missing_term_404(client):
     assert client.delete("/api/terms/999").status_code == 404
-
-
-_HANJA_MD = """# Hanja 4급-II, 2026-10-28
-
-Words: libhangul word list (local), each one checked.
-
-## 端 · 끝 단 (new)
-
-Card: 끝 단 · official: 끝 단 · match
-Trap: 일단 c14 is 一旦, not 一端.
-
-| word | hanja | meaning | register |
-|---|---|---|---|
-| 극단 | 極端 | extreme | both |
-| 첨단 | 尖端 | cutting edge | both |
-| 이단 | 異端 | heresy | news/official | * |
-
-## 血 · 피 혈 (new)
-
-| word | hanja | meaning | register |
-|---|---|---|---|
-| 혈액 | 血液 | blood | both |
-"""
-
-
-def test_hanja_lists_parse_and_saved_status(client, db_path, tmp_path, monkeypatch):
-    from server.routes import terms
-
-    monkeypatch.setattr(terms, "HANJA_OUTPUT", tmp_path)
-    (tmp_path / "2026-10-28.md").write_text(_HANJA_MD, encoding="utf-8")
-    (tmp_path / "2026-10-27.md").write_text("", encoding="utf-8")
-    (tmp_path / "notes.md").write_text("", encoding="utf-8")
-    assert client.get("/api/terms/hanja-lists").json() == ["2026-10-28", "2026-10-27"]
-
-    synced = _create(client, lemma="극단", hanja=["極端"]).json()["id"]
-    _create(client, lemma="첨단", hanja=["尖端"])
-    _create(client, lemma="이단", hanja=["二段"])  # same word, other hanja
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 1, anki_dirty = 0 WHERE id = ?", (synced,))
-    conn.commit()
-    conn.close()
-
-    sections = client.get("/api/terms/hanja-lists/2026-10-28").json()
-    assert [s["char"] for s in sections] == ["端", "血"]
-    assert sections[0]["heading"] == "端 · 끝 단 (new)"
-    assert sections[0]["notes"] == ["Card: 끝 단 · official: 끝 단 · match", "Trap: 일단 c14 is 一旦, not 一端."]
-    assert sections[0]["words"][0] == {
-        "word": "극단", "hanja": "極端", "meaning": "extreme", "register": "both", "status": "anki"
-    }
-    assert [w["status"] for w in sections[0]["words"]] == ["anki", "saved", None]
-    assert sections[1]["notes"] == []
-    assert sections[1]["words"][0]["word"] == "혈액"
-
-
-def test_hanja_list_unknown_or_bad_date_404(client, tmp_path, monkeypatch):
-    from server.routes import terms
-
-    monkeypatch.setattr(terms, "HANJA_OUTPUT", tmp_path)
-    assert client.get("/api/terms/hanja-lists/2026-01-01").status_code == 404
-    assert client.get("/api/terms/hanja-lists/..%2Freader").status_code == 404

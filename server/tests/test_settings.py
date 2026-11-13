@@ -9,7 +9,6 @@ def test_get_settings_defaults(client):
         "default_deck": "Korean",
         "translator_backend": "deepl",
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-        "hanja_deck": "한자어",
         "last_fetch_attempt": None,
     }
 
@@ -25,7 +24,6 @@ def test_put_settings_persists_and_returns_full_dict(client):
         "default_deck": "Slang",
         "translator_backend": "deepl",
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-        "hanja_deck": "한자어",
         "last_fetch_attempt": None,
     }
 
@@ -35,7 +33,6 @@ def test_put_settings_persists_and_returns_full_dict(client):
         "default_deck": "Slang",
         "translator_backend": "deepl",
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-        "hanja_deck": "한자어",
         "last_fetch_attempt": None,
     }
 
@@ -49,7 +46,6 @@ def test_put_settings_partial_update_leaves_other_keys(client):
         "default_deck": "Korean",
         "translator_backend": "claude",
         "candidate_retention_days": DEFAULT_CANDIDATE_RETENTION_DAYS,
-        "hanja_deck": "한자어",
         "last_fetch_attempt": None,
     }
 
@@ -59,13 +55,6 @@ def test_put_settings_candidate_retention_days_roundtrip(client):
     assert resp.status_code == 200
     assert resp.json()["candidate_retention_days"] == 3
     assert client.get("/api/settings").json()["candidate_retention_days"] == 3
-
-
-def test_put_settings_hanja_deck_roundtrip(client):
-    resp = client.put("/api/settings", json={"hanja_deck": "Sino-Korean"})
-    assert resp.status_code == 200
-    assert resp.json()["hanja_deck"] == "Sino-Korean"
-    assert client.get("/api/settings").json()["hanja_deck"] == "Sino-Korean"
 
 
 def test_put_settings_rejects_out_of_range_candidate_retention_days(client):

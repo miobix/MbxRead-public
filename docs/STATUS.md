@@ -17,11 +17,10 @@ Anki. Content arrives two ways: manual import (paste/txt/YouTube/PDF/EPUB/subtit
 files/article) and an automated feed roster (RSS + YouTube) that fetches candidates into a
 review Queue. A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
-Sino-Korean words get their own hanja deck and note type, fed by the `/hanja` and
-`/hanja-today` study skills (Terms > Add batch loads a `/hanja-today` list). FastAPI + SQLite + kiwipiepy backend, Next.js static-export
-frontend served by FastAPI, phone access over Tailscale.
+FastAPI + SQLite + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
+phone access over Tailscale.
 
-**Test suite: 335 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 282 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Epic checklist
@@ -46,44 +45,41 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
 - [x] **15** — Curation Queue + general-difficulty score + source-type filter
 - [x] **16** — `/stats` screen + UI makeover (reading log, provenance)
 - [x] **—** — EPUB import (ad-hoc, between 16 and 17)
-- [x] **17** — Fetch automation (Task Scheduler), candidate retention, "Library" terminology
+- [x] **17** — Fetch automation, candidate retention, "Library" terminology (scheduled job
+  removed in 32)
 - [x] **18** — Queue browsing UX (cards/list, chips, sort/filter, length, source link)
 - [x] **19** — Promotion stats (what gets read vs. discarded/expired)
 - [x] **20** — Term forms/aliases + highlighting fix
 - [x] **21** — Dictionary click-to-add + krdict examples + two-way Anki note type
 - [x] **22** — Structured Front/Back/Examples card builder
 - [x] **—** — Pre-go-live storage/UI pass (queue-text auto-purge, rebrand, Library/Queue pagination)
-- [x] **23** — Go-live: `start.ps1`, Tailscale phone access, Task Scheduler fetch job
+- [x] **23** — Go-live: `start.ps1`, Tailscale phone access
 - [x] **—** — Background tray launcher (ad-hoc)
 - [x] **24** — Client-side reader pagination + Library nav/card pass
 - [x] **—** — Subtitle-file import (`.srt/.vtt/.smi/.ass/.ttml`, batch) + Library card edit (ad-hoc)
-- [x] **25** — Save-a-word: on-demand hanja terms, own deck + `Korean Reader Hanja` note type
-- [x] **26** — Multi-hanja terms: one lemma, an ordered list of hanja senses, one note
-- [x] **27** — `/hanja` study skill (one character per run; `Hanja::*` decks read-only)
+- [x] **25–27** — Hanja terms, multi-sense hanja, hanja study skill (removed in 32)
 - [x] **28** — Visual redesign (indigo palette, Noto Sans KR, metro-station progress)
-- [x] **29** — Local hanja pipeline (libhangul word list) + `/hanja-today` daily list
+- [x] **29** — Hanja word-list pipeline (removed in 32)
 - [x] **—** — Over-engineering cleanup, 2026-10-21 (dead migrations, legacy Basic sync,
   `/pages/{n}`, scraper feed type; see `DECISIONS.md`)
-- [x] **30** — Add batch: `/terms/batch` saves words from a `/hanja-today` list
+- [x] **30** — Add batch (removed in 32)
 - [x] **31** — Sync marks Anki-mature terms `known` (dotted underline in reader); Terms
   newest first, 50 at a time
+- [x] **32** — Removed in-app hanja (deck, note type, multi-sense UI, Add batch) and the
+  scheduled fetch; old DBs open unchanged (roadmap unit 0)
 
 ## Live operational facts
 
 - **Server runs on port 8002.** Port 8000 belongs to an unrelated Docker-based Android sync
-  service on this machine — don't use it or kill things on it without checking; 5001/8001
-  were the legacy Lute setup. No app code hardcodes the port (passed via `uvicorn --port`).
+  service on this machine — don't use it or kill things on it without checking. No app code hardcodes the port (passed via `uvicorn --port`).
 - **Two launchers.** `start.ps1` = the *dev* launcher (visible console, rebuilds `web/` if
   stale). `scripts/tray_app.py` = the *daily* launcher — hidden uvicorn + tray icon
   (Open / Restart / Quit), auto-started at logon via a **Startup-folder shortcut**
   (`shell:startup`), *not* Task Scheduler (logon-trigger registration hits Access Denied in
   this environment). Server output → `scripts/server.log` (gitignored).
-- **Feed fetch** is a daily 06:00 Task Scheduler job (`scripts/fetch_feeds.ps1` → `POST
-  /api/feeds/fetch`, `-WindowStyle Hidden`, logs to `scripts/fetch_feeds.log`).
-  **Paused 2026-07-27** — task `MbxRead fetch feeds` is *Disabled*, because reading
-  is currently focused on one book and the queue was accumulating unread text. Re-enable
-  with `Enable-ScheduledTask -TaskName 'MbxRead fetch feeds'` (trigger/action are
-  unchanged; nothing else was touched).
+- **Feed fetch is manual:** the Queue's "Fetch new candidates" button (`POST
+  /api/feeds/fetch`). Each fetch also expires stale candidates and stamps
+  `last_fetch_attempt`.
 - **Tailscale** address: `<machine>.<tailnet>.ts.net` — phone reaches the app at
   `http://<machine>.<tailnet>.ts.net:8002`.
 - **Reader pagination is client-side.** The browser breaks pages with CSS columns after
@@ -94,11 +90,10 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   slices (storage only; the reader reads `GET /api/books/{id}/text?offset=`). As of go-live:
   ~200 books / 1.14M chars / 3.7MB. Discarded article/yt candidates have their `pages` text
   auto-purged; paste/pdf/epub/txt text is kept indefinitely.
-- **Hanja study deck** is `STUDY_DECK` in `server/hanja_study.py` (currently 4급-II); change
-  it when the user moves on. `/hanja-today` writes `hanja_output/<date>.md` (gitignored).
 - **Schema upgrades are additive only** (`_ADDED_COLUMNS` in `server/db.py`). The one-time
   Epic 24/26 migrations were removed 2026-10-21; a `reader.db` backup older than Epic 26
-  must be opened with a checkout from before commit `6d7eb08` to upgrade it.
+  must be opened with a checkout from before commit `6d7eb08` to upgrade it. Removed features
+  leave their columns in place (`terms.hanja`, stored and unused since Epic 32).
 
 ## Next: grow the app (2026-11-13)
 
@@ -108,8 +103,8 @@ never committed; copy `.env.example`.
 
 | # | Unit | State |
 |---|---|---|
-| 0 | Remove the hanja feature and the Windows Task Scheduler automation | **next** |
-| 1 | Dockerfile for the API | |
+| 0 | Remove the hanja feature and the Windows Task Scheduler automation | done (Epic 32) |
+| 1 | Dockerfile for the API | **next** |
 | 2 | Compose: API + static web, env file for keys | |
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | |
 | 4 | SQLite to Postgres migration, in compose and CI | |
@@ -117,11 +112,6 @@ never committed; copy `.env.example`.
 | 6 | Agent: a model "decider" that routes between cheap and strong models | |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
-
-**Unit 0:** remove the in-app hanja feature (hanja deck, `Korean Reader Hanja` note type,
-multi-sense UI, Add batch, `/terms/batch`) and the Task Scheduler fetch job
-(`scripts/fetch_feeds.ps1` and its docs). Keep the `hanja` field krdict fills, stored and
-unused. Feeds, the manual fetch and the Queue stay: they are core.
 
 **Unit 1:** slim Python base, layer order for cache hits, `.dockerignore`, non-root user.
 Pick the image's Python here (3.10 is deprecated by yt-dlp; see follow-ups). `pystray`/
@@ -157,8 +147,6 @@ Translation already calls DeepL/Claude, so the router has a real job.
   (YouTube transcripts): it has deprecated 3.10, so the next yt-dlp upgrade, the usual fix
   when YouTube breaks, needs this first. yt-dlp also warns that YouTube wants a JS runtime
   (deno); check that at the same time.
-- **Live-Anki two-way card check:** worth confirming once, on a real sync, that a
-  multi-sense word's card matches the popover preview.
 - **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
 - **Content idea: "basic and likely to miss" Korean (user, 2026-10-23).** The user is fluent but
   learned outside Korean schooling, so early-school basics can be missing (found: didn't know 자모,

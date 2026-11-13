@@ -121,31 +121,5 @@ def update_note_model(note_id: int, korean: str, english: str, examples: str) ->
     _update(note_id, {"Korean": korean, "English": english, "Examples": examples})
 
 
-# Minimal on purpose: the user shapes these cards in Anki desktop, and _ensure never
-# overwrites an existing model.
-HANJA_MODEL_NAME = "Korean Reader Hanja"
-
-_HANJA_CARD_TEMPLATES = [
-    {
-        "Name": "Card 1",
-        # Hanja on the Front: it is what tells homographs (제일 祭日 vs 第一) apart.
-        "Front": "{{Korean}}<br>{{Hanja}}",
-        "Back": (
-            "{{FrontSide}}<hr id=answer>{{English}}"
-            '{{#KoreanDef}}<div class="examples">{{KoreanDef}}</div>{{/KoreanDef}}'
-        ),
-    }
-]
-
-
-def ensure_hanja_model() -> None:
-    _ensure(HANJA_MODEL_NAME, ["Korean", "Hanja", "English", "KoreanDef"], _HANJA_CARD_TEMPLATES)
-
-
-def add_note_hanja(deck: str, korean: str, hanja: str, english: str, korean_def: str) -> int:
-    fields = {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def}
-    return _add(deck, HANJA_MODEL_NAME, fields)
-
-
-def update_note_hanja(note_id: int, korean: str, hanja: str, english: str, korean_def: str) -> None:
-    _update(note_id, {"Korean": korean, "Hanja": hanja, "English": english, "KoreanDef": korean_def})
+# Notes synced as this type before Epic 32 keep it; sync leaves them alone.
+LEGACY_HANJA_MODEL = "Korean Reader Hanja"

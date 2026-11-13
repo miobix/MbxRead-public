@@ -129,21 +129,6 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-muted">Hanja deck</h2>
-            <p className="text-xs text-muted">
-              Anki deck for on-demand hanja saves (Terms → Add word), kept separate from
-              your regular reading decks and from your character-review Hanja deck.
-            </p>
-            <input
-              value={settings.hanja_deck}
-              onChange={(e) => setSettings({ ...settings, hanja_deck: e.target.value })}
-              onBlur={() => save(settings)}
-              disabled={saving}
-              className="field"
-            />
-          </section>
-
-          <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium text-muted">Translator backend</h2>
             <select
               value={settings.translator_backend}
@@ -186,7 +171,7 @@ export default function SettingsPage() {
             <h2 className="text-sm font-medium text-muted">Queue candidate retention</h2>
             <p className="text-xs text-muted">
               How many days an unpromoted, undiscarded item sits in the Queue before the
-              fetch job automatically discards it.
+              next fetch discards it.
             </p>
             <div className="flex items-center gap-2">
               <input

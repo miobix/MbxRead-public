@@ -7,8 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .. import anki
 from .. import db as db_module
-from . import settings as settings_routes
-from .terms import _back_items_for, _forms_for, hanja_list
+from .terms import _back_items_for, _forms_for
 
 router = APIRouter(prefix="/api/anki", tags=["anki"])
 
@@ -90,7 +89,13 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
     """Korean/English/Examples for the two-way model."""
     front_entries = _front_entries(conn, row["id"], row["lemma"])
     korean = _render_korean(front_entries)
-    back_items = _back_items_for(conn, row["id"])
+    # Pre-Epic-32 hanja chips are grouped by a spelling no front entry has; keep them
+    # on the card under the lemma.
+    groups = {e["group"] for e in front_entries}
+    back_items = [
+        it if it["group"] in groups else {**it, "group": ""}
+        for it in _back_items_for(conn, row["id"])
+    ]
     if not back_items:
         english = row["translation"]
         examples = _render_legacy_examples(json.loads(row["examples"]), row["sentence"])
@@ -101,39 +106,6 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
     return korean, english, examples
 
 
-def _sense_entries(senses: list[str]) -> list[dict]:
-    """Hanja cards label by sense, not by Front entry; each spelling is its own group."""
-    return [{"text": h, "kind": "hanja", "group": h} for h in senses]
-
-
-def _regroup_to_senses(back_items: list[dict], senses: list[str]) -> list[dict]:
-    """Fold chips whose group names no sense (e.g. the '' lemma group) into the first
-    sense, so no meaning silently drops off the card."""
-    known = set(senses)
-    return [
-        item if item["group"] in known else {**item, "group": senses[0]}
-        for item in back_items
-    ]
-
-
-def _render_hanja(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str, str]:
-    """Korean/Hanja/English/KoreanDef for the hanja model; several senses render as a
-    numbered Hanja stack that the English labels line up with."""
-    korean = _render_korean(_front_entries(conn, row["id"], row["lemma"]))
-    senses = hanja_list(row["hanja"])
-    sense_entries = _sense_entries(senses)
-    hanja = _render_korean(sense_entries)
-    back_items = _back_items_for(conn, row["id"])
-    if not back_items:
-        english = row["translation"]
-        korean_def = row["notes"]
-    else:
-        labeled = _label_items(sense_entries, _regroup_to_senses(back_items, senses))
-        english = _render_english(labeled)
-        korean_def = _render_examples_field(row["sentence"] or "", labeled, row["notes"])
-    return korean, hanja, english, korean_def
-
-
 @router.post("/sync")
 def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     try:
@@ -141,36 +113,19 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     except anki.AnkiError as e:
         return JSONResponse(status_code=503, content={"error": str(e)})
 
-    # Best-effort: if a model is missing, its addNote calls fail per note in `failed`.
+    # Best-effort: if the model is missing, its addNote calls fail per note in `failed`.
     try:
         anki.ensure_model()
     except anki.AnkiError:
         pass
-    try:
-        anki.ensure_hanja_model()
-    except anki.AnkiError:
-        pass
-
-    # A synced reading term moved to the hanja deck with hanja added still has a
-    # 2-way note; re-add it as a Hanja note, as convert-to-hanja does.
-    hanja_deck = settings_routes._read(conn)["hanja_deck"]
-    for row in conn.execute(
-        "SELECT id, hanja FROM terms WHERE deck = ? AND status = 'learning' "
-        "AND anki_note_id IS NOT NULL AND anki_model IS NOT ?",
-        (hanja_deck, anki.HANJA_MODEL_NAME),
-    ).fetchall():
-        if hanja_list(row["hanja"]):
-            conn.execute(
-                "UPDATE terms SET anki_note_id = NULL, anki_model = NULL, anki_dirty = 0 "
-                "WHERE id = ?",
-                (row["id"],),
-            )
 
     new_terms = conn.execute(
         "SELECT * FROM terms WHERE status = 'learning' AND anki_note_id IS NULL"
     ).fetchall()
     dirty_terms = conn.execute(
-        "SELECT * FROM terms WHERE anki_dirty = 1 AND anki_note_id IS NOT NULL"
+        "SELECT * FROM terms WHERE anki_dirty = 1 AND anki_note_id IS NOT NULL "
+        "AND anki_model IS NOT ?",
+        (anki.LEGACY_HANJA_MODEL,),
     ).fetchall()
 
     for deck in {row["deck"] or DEFAULT_DECK for row in (*new_terms, *dirty_terms)}:
@@ -186,22 +141,12 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     # Stamp anki_model so later edits update the right note type.
     for row in new_terms:
         try:
-            if hanja_list(row["hanja"]):
-                korean, hanja, english, korean_def = _render_hanja(conn, row)
-                note_id = anki.add_note_hanja(
-                    row["deck"] or DEFAULT_DECK, korean, hanja, english, korean_def
-                )
-                model_name = anki.HANJA_MODEL_NAME
-            else:
-                korean, english, examples = _render_two_way(conn, row)
-                note_id = anki.add_note_model(
-                    row["deck"] or DEFAULT_DECK, korean, english, examples
-                )
-                model_name = anki.MODEL_NAME
+            korean, english, examples = _render_two_way(conn, row)
+            note_id = anki.add_note_model(row["deck"] or DEFAULT_DECK, korean, english, examples)
             conn.execute(
                 "UPDATE terms SET anki_note_id = ?, anki_model = ?, anki_dirty = 0 "
                 "WHERE id = ?",
-                (note_id, model_name, row["id"]),
+                (note_id, anki.MODEL_NAME, row["id"]),
             )
             added += 1
         except anki.AnkiError as e:
@@ -209,14 +154,8 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
 
     for row in dirty_terms:
         try:
-            if row["anki_model"] == anki.HANJA_MODEL_NAME:
-                korean, hanja, english, korean_def = _render_hanja(conn, row)
-                anki.update_note_hanja(
-                    row["anki_note_id"], korean, hanja, english, korean_def
-                )
-            else:
-                korean, english, examples = _render_two_way(conn, row)
-                anki.update_note_model(row["anki_note_id"], korean, english, examples)
+            korean, english, examples = _render_two_way(conn, row)
+            anki.update_note_model(row["anki_note_id"], korean, english, examples)
             anki.move_note_to_deck(row["anki_note_id"], row["deck"] or DEFAULT_DECK)
             conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = ?", (row["id"],))
             updated += 1
