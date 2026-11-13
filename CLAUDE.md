@@ -27,7 +27,8 @@ frontend (static export), phone access via Tailscale.
 ## Hard rules
 
 - Python is `.venv\Scripts\python.exe` (Windows). New deps: pip install **and** add to
-  `requirements.txt`.
+  `requirements.txt` (runtime, the only file the Docker image installs) or
+  `requirements-dev.txt` (tests, Windows tray).
 - Never commit or modify: `.env`, `*.sqlite3`, `reader.db`, `.venv/`.
 - Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP,
   temp sqlite per test.

@@ -201,8 +201,8 @@ Tests: mock the AnkiConnect HTTP layer (monkeypatch `httpx.post`); cover add-new
 
 ## 9. Executor conventions (apply to EVERY epic)
 
-- **Environment:** Windows, PowerShell. Python: `.venv\Scripts\python.exe` (never system python). Install deps with `.venv\Scripts\pip install <pkg>` **and** add them to `requirements.txt`.
-- **Git:** repo is initialized in Epic 0. Work directly on `main` (single-user project, no remote initially). At minimum **one commit at the end of each epic**, message `Epic N: <what shipped>`. Commit only when the epic's tests pass. Never commit `.env`, `*.sqlite3`, `reader.db`, `.venv/`, `web/node_modules|.next|out`.
+- **Environment:** Windows, PowerShell. Python: `.venv\Scripts\python.exe` (never system python). Install deps with `.venv\Scripts\pip install <pkg>` **and** add them to `requirements.txt` (runtime; the Docker image installs only this) or `requirements-dev.txt` (tests, Windows tray; unit 1).
+- **Git (since the public repo):** one branch + PR per unit, titled `<summary> (unit N)`; see `docs/README.md` for epic vs. unit naming. *The rest of this bullet describes epics 0–32:* repo is initialized in Epic 0. Work directly on `main` (single-user project, no remote initially). At minimum **one commit at the end of each epic**, message `Epic N: <what shipped>`. Commit only when the epic's tests pass. Never commit `.env`, `*.sqlite3`, `reader.db`, `.venv/`, `web/node_modules|.next|out`.
 - **Design docs (update in the same end-of-epic commit):**
   - `docs/ARCHITECTURE.md` — created in Epic 0 from sections 3–8 of this plan; **amend whenever reality diverges from the spec** (changed endpoint shape, extra table column, different heuristic…). It must always describe the code as it is.
   - `docs/STATUS.md` — epic checklist with one line per epic: done/in-progress + any deviations or known issues. This is the handover state between models: **read it first, update it last.**

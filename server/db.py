@@ -1,12 +1,15 @@
 """SQLite connection and schema management for reader.db."""
 import csv
+import os
 import sqlite3
 from pathlib import Path
 from typing import Generator
 
 from fastapi import Request
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "reader.db"
+# MBXREAD_DATA_DIR holds the writable SQLite files (the image sets /data).
+DATA_DIR = Path(os.getenv("MBXREAD_DATA_DIR") or Path(__file__).resolve().parent.parent)
+DEFAULT_DB_PATH = DATA_DIR / "reader.db"
 
 # NIKL learner vocabulary list (2003); provenance in docs/DECISIONS.md.
 VOCAB_LEVELS_TSV = Path(__file__).resolve().parent / "data" / "vocab_levels.tsv"

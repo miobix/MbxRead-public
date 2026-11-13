@@ -31,7 +31,9 @@ MbxRead/
   import_tools/            yt_subs.py / pdf_text.py — still runnable standalone CLIs,
                            now also imported as libraries by routes/imports.py (Epic 12)
   docs/                    living design docs (see Executor conventions)
-  requirements.txt         direct Python deps
+  requirements.txt         runtime Python deps (the Docker image installs only this)
+  requirements-dev.txt     -r requirements.txt + pytest + Windows tray deps (unit 1)
+  Dockerfile, .dockerignore  API image (unit 1); see "Container image" below
   start.ps1                single-server launcher — rewritten in Epic 8
   reader.db                app data — never commit
 ```
@@ -875,3 +877,22 @@ Import-tools usage (`yt_subs.py`, `pdf_text.py`) carried over unchanged.
 **Not yet done, deliberately:** the user asked for retirement + deployment docs without
 actually "going live" yet — so the end-to-end cold-start run (`start.ps1` from a closed
 state → server up → phone over Tailscale) has not been executed. See `docs/STATUS.md`.
+
+## Container image (unit 1)
+
+`Dockerfile` builds the API only: `python:3.14.10-slim-trixie` pinned by digest, deps
+installed before the code is copied (a code-only change reuses the pip layer), code owned
+by root and read-only, process runs as `app` (uid 10001), `uvicorn server.main:app` on
+`0.0.0.0:8002`, `HEALTHCHECK` on `/api/health` via `urllib` (slim has no curl).
+`.dockerignore` is an allowlist: `requirements.txt`, `server/` (minus `tests/`),
+`translate_svc/`, `import_tools/`.
+
+**Data:** `MBXREAD_DATA_DIR` (default: repo root) sets where `reader.db`
+(`server/db.py` `DATA_DIR`) and `translate_cache.sqlite3` (`translate_svc/config.py`)
+live; the image sets `/data`, the only path `app` can write. Keys come from the
+environment (`--env-file .env`); `load_dotenv` finds no `.env` in the image.
+
+**Not in the image yet:** `web/out` (so `/` is 404; `main.py` skips the static mount when
+the folder is missing) and a route to desktop AnkiConnect (`127.0.0.1:8765` is the
+container itself, so sync returns its 503). Both are unit 2. Size ~507 MB, almost all
+`kiwipiepy_model`, `pymupdf` and `numpy`.
