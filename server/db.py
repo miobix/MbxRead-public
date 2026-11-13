@@ -94,6 +94,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # JSON lists in a column: display-only, never matched against tokens.
         "examples": "TEXT NOT NULL DEFAULT '[]'",
         "anki_model": "TEXT",
+        # Stored, unused since Epic 32; kept so existing DBs keep their data.
         "hanja": "TEXT NOT NULL DEFAULT '[]'",
     },
     "books": {

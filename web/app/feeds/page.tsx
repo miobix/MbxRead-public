@@ -97,7 +97,7 @@ export default function FeedsPage() {
       <div>
         <h1 className="page-title">Feeds</h1>
         <p className="text-sm text-muted mt-1">
-          Content sources the fetch job pulls into the{" "}
+          Content sources that fetching pulls into the{" "}
           <Link href="/queue" className="underline hover:text-ink">
             Queue
           </Link>

@@ -8,7 +8,6 @@ web/node_modules/
 web/.next/
 web/out/
 .idea/
-scripts/fetch_feeds.log
 scripts/server.log
 scripts/server.log.1
 scripts/crash.log
@@ -23,13 +22,6 @@ anki_decks/
 *.ssa
 *.ttml
 *.dfxp
-
-# /hanja-today word lists (personal study output, never committed)
-hanja_output/
-
-# Personal hanja study notes and Anki note-id snapshots (not part of the app)
-hanja/LEVEL_SORTING.md
-hanja/level_sorting_backup.json
 
 # Scratch artifact HTML (design maps, not app code)
 artifacts/
