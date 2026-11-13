@@ -100,6 +100,51 @@ Full write-up for any line is in `git log` (commit `Epic N: …`) and `docs/DECI
   Epic 24/26 migrations were removed 2026-10-21; a `reader.db` backup older than Epic 26
   must be opened with a checkout from before commit `6d7eb08` to upgrade it.
 
+## Next: grow the app (2026-11-13)
+
+**Goal:** take MbxRead from a single-machine desktop app to something that runs anywhere and
+does more with its texts. Every unit is a branch + PR. Bring your own API keys: `.env` is
+never committed; copy `.env.example`.
+
+| # | Unit | State |
+|---|---|---|
+| 0 | Remove the hanja feature and the Windows Task Scheduler automation | **next** |
+| 1 | Dockerfile for the API | |
+| 2 | Compose: API + static web, env file for keys | |
+| 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | |
+| 4 | SQLite to Postgres migration, in compose and CI | |
+| 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | |
+| 6 | Agent: a model "decider" that routes between cheap and strong models | |
+| 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
+| 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
+
+**Unit 0:** remove the in-app hanja feature (hanja deck, `Korean Reader Hanja` note type,
+multi-sense UI, Add batch, `/terms/batch`) and the Task Scheduler fetch job
+(`scripts/fetch_feeds.ps1` and its docs). Keep the `hanja` field krdict fills, stored and
+unused. Feeds, the manual fetch and the Queue stay: they are core.
+
+**Unit 1:** slim Python base, layer order for cache hits, `.dockerignore`, non-root user.
+Pick the image's Python here (3.10 is deprecated by yt-dlp; see follow-ups). `pystray`/
+`pillow` are Windows tray deps, so split the requirements.
+
+**Unit 2:** AnkiConnect runs on the desktop: `host.docker.internal` locally, off when
+deployed. Possible replacement: CSV export (Anki imports CSV natively).
+
+**Unit 3 before unit 4,** so the migration lands behind a working CI gate.
+
+**Unit 4:** raw `sqlite3` in ~11 modules, no ORM. First decision: psycopg 3 or SQLAlchemy
+Core. Snags: `?` vs `%s`, `INSERT OR IGNORE`, `lastrowid`, PRAGMAs, date functions, the
+additive `_ADDED_COLUMNS` scheme, temp-SQLite-per-test fixtures.
+
+**Unit 5:** build several pipelines (chunking, embeddings, hybrid or keyword search) and
+record where each fails. Public-domain Korean texts only, for the repo, tests and any demo.
+
+**Unit 6:** modelled on Strands' decider
+(https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
+Translation already calls DeepL/Claude, so the router has a real job.
+
+**Before the first deploy:** add a LICENSE (MIT is the usual pick).
+
 ## Open follow-ups (not blockers)
 
 - **Claude translator is selectable but not installable:** Settings offers it, but
