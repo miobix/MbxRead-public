@@ -87,6 +87,8 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
   exactly N rendered lines; N lives in **localStorage per device** (`readerLines`, default
   15, editable on `/settings`). The footer shows a percentage, not a page number. Position is
   `books.current_offset`, a character offset, so devices stay in sync.
+- **Python 3.14.10 everywhere:** the repo's `.venv` (`pip install -r requirements-dev.txt`)
+  and the Docker image run the same version; the suite passes on both.
 - **Data directory:** `MBXREAD_DATA_DIR` holds `reader.db` and `translate_cache.sqlite3`
   (default: repo root; `/data` in the Docker image).
 - **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text in ~1500-char
@@ -140,10 +142,6 @@ Translation already calls DeepL/Claude, so the router has a real job.
 - **Claude translator is selectable but not installable:** Settings offers it, but
   `anthropic` is not in `requirements.txt`. Unused today (DeepL in settings and `.env`, no
   Anthropic key); the user deferred adding the dependency (2026-10-21).
-- **Upgrade the local venv's Python.** The Docker image runs **3.14.10** and the full suite
-  passes there (unit 1); the local venv is still **3.10.11**. Install 3.14, rebuild
-  `.venv`, `pip install -r requirements-dev.txt`, rerun the suite. yt-dlp has deprecated
-  3.10, so its next upgrade (the usual fix when YouTube breaks) needs this first.
 - **yt-dlp wants a JS runtime (deno) for YouTube.** Not installed locally or in the image;
   check whether YouTube import still works without it, and add it to the image if not.
 - **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
