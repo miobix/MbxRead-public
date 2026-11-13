@@ -1678,3 +1678,19 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   the user does exactly one day's new cards per day; the skill says to state that.
 - The one-off 10-31/11-01 writes (20 notes, undo records in `hanja_output/`) were approved
   explicitly and match what `--ahead 1/2` now returns (re-preview: 0 pending).
+
+## 2026-11-13 — Public repo, history rewritten; growth roadmap
+
+- **This repo was created from the private original with `git filter-repo`.** Dropped from
+  all history: the hanja study workload (`hanja/`, its Claude Code skills,
+  `hanja_study.py`, its data files and tests) and a personal reading list. Machine-specific
+  paths and the Tailscale hostname were replaced with placeholders; authors use the GitHub
+  noreply address. History is otherwise kept as it happened, hanja epics included.
+- **Unit 0 removes the in-app hanja feature and the Task Scheduler fetch job.** Feeds, the
+  manual fetch and the Queue stay as core features.
+- **Roadmap order:** Docker, compose, CI, Postgres, RAG, agent, eval, then cloud deploy.
+  CI comes before Postgres so the migration lands behind a working gate. Full migration
+  to Postgres rather than Postgres only as a RAG store: one database, and the app gets
+  the real migration.
+- **RAG uses public-domain Korean texts only;** imported books are copyrighted.
+- **API keys are bring-your-own** via `.env` (never committed, `.env.example` lists them).
