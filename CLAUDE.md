@@ -17,11 +17,12 @@ frontend (static export), phone access via Tailscale.
 3. **`docs/README.md` names the doc taxonomy** — which files are living-state vs. contract
    vs. append-only log vs. ephemeral, and the maintenance rule for each. Read it before
    adding or reorganizing any doc.
-4. Do **one epic per session** unless the user says otherwise. End every epic with: full
-   test suite green (`.venv\Scripts\python.exe -m pytest server/tests -q`), `npm run build`
-   **and** `npm run lint` in `web/` green (Epic ≥ 4 — `tsc` alone missed a real
-   react-hooks bug in Epic 4), one commit `Epic N: <summary>` that includes the docs
-   updates.
+4. Do **one unit per session** unless the user says otherwise. A unit is one roadmap item
+   (`docs/STATUS.md`, "Next: grow the app"); work before the public repo is numbered as
+   epics 0–32 (see `docs/README.md`). End every unit with: full test suite green
+   (`.venv\Scripts\python.exe -m pytest server/tests -q`), `npm run build` **and**
+   `npm run lint` in `web/` green (`tsc` alone once missed a real react-hooks bug), and
+   one branch + PR titled `<summary> (unit N)` that includes the docs updates.
 
 ## Hard rules
 
