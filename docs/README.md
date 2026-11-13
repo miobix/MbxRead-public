@@ -11,6 +11,11 @@ The four kinds:
 | **Append-only log** | Looked up on demand ("why did we…?"), never read in full | **Never rewrite, never compress.** Growth is correct. | `DECISIONS.md` |
 | **Reference / ephemeral** | On demand; ephemeral ones die once decided | Reference: keep accurate. Ephemeral: **archive when spent.** | `CONTENT_CATALOG.md`, `LEARNED_LESSONS.md`, `archive/` |
 
+**Naming:** epics 0–32 come from solo development, where an *epic* meant one scoped change
+(one session, one commit, one `DECISIONS.md` entry), not the Scrum sense. From the public
+repo on, the same thing is a *unit*: one roadmap item, one PR, numbered as in `STATUS.md`
+("Next: grow the app"). Epic 32 is unit 0.
+
 ## The files
 
 - **`STATUS.md`** — *Living state.* The current picture of the app + the epic checklist +

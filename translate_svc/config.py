@@ -12,4 +12,5 @@ DEEPL_API_KEY = os.getenv("DEEPL_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 KRDICT_API_KEY = os.getenv("KRDICT_API_KEY", "")
 
-CACHE_DB = Path(__file__).resolve().parent.parent / "translate_cache.sqlite3"
+DATA_DIR = Path(os.getenv("MBXREAD_DATA_DIR") or Path(__file__).resolve().parent.parent)
+CACHE_DB = DATA_DIR / "translate_cache.sqlite3"
