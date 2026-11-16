@@ -33,7 +33,8 @@ MbxRead/
   docs/                    living design docs (see Executor conventions)
   requirements.txt         runtime Python deps (the Docker image installs only this)
   requirements-dev.txt     -r requirements.txt + pytest + Windows tray deps (unit 1)
-  Dockerfile, .dockerignore  API image (unit 1); see "Container image" below
+  Dockerfile, .dockerignore  app image, API + web (units 1-2); see "Container image" below
+  compose.yaml             runs the image locally (unit 2)
   start.ps1                single-server launcher — rewritten in Epic 8
   reader.db                app data — never commit
 ```
@@ -878,21 +879,27 @@ Import-tools usage (`yt_subs.py`, `pdf_text.py`) carried over unchanged.
 actually "going live" yet — so the end-to-end cold-start run (`start.ps1` from a closed
 state → server up → phone over Tailscale) has not been executed. See `docs/STATUS.md`.
 
-## Container image (unit 1)
+## Container image (units 1-2)
 
-`Dockerfile` builds the API only: `python:3.14.10-slim-trixie` pinned by digest, deps
+`Dockerfile` has three stages, each base pinned by digest: `node:24.18.0-slim` runs
+`npm ci && npm run build` and only its `web/out` is copied over; `denoland/deno:bin-2.9.6`
+supplies `/usr/local/bin/deno`, the JS runtime yt-dlp needs for YouTube. The final stage is
+`python:3.14.10-slim-trixie`, deps
 installed before the code is copied (a code-only change reuses the pip layer), code owned
 by root and read-only, process runs as `app` (uid 10001), `uvicorn server.main:app` on
 `0.0.0.0:8002`, `HEALTHCHECK` on `/api/health` via `urllib` (slim has no curl).
 `.dockerignore` is an allowlist: `requirements.txt`, `server/` (minus `tests/`),
-`translate_svc/`, `import_tools/`.
+`translate_svc/`, `import_tools/`, `web/` (minus `node_modules/`, `out/`, `.next/`).
 
 **Data:** `MBXREAD_DATA_DIR` (default: repo root) sets where `reader.db`
 (`server/db.py` `DATA_DIR`) and `translate_cache.sqlite3` (`translate_svc/config.py`)
 live; the image sets `/data`, the only path `app` can write. Keys come from the
 environment (`--env-file .env`); `load_dotenv` finds no `.env` in the image.
 
-**Not in the image yet:** `web/out` (so `/` is 404; `main.py` skips the static mount when
-the folder is missing) and a route to desktop AnkiConnect (`127.0.0.1:8765` is the
-container itself, so sync returns its 503). Both are unit 2. Size ~507 MB, almost all
-`kiwipiepy_model`, `pymupdf` and `numpy`.
+**Compose** (`compose.yaml`, unit 2): one service on 8002, `env_file: .env`, the
+`mbxread-data` volume at `/data`, `restart: unless-stopped`. `ANKICONNECT_URL`
+(`server/anki.py`, default `http://127.0.0.1:8765`) is set to
+`http://host.docker.internal:8765`, with `extra_hosts: host-gateway` so the name also
+resolves on Linux. Sync reaches Anki only on the machine running Docker; elsewhere it
+returns its 503. Size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`,
+`pymupdf` and `numpy`.

@@ -1,7 +1,9 @@
 """AnkiConnect client. See docs/SPEC.md section 8."""
+import os
+
 import httpx
 
-ANKICONNECT_URL = "http://127.0.0.1:8765"
+ANKICONNECT_URL = os.getenv("ANKICONNECT_URL", "http://127.0.0.1:8765")
 
 # Created once and never updated (see _ensure), so bump the name if the templates ever
 # change incompatibly.

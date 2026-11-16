@@ -1,7 +1,7 @@
 # MbxRead
 
-Personal Korean reading app: read texts, tap unknown words, translate them (DeepL or
-Claude), hand-enrich the translation, save by **dictionary form (lemma)** so every
+Personal Korean reading app: read texts, tap unknown words, translate them (DeepL),
+hand-enrich the translation, save by **dictionary form (lemma)** so every
 inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAPI +
 SQLite + kiwipiepy backend, Next.js frontend (static export), one server, phone access
 via Tailscale.
@@ -40,9 +40,6 @@ Copy `.env.example` to `.env` and fill in:
   chars/month).
 - **KRDICT_API_KEY** — free at https://krdict.korean.go.kr/openApi/openApiInfo (instant,
   needs an account).
-- **ANTHROPIC_API_KEY** — only if you want the Claude translation backend instead of
-  DeepL; then set `TRANSLATOR=claude` (or switch backends anytime in the app's Settings
-  page).
 
 Restart the server after editing `.env`.
 
@@ -77,19 +74,22 @@ opening anything to the public internet.
 Both devices need Tailscale running and signed into the same account for this to work;
 neither the app nor port 8002 is ever exposed to the public internet.
 
-## Run with Docker (API only)
+## Run with Docker
 
 ```
-docker build -t mbxread-api .
-docker run -d --name mbxread -p 8002:8002 --env-file .env -v mbxread-data:/data mbxread-api
+cp .env.example .env      # then fill in your keys
+docker compose up -d --build
 ```
 
-- The API answers at `http://localhost:8002/api` (`/api/health` for a check). The web UI
-  is not in this image yet (roadmap unit 2), so `/` returns 404.
+- Open `http://localhost:8002`. One container serves the web UI and the API
+  (`/api/health` for a check).
 - Your data (`reader.db`, the translation cache) lives in the `mbxread-data` volume. Outside
   Docker, `MBXREAD_DATA_DIR` moves those files too (default: the repo root).
-- Anki sync can't reach desktop Anki from the container yet (unit 2); it answers "Anki is
-  not running".
+- **Anki sync** works when Anki runs on the same computer as Docker: compose points the
+  server at `host.docker.internal:8765` (`ANKICONNECT_URL`). Docker Desktop (Windows/Mac)
+  needs nothing else. On Linux, set AnkiConnect's `webBindAddress` to `0.0.0.0` (Anki →
+  Tools → Add-ons → AnkiConnect → Config), since its default `127.0.0.1` refuses
+  connections from containers.
 - Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
   pytest and the tray's `pystray`/`pillow`). The image installs `requirements.txt` only.
 
@@ -114,22 +114,18 @@ scheduled job.
 - The time of the last fetch *attempt* is stored (`GET /api/settings` →
   `last_fetch_attempt`) and shown on the Queue page.
 
-## Switching translation backends
-
-Settings page in the app (`/settings`) → Translator backend → DeepL or Claude. Every
-translation is cached, so repeat lookups of the same text are free.
-
 ## Layout
 
 ```
 server/                 FastAPI app (port 8002): API routes, sqlite (reader.db), tokenizer
 web/                    Next.js frontend, built to web/out and served by server/main.py
-translate_svc/          DeepL/Claude translation + cache + krdict, imported as a library
+translate_svc/          DeepL translation + cache + krdict, imported as a library
 import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
 scripts/tray_app.py     daily-use launcher: server + tray icon, starts at logon, no console
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
-Dockerfile              API image (see "Run with Docker"); .dockerignore is an allowlist
+Dockerfile              app image, API + web (see "Run with Docker"); .dockerignore is an allowlist
+compose.yaml            runs the image with .env, the data volume and the route to desktop Anki
 requirements.txt        runtime deps (what the image installs)
 requirements-dev.txt    + pytest and the Windows tray deps, for local use
 ANKI.md                 Anki sync setup and daily-use guide

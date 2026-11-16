@@ -12,6 +12,10 @@ for the full technical spec; this is the practical how-to.
    requests sent *from a browser* (with an `Origin` header); MbxRead's
    sync call goes server-to-server (the FastAPI backend calling AnkiConnect
    directly over `httpx`), which isn't subject to that check at all.
+3. **Running in Docker** (`docker compose up`): the server reaches Anki on the same
+   computer at `host.docker.internal:8765`. On Linux only, set AnkiConnect's
+   `webBindAddress` to `0.0.0.0` in its add-on config. A server on another machine
+   can't reach your Anki at all.
 
 ## Daily use
 
