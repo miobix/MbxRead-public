@@ -903,3 +903,20 @@ environment (`--env-file .env`); `load_dotenv` finds no `.env` in the image.
 resolves on Linux. Sync reaches Anki only on the machine running Docker; elsewhere it
 returns its 503. Size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`,
 `pymupdf` and `numpy`.
+
+## CI (unit 3)
+
+`.github/workflows/ci.yml`, on every pull request and every push to `main`, on
+`ubuntu-24.04`, with every action pinned to a commit SHA (tag in a comment):
+
+- **`test`**: Python 3.14.10, `pip install -r requirements-dev.txt`, the full pytest suite
+  (offline, no keys, like local runs).
+- **`web`**: Node 24.18.0, `npm ci`, `npm run lint`, `npm run build` in `web/`.
+- **`image`** (after both pass): builds the Dockerfile with buildx and the GitHub Actions
+  cache. On a PR it only builds; on a push to `main` it logs in with `GITHUB_TOKEN`
+  (`packages: write`, granted to this job only) and pushes
+  `ghcr.io/miobix/mbxread:latest` and `:<commit sha>`. The image's
+  `org.opencontainers.image.source` label links the package to the repo.
+
+Branch protection on `main` requires `test`, `web` and `image`. A newer push to the same
+ref cancels the running workflow.
