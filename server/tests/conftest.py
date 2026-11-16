@@ -26,6 +26,13 @@ def _no_live_anki(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_live_models(monkeypatch):
+    """A local .env may point at the embed/Ollama containers; tests never call them."""
+    monkeypatch.setattr(config, "EMBED_URL", "")
+    monkeypatch.setattr(config, "OLLAMA_URL", "http://127.0.0.1:9")
+
+
+@pytest.fixture(autouse=True)
 def _no_live_db(monkeypatch):
     """The default URL is the live database; a test that didn't ask for db_url must fail."""
     monkeypatch.setattr(config, "DATABASE_URL", "postgresql://nobody@127.0.0.1:9/none?connect_timeout=1")

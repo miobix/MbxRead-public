@@ -1843,3 +1843,59 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
 - **Verified:** pytest 275 green against Postgres; `npm run lint` and `npm run build`
   clean; the image in a throwaway network on 8012 (book, read ping, term, ILIKE search,
   stats local day, zero tracebacks).
+
+## 2026-11-16 — Unit 5: same-sense usage search (retrieval + local LLM)
+
+- **Why this feature:** the roadmap said "RAG"; the user asked what it would do *for the
+  app*. Answer: a popover button that finds the tapped word in other library sentences
+  ranked by *sense* (타다 ride vs burn vs receive), then a local LLM names the sense
+  from those sentences. Lemma search alone finds every sentence with the word; only
+  embeddings separate senses; generation makes it full RAG. Q&A over the library and
+  "example sentences for a term" were rejected: the first had no user need, the second
+  is already solved by lemmas.
+- **No paid API, no model in the app image.** The user dropped the Claude API, so the
+  LLM is local. Each model gets its own container (user's call, to be revisited):
+  `embed` (TEI CPU, bge-m3) and `ollama`. Weights live in volumes. The app image stayed
+  at 617 MB; bge-m3 + torch in-process would have added ~3 GB.
+- **Embedding model: bge-m3** (568M, Apache 2.0, 79.3 on the ko-embedding-leaderboard;
+  Qwen3-Embedding-4B 81.4 and KURE-v1 80.8 score higher, the 27B/8B leaders do not fit a
+  CPU). Pinned to revision `5617a9f61b028005a4858fdac845db406aefb181`. A Korean-only model
+  is a one-line swap in compose plus a re-index if the eval says it matters.
+- **LLM: `gemma4:e4b`** (Ollama id `dc35e8d9c606`). Checked against `qwen3:8b` and
+  `exaone3.5:7.8b` on three polysemy prompts: gemma was right on all three and fastest
+  (~2.5 s on CPU); qwen3 twice listed a "burn" example as "ride"; exaone was right but
+  slower and ignored the format. The rejected models were removed from the volume.
+- **GPU: not working, deferred.** Docker sees the RTX 3070 Ti (`nvidia-smi` runs in a
+  container) but CUDA init fails inside Ollama (`cuInit failed: named symbol not
+  found`), a WSL2 driver/shim mismatch. CPU latency (~3 s) is acceptable, so it runs
+  on CPU; compose keeps the GPU reservation for when the host stack is fixed.
+- **Eval** (`scripts/eval_usage.py`, 100 hand-written labeled sentences, 8 words, 2-4
+  senses each; precision of same-sense hits, each lemma isolated to its own sentences):
+
+  | | chance | keyword | vector | hybrid |
+  |---|---|---|---|---|
+  | precision@1 | 0.28 | 0.46 | **0.73** | 0.70 |
+  | precision@3 | 0.28 | 0.40 | **0.61** | 0.60 |
+
+  **Default method = `vector`.** Keyword (shared context lemmas) barely beats chance:
+  short sentences share few words. Hybrid only helped 차다 (공/허리 as cues) and
+  otherwise dilutes vector. Hybrid first lost to vector outright because all-zero
+  keyword ties still voted in id order; zero-overlap rows now get no vote.
+- **Where it fails:** whole-sentence embeddings capture topic and register as much as
+  the target word's sense. Worst: 차다 (0.40 at k=1: "cold hands" sits near "full
+  cup"), 배 (pear vs belly: both food/body contexts), 타다 ride vs receive (both short
+  "X를 탔다" sentences). Strong: 걸리다, 눈, 다리 (1.00 at k=1). One sentence
+  (스트레스가 풀려요) was skipped: the tokenizer gives 풀리다, not 풀다. In the e2e run
+  the LLM named the right examples even when retrieval ranked wrong-sense ones first,
+  so generation partly covers retrieval misses. Upgrade paths if needed: embed a window
+  around the word instead of the sentence, a Korean model (KURE), or a reranker.
+- **Indexing** is a background task in the app lifespan, not hooked into each of the
+  six import/promote paths: one place, and it picks up promotions for free. Guarded,
+  one book per pass, exponential backoff to 15 min, off when `EMBED_URL` is unset
+  (tests, bare dev runs). Exact vector scan, no ANN index: candidates are one lemma's
+  sentences.
+- **Verified:** pytest 290 green; `npm run lint` and `npm run build` clean; e2e on a
+  scratch database with the real services (book indexed by the background task, search,
+  explain 3.3 s, cached 0.03 s); image builds at 617 MB. Pinned: pgvector
+  `0.8.7-pg18-trixie`, TEI `cpu-1.9.3`, Ollama `0.40.15` (one release behind latest),
+  all by digest.

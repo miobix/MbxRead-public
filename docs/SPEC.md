@@ -478,6 +478,63 @@ SQLite's own `'localtime'` output on the live-data rehearsal instead of a unit t
 lint` clean, `docker compose up -d --build` serves the app on 8002 with the migrated live
 data (row counts match `reader.db`).
 
+### Unit 5 — Same-sense usage (retrieval + local LLM: RAG)
+
+**Why:** the reader shows a word in one sentence; a polysemous word (타다 ride/burn/receive)
+needs examples *in the same sense*. Lemma search finds every sentence with the word;
+embeddings rank them by sense; a local LLM explains the sense from what was retrieved.
+
+**Services (each model its own container, weights in volumes, never in the app image):**
+- `db` → `pgvector/pgvector:0.8.7-pg18-trixie` (same Postgres major; digest pinned).
+- `embed` → Hugging Face text-embeddings-inference (CPU), `BAAI/bge-m3` (1024-d,
+  Apache 2.0) at a pinned revision. Not published on the host.
+- `ollama` → `ollama/ollama`, GPU, model picked by a quick Korean check (recorded in
+  DECISIONS). Pulled once by hand: `docker compose exec ollama ollama pull <model>`.
+- App env: `EMBED_URL`, `OLLAMA_URL`, `OLLAMA_MODEL`. Unset `EMBED_URL` = feature off
+  (tests, bare dev runs).
+
+**Index:** table `sentences (id, book_id FK cascade, start INT, text, lemmas TEXT[] GIN,
+embedding vector(1024))`. Sentences split with `paging`'s break regex, lemmas from
+`tokenizer`. Only `status='library'` books; `books.indexed_at` marks done. A guarded
+background loop in the app lifespan indexes pending books (one per pass, quiet backoff
+on error), so new and promoted books get indexed without touching every import path.
+
+**Search:** `POST /api/usage {lemma, sentence, k=5, method}`. Candidates = indexed
+sentences containing the lemma, minus the query sentence. Ranking methods (compared):
+- `keyword`: overlap count of the query sentence's other lemmas (no embeddings).
+- `vector`: cosine distance to the query sentence's embedding (pgvector `<=>`, exact).
+- `hybrid`: reciprocal rank fusion (k=60) of the two.
+Default = whichever wins the eval. Response: `[{book_id, title, text, score}]` +
+`pending_books`.
+
+**Generation:** `POST /api/usage/explain {lemma, sentence, examples}` → Ollama chat with
+the sentence, the retrieved examples and krdict's senses (if a key is set) → one English
+line naming the sense, grounded in the examples. Cached in `translate_cache`
+(backend `explain:<model>`). Errors → 503 with a readable message.
+
+**Frontend:** popover button "Similar usage" (single words, not phrases) → list of
+sentences with book titles → "Explain" button → the line, with a way to add it as a
+Back chip (`kind='manual'`).
+
+**Eval:** `scripts/eval_usage.py` + hand-written labeled sentences
+(`server/data/usage_eval.tsv`: lemma, sense, sentence; original text, no copyright).
+Builds a scratch DB on the test server, indexes with the real `embed`, queries each
+sentence, reports precision@k of same-sense hits per method. Results + failure cases go
+to DECISIONS.
+
+**Tests (offline):** fake embedder and mocked Ollama HTTP. Indexing (only library
+books, idempotent, cascade), each ranking method's order, query-sentence exclusion, RRF,
+explain caching and 503s, feature-off behaviour. CI and local test db use the pgvector
+image.
+
+**Out of scope:** jumping to the hit's place in the book, ANN index (exact scan over one
+lemma's candidates is small), contrasting other senses (follow-up), routing between
+models (unit 6).
+
+**Accept:** pytest, `npm run build`, `npm run lint` green; compose brings up all four
+services; on real data the button returns same-sense hits for 타다-like words and
+Explain returns a grounded line; eval numbers recorded.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

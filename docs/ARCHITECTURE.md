@@ -34,9 +34,10 @@ MbxRead/
   requirements.txt         runtime Python deps (the Docker image installs only this)
   requirements-dev.txt     -r requirements.txt + pytest (unit 1)
   Dockerfile, .dockerignore  app image, API + web (units 1-2); see "Container image" below
-  compose.yaml             app + Postgres (`db`), the daily launcher (units 2, 4)
+  compose.yaml             app + Postgres (`db`) + `embed` + `ollama`, the daily launcher (units 2, 4, 5)
   start.ps1                dev launcher: compose db + uvicorn with a console
   scripts/sqlite_to_pg.py  one-off cutover from a pre-unit-4 reader.db (unit 4)
+  scripts/eval_usage.py    usage-search eval on server/data/usage_eval.tsv (unit 5)
 ```
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
@@ -68,7 +69,7 @@ unimplemented (Epic 7).
 
 The schema is `SCHEMA` in `server/db.py`: the source of truth, with per-column comments.
 Tables: `books`, `pages`, `terms`, `term_forms`, `term_back_items`, `settings`,
-`read_days`, `feeds`, `vocab_levels`, plus the caches `translate_cache`, `krdict_cache`,
+`read_days`, `feeds`, `vocab_levels`, `sentences` (unit 5, pgvector), plus the caches `translate_cache`, `krdict_cache`,
 `krdict_state` (used by `translate_svc/`). Postgres is the only database; there is no
 SQLite anywhere in the app.
 
@@ -802,11 +803,38 @@ once; `restart: unless-stopped` brings both services back whenever Docker Deskto
   `http://127.0.0.1:8765`) is `http://host.docker.internal:8765`, with
   `extra_hosts: host-gateway` so the name also resolves on Linux. Sync reaches Anki only
   on the machine running Docker; elsewhere it returns its 503.
-- `db`: `postgres:18.6-trixie` pinned by digest, user/db `mbxread`, password
+- `db`: `pgvector/pgvector:0.8.7-pg18-trixie` pinned by digest (Postgres 18 + the
+  `vector` extension, unit 5), user/db `mbxread`, password
   `POSTGRES_PASSWORD` (default `mbxread`), volume `mbxread-pg` at `/var/lib/postgresql`
   (the Postgres 18 image layout), `pg_isready` healthcheck, published on
   `127.0.0.1:5433` only (5432 is taken on this machine by an unrelated native Postgres
   service). Dev runs and tests reach it there.
+- `embed` (unit 5): text-embeddings-inference `cpu-1.9.3` pinned by digest, serving
+  `BAAI/bge-m3` at revision `5617a9f6`; weights in volume `mbxread-embed`. On
+  `127.0.0.1:8081` for dev runs and the eval; the app uses `EMBED_URL=http://embed:80`.
+- `ollama` (unit 5): `ollama/ollama:0.40.15` pinned by digest, model `gemma4:e4b`
+  (`OLLAMA_MODEL`) pulled once by hand into volume `mbxread-ollama`; on
+  `127.0.0.1:11434`. Requests the GPU, but on this machine CUDA init fails inside WSL2,
+  so it runs on CPU (~3 s per explanation).
+
+## Same-sense usage (unit 5, `server/usage.py`, `routes/usage.py`)
+
+- **Index:** `sentences` rows (book, start offset, text, lemma array with a GIN index,
+  1024-d bge-m3 embedding) for `status='library'` books only; `books.indexed_at` marks a
+  book done. A background task in the app lifespan indexes one pending book per pass
+  (backs off up to 15 min on errors); it only runs when `EMBED_URL` is set.
+- **`POST /api/usage {lemma, sentence, k=5, method}`** → `{hits: [{book_id, title, text,
+  score}], pending_books}`. Candidates: indexed sentences containing the lemma, minus the
+  query sentence. `method`: `vector` (default, cosine via `<=>`), `keyword` (count of
+  shared context lemmas), `hybrid` (RRF k=60 over each method's top 50; zero-overlap
+  keyword rows get no vote). 503 when embeddings are needed but unavailable.
+- **`POST /api/usage/explain {lemma, sentence, examples}`** → `{explanation}`: one line
+  `<sense> (<gloss>). Same sense: <example numbers>.` from Ollama, prompted with the
+  sentence, the examples and krdict senses; cached in `translate_cache` under
+  `explain:<model>`. 503 with a readable message when Ollama is down or the model is not
+  pulled.
+- **Popover:** "Similar usage" (single words) lists the hits, "Explain sense" shows the
+  line, "Add to back" adds it as a manual Back chip.
 
 Image size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`, `pymupdf` and
 `numpy`.

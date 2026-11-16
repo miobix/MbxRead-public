@@ -145,6 +145,9 @@ export type TextWindow = {
   terms: Record<string, TermSummary>;
 };
 
+export type UsageHit = { book_id: number; title: string; text: string; score: number };
+export type UsageResult = { hits: UsageHit[]; pending_books: number };
+
 export type DictEntry = {
   word: string;
   pos: string;
@@ -373,6 +376,18 @@ export const api = {
 
   dictLookup: (word: string) =>
     request<DictEntry[]>(`/dict?word=${encodeURIComponent(word)}`),
+
+  usage: (lemma: string, sentence: string) =>
+    request<UsageResult>("/usage", {
+      method: "POST",
+      body: JSON.stringify({ lemma, sentence }),
+    }),
+
+  explainUsage: (lemma: string, sentence: string, examples: string[]) =>
+    request<{ explanation: string }>("/usage/explain", {
+      method: "POST",
+      body: JSON.stringify({ lemma, sentence, examples }),
+    }),
 
   syncAnki: () => request<AnkiSyncResult>("/anki/sync", { method: "POST" }),
 
