@@ -1,6 +1,6 @@
 """POST /api/anki/sync. See docs/SPEC.md section 8."""
 import json
-import sqlite3
+import psycopg
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -23,7 +23,7 @@ def _render_legacy_examples(examples: list[str], sentence: str) -> str:
     return "<br>".join(parts)
 
 
-def _front_entries(conn: sqlite3.Connection, term_id: int, lemma: str) -> list[dict]:
+def _front_entries(conn: psycopg.Connection, term_id: int, lemma: str) -> list[dict]:
     """The Front stack: the lemma (group '') then each form, which is its own group key."""
     return [{"text": lemma, "kind": "lemma", "group": ""}] + [
         {"text": f["text"], "kind": f["kind"], "group": f["text"]}
@@ -85,7 +85,7 @@ def _render_examples_field(
     return "<br><br>".join("<br>".join(block) for block in blocks)
 
 
-def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, str, str]:
+def _render_two_way(conn: psycopg.Connection, row: dict) -> tuple[str, str, str]:
     """Korean/English/Examples for the two-way model."""
     front_entries = _front_entries(conn, row["id"], row["lemma"])
     korean = _render_korean(front_entries)
@@ -107,7 +107,7 @@ def _render_two_way(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, st
 
 
 @router.post("/sync")
-def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
+def sync(conn: psycopg.Connection = Depends(db_module.get_db)):
     try:
         anki.ping()
     except anki.AnkiError as e:
@@ -124,7 +124,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
     ).fetchall()
     dirty_terms = conn.execute(
         "SELECT * FROM terms WHERE anki_dirty = 1 AND anki_note_id IS NOT NULL "
-        "AND anki_model IS NOT ?",
+        "AND anki_model IS DISTINCT FROM %s",
         (anki.LEGACY_HANJA_MODEL,),
     ).fetchall()
 
@@ -144,8 +144,8 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
             korean, english, examples = _render_two_way(conn, row)
             note_id = anki.add_note_model(row["deck"] or DEFAULT_DECK, korean, english, examples)
             conn.execute(
-                "UPDATE terms SET anki_note_id = ?, anki_model = ?, anki_dirty = 0 "
-                "WHERE id = ?",
+                "UPDATE terms SET anki_note_id = %s, anki_model = %s, anki_dirty = 0 "
+                "WHERE id = %s",
                 (note_id, anki.MODEL_NAME, row["id"]),
             )
             added += 1
@@ -157,7 +157,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
             korean, english, examples = _render_two_way(conn, row)
             anki.update_note_model(row["anki_note_id"], korean, english, examples)
             anki.move_note_to_deck(row["anki_note_id"], row["deck"] or DEFAULT_DECK)
-            conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = ?", (row["id"],))
+            conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = %s", (row["id"],))
             updated += 1
         except anki.AnkiError as e:
             failed.append({"lemma": row["lemma"], "error": str(e)})
@@ -173,7 +173,7 @@ def sync(conn: sqlite3.Connection = Depends(db_module.get_db)):
             intervals = {}
         for row in synced:
             if intervals.get(row["anki_note_id"], 0) >= MATURE_DAYS:
-                conn.execute("UPDATE terms SET status = 'known' WHERE id = ?", (row["id"],))
+                conn.execute("UPDATE terms SET status = 'known' WHERE id = %s", (row["id"],))
                 promoted += 1
 
     conn.commit()

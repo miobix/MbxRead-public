@@ -1,5 +1,5 @@
 # Starts MbxRead: rebuilds web/ if the source is newer than the last
-# build, launches the FastAPI server (serves the API and the built frontend
+# build, starts the compose Postgres, launches the FastAPI server (serves the API and the built frontend
 # together on one port), and opens the browser.
 $root = $PSScriptRoot
 $py = Join-Path $root ".venv\Scripts\python.exe"
@@ -29,6 +29,9 @@ if ($null -eq $outputTime -or ($null -ne $sourceTime -and $sourceTime -gt $outpu
 } else {
     Write-Host "web/ build is up to date, skipping rebuild."
 }
+
+# The app needs its Postgres (compose db, 127.0.0.1:5433); idempotent if already up.
+docker compose -f (Join-Path $root "compose.yaml") up -d --wait db
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
     "& '$py' -m uvicorn server.main:app --host 0.0.0.0 --port 8002" -WorkingDirectory $root

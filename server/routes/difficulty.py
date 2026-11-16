@@ -3,7 +3,7 @@
 Scoring a *stored* book lives in routes/books.py (POST /api/books/{id}/score) so it can
 cache onto the book row; this router only handles ad-hoc text.
 """
-import sqlite3
+import psycopg
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ class ScoreRequest(BaseModel):
 
 
 @router.post("/score")
-def score(body: ScoreRequest, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def score(body: ScoreRequest, conn: psycopg.Connection = Depends(db_module.get_db)):
     frequency = frequency_grades(conn)
     result = score_text(body.text, known_lemmas(conn), frequency)
     result.update(score_general_difficulty(body.text, frequency))

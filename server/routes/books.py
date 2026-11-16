@@ -1,6 +1,6 @@
 """Books & pages API. See docs/SPEC.md section 5."""
 import json
-import sqlite3
+import psycopg
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -50,17 +50,17 @@ class BookPatch(BaseModel):
     status: BookStatus | None = None
 
 
-def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
-    row = conn.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
+def _book_dict(conn: psycopg.Connection, book_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM books WHERE id = %s", (book_id,)).fetchone()
     if row is None:
         return None
     page_count = conn.execute(
-        "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
-    ).fetchone()[0]
+        "SELECT COUNT(*) n FROM pages WHERE book_id = %s", (book_id,)
+    ).fetchone()["n"]
     total_chars = conn.execute(
-        "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM pages WHERE book_id = ?",
+        "SELECT COALESCE(SUM(LENGTH(content)), 0) n FROM pages WHERE book_id = %s",
         (book_id,),
-    ).fetchone()[0]
+    ).fetchone()["n"]
     return {
         **dict(row),
         "page_count": page_count,
@@ -71,7 +71,7 @@ def _book_dict(conn: sqlite3.Connection, book_id: int) -> dict | None:
     }
 
 
-def _get_book_or_404(conn: sqlite3.Connection, book_id: int) -> dict:
+def _get_book_or_404(conn: psycopg.Connection, book_id: int) -> dict:
     book = _book_dict(conn, book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="book not found")
@@ -82,12 +82,12 @@ class DuplicateSourceRef(Exception):
     """Raised when source_ref collides with an already-imported book."""
 
 
-def _purge_queue_text(conn: sqlite3.Connection, book_ids: list[int]) -> None:
+def _purge_queue_text(conn: psycopg.Connection, book_ids: list[int]) -> None:
     """Drop the text of discarded feed candidates (article/yt only; manual imports are
     kept). The `books` row stays so dedup and curation stats still see it."""
     if not book_ids:
         return
-    placeholders = ", ".join("?" for _ in book_ids)
+    placeholders = ", ".join("%s" for _ in book_ids)
     conn.execute(
         f"DELETE FROM pages WHERE book_id IN ("
         f"SELECT id FROM books WHERE id IN ({placeholders}) "
@@ -97,7 +97,7 @@ def _purge_queue_text(conn: sqlite3.Connection, book_ids: list[int]) -> None:
 
 
 def insert_book(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     title: str,
     text: str,
@@ -117,18 +117,18 @@ def insert_book(
         cur = conn.execute(
             "INSERT INTO books (title, source, topic, tags, source_url, source_ref, "
             "fetched, status, word_count, duration_seconds, feed_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (
                 title, source, topic, json.dumps(tags or []), source_url, source_ref,
                 fetched, status, word_count, duration_seconds, feed_id,
             ),
         )
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         raise DuplicateSourceRef(source_ref)
-    book_id = cur.lastrowid
+    book_id = cur.fetchone()["id"]
     pages = split_pages(text)
-    conn.executemany(
-        "INSERT INTO pages (book_id, page_no, content) VALUES (?, ?, ?)",
+    conn.cursor().executemany(
+        "INSERT INTO pages (book_id, page_no, content) VALUES (%s, %s, %s)",
         [(book_id, i + 1, page) for i, page in enumerate(pages)],
     )
     conn.commit()
@@ -136,7 +136,7 @@ def insert_book(
 
 
 def _score_and_cache(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     book_id: int,
     text: str,
     known: set[str] | None = None,
@@ -151,8 +151,8 @@ def _score_and_cache(
     personal = score_text(text, known, frequency)
     general = score_general_difficulty(text, frequency)
     conn.execute(
-        "UPDATE books SET coverage = ?, new_per_page = ?, general_coverage = ?, "
-        "general_level = ?, scored_at = CURRENT_TIMESTAMP WHERE id = ?",
+        "UPDATE books SET coverage = %s, new_per_page = %s, general_coverage = %s, "
+        "general_level = %s, scored_at = CURRENT_TIMESTAMP WHERE id = %s",
         (
             personal["coverage"],
             personal["new_per_page"],
@@ -188,25 +188,25 @@ def list_books(
     sort: str | None = None,
     limit: int | None = None,
     offset: int = 0,
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     # Defaults to the library so Queue candidates and discards stay out of the main list.
     query = "SELECT id FROM books WHERE 1=1"
     params: list = []
     if topic:
-        query += " AND topic = ?"
+        query += " AND topic = %s"
         params.append(topic)
     if archived is not None:
-        query += " AND archived = ?"
+        query += " AND archived = %s"
         params.append(int(archived))
     if source:
-        query += " AND source = ?"
+        query += " AND source = %s"
         params.append(source)
-    query += " AND status = ?"
+    query += " AND status = %s"
     params.append(status or "library")
     query += f" ORDER BY {_SORT_CLAUSES.get(sort, 'id')}"
     if limit is not None:
-        query += " LIMIT ? OFFSET ?"
+        query += " LIMIT %s OFFSET %s"
         params.append(limit)
         params.append(offset)
     rows = conn.execute(query, params).fetchall()
@@ -214,7 +214,7 @@ def list_books(
 
 
 @router.post("", status_code=201)
-def create_book(body: BookCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def create_book(body: BookCreate, conn: psycopg.Connection = Depends(db_module.get_db)):
     try:
         return insert_book(
             conn,
@@ -235,7 +235,7 @@ def create_book(body: BookCreate, conn: sqlite3.Connection = Depends(db_module.g
 
 
 @router.get("/{book_id}")
-def get_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def get_book(book_id: int, conn: psycopg.Connection = Depends(db_module.get_db)):
     book = _get_book_or_404(conn, book_id)
     return {
         "id": book["id"],
@@ -248,19 +248,22 @@ def get_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db))
 
 @router.patch("/{book_id}")
 def patch_book(
-    book_id: int, body: BookPatch, conn: sqlite3.Connection = Depends(db_module.get_db)
+    book_id: int, body: BookPatch, conn: psycopg.Connection = Depends(db_module.get_db)
 ):
     _get_book_or_404(conn, book_id)
     fields = body.model_dump(exclude_unset=True)
     if "tags" in fields:
         fields["tags"] = json.dumps(fields["tags"])
+    for flag in ("archived", "read"):
+        if flag in fields:
+            fields[flag] = int(fields[flag])
     # Auto-expiry sets 'expired' in its own UPDATE (routes/feeds.py).
     if fields.get("status") == "discarded":
         fields["discard_reason"] = "user"
     if fields:
-        set_clause = ", ".join(f"{key} = ?" for key in fields)
+        set_clause = ", ".join(f"{key} = %s" for key in fields)
         conn.execute(
-            f"UPDATE books SET {set_clause} WHERE id = ?",
+            f"UPDATE books SET {set_clause} WHERE id = %s",
             (*fields.values(), book_id),
         )
         conn.commit()
@@ -271,20 +274,20 @@ def patch_book(
 
 
 @router.delete("/{book_id}", status_code=204)
-def delete_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def delete_book(book_id: int, conn: psycopg.Connection = Depends(db_module.get_db)):
     _get_book_or_404(conn, book_id)
-    conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
+    conn.execute("DELETE FROM books WHERE id = %s", (book_id,))
     conn.commit()
 
 
 @router.post("/{book_id}/score")
-def score_book(book_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def score_book(book_id: int, conn: psycopg.Connection = Depends(db_module.get_db)):
     """Compute the book's personal + general difficulty and cache it on the row."""
     _get_book_or_404(conn, book_id)
     return _score_and_cache(conn, book_id, _book_text(conn, book_id))
 
 
-def _term_summary(row: sqlite3.Row) -> dict:
+def _term_summary(row: dict) -> dict:
     """The reader popover's view of a term; forms and back_items are attached after."""
     return {
         "id": row["id"],
@@ -299,12 +302,12 @@ def _term_summary(row: sqlite3.Row) -> dict:
     }
 
 
-def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
+def _terms_for_lemmas(conn: psycopg.Connection, lemmas: set[str]) -> dict:
     """Every saved term a set of window token lemmas should light up, keyed by the
     string that matched (the term's own lemma, or one of its extra `forms`)."""
     terms: dict = {}
     if lemmas:
-        placeholders = ", ".join("?" for _ in lemmas)
+        placeholders = ", ".join("%s" for _ in lemmas)
         rows = conn.execute(
             f"SELECT id, lemma, translation, notes, status, deck, examples FROM terms "
             f"WHERE lemma IN ({placeholders})",
@@ -334,11 +337,11 @@ def _terms_for_lemmas(conn: sqlite3.Connection, lemmas: set[str]) -> dict:
     return terms
 
 
-def _book_text(conn: sqlite3.Connection, book_id: int) -> str:
+def _book_text(conn: psycopg.Connection, book_id: int) -> str:
     """The full text. Page slices are contiguous, so joining with "" is lossless."""
     return "".join(
         row["content"] for row in conn.execute(
-            "SELECT content FROM pages WHERE book_id = ? ORDER BY page_no", (book_id,)
+            "SELECT content FROM pages WHERE book_id = %s ORDER BY page_no", (book_id,)
         )
     )
 
@@ -348,13 +351,13 @@ def get_text(
     book_id: int,
     offset: int = 0,
     window: int = DEFAULT_TEXT_WINDOW,
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     """A window of the book for the client-side paginator, snapped outward to sentence
     boundaries. Token offsets are relative to `content`; absolute is `offset + s`."""
     _get_book_or_404(conn, book_id)
     # The reader's display call, so it's what "most recently opened" reflects.
-    conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = ?", (book_id,))
+    conn.execute("UPDATE books SET last_opened = CURRENT_TIMESTAMP WHERE id = %s", (book_id,))
     conn.commit()
 
     text = _book_text(conn, book_id)

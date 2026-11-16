@@ -7,12 +7,32 @@ services:
     env_file: .env
     environment:
       ANKICONNECT_URL: http://host.docker.internal:8765
+      DATABASE_URL: postgresql://mbxread:${POSTGRES_PASSWORD:-mbxread}@db:5432/mbxread
     # Docker Desktop defines host.docker.internal already; Linux needs this line.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    environment:
+      POSTGRES_USER: mbxread
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mbxread}
+      POSTGRES_DB: mbxread
+    # Localhost only, for dev and tests; 5432 is taken on this machine.
+    ports:
+      - "127.0.0.1:5433:5432"
     volumes:
-      - mbxread-data:/data
+      - mbxread-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mbxread", "-d", "mbxread"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:
-  mbxread-data:
+  mbxread-pg:

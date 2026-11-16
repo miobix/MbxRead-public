@@ -26,9 +26,8 @@ const PAGE_SIZE = 30;
 
 function formatTimestamp(ts: string | null): string {
   if (!ts) return "never";
-  // Stored as SQLite's CURRENT_TIMESTAMP (UTC, no offset marker) — append "Z" so
-  // the browser parses it as UTC and renders it in the reader's local time.
-  return new Date(ts.replace(" ", "T") + "Z").toLocaleString();
+  // ISO with an offset now; a pre-Postgres value is "YYYY-MM-DD HH:MM:SS" in UTC.
+  return new Date(ts.includes("T") ? ts : ts.replace(" ", "T") + "Z").toLocaleString();
 }
 
 export default function QueuePage() {

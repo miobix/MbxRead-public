@@ -17,10 +17,11 @@ Anki. Content arrives two ways: manual import (paste/txt/YouTube/PDF/EPUB/subtit
 files/article) and an automated feed roster (RSS + YouTube) that fetches candidates into a
 review Queue. A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
-FastAPI + SQLite + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
-phone access over Tailscale.
+FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
+all in Docker compose, phone access over Tailscale.
 
-**Test suite: 282 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`).
+**Test suite: 275 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+`docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
 ## Checklist: epics 0–32 (solo development)
@@ -55,7 +56,7 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 - [x] **22** — Structured Front/Back/Examples card builder
 - [x] **—** — Pre-go-live storage/UI pass (queue-text auto-purge, rebrand, Library/Queue pagination)
 - [x] **23** — Go-live: `start.ps1`, Tailscale phone access
-- [x] **—** — Background tray launcher (ad-hoc)
+- [x] **—** — Background tray launcher (ad-hoc; removed in unit 4)
 - [x] **24** — Client-side reader pagination + Library nav/card pass
 - [x] **—** — Subtitle-file import (`.srt/.vtt/.smi/.ass/.ttml`, batch) + Library card edit (ad-hoc)
 - [x] **25–27** — Hanja terms, multi-sense hanja, hanja study skill (removed in 32)
@@ -73,13 +74,12 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 
 - **Server runs on port 8002.** Port 8000 belongs to an unrelated Docker-based Android sync
   service on this machine — don't use it or kill things on it without checking. No app code hardcodes the port (passed via `uvicorn --port`).
-- **Two launchers.** `start.ps1` = the *dev* launcher (visible console, rebuilds `web/` if
-  stale). `scripts/tray_app.py` = the *daily* launcher — hidden uvicorn + tray icon
-  (Open / Restart / Quit), auto-started at logon via a **Startup-folder shortcut**
-  (`shell:startup`), *not* Task Scheduler (logon-trigger registration hits Access Denied in
-  this environment). Server output → `scripts/server.log` (gitignored).
-- **Docker:** `docker compose up -d --build` runs web + API in one container on 8002 (the
-  daily tray app also uses 8002, so stop one before starting the other).
+- **Daily launcher is compose** (unit 4): `docker compose up -d --build` runs the app (8002)
+  and Postgres (`db`, `127.0.0.1:5433`); `restart: unless-stopped` brings both back when
+  Docker Desktop starts. The Windows tray launcher was deleted. `start.ps1` = the *dev*
+  launcher (compose db + uvicorn in a visible console, rebuilds `web/` if stale); stop the
+  compose app first, both want 8002.
+- **Port 5432 is not ours:** an unrelated native Windows Postgres service holds it.
 - **CI** (`.github/workflows/ci.yml`): jobs `test`, `web`, `image` on every PR and push
   to `main`; all three are required to merge. Pushes to `main` publish
   `ghcr.io/miobix/mbxread:latest` and `:<sha>`.
@@ -94,16 +94,16 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
   `books.current_offset`, a character offset, so devices stay in sync.
 - **Python 3.14.10 everywhere:** the repo's `.venv` (`pip install -r requirements-dev.txt`)
   and the Docker image run the same version; the suite passes on both.
-- **Data directory:** `MBXREAD_DATA_DIR` holds `reader.db` and `translate_cache.sqlite3`
-  (default: repo root; `/data` in the Docker image).
-- **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text in ~1500-char
-  slices (storage only; the reader reads `GET /api/books/{id}/text?offset=`). As of go-live:
-  ~200 books / 1.14M chars / 3.7MB. Discarded article/yt candidates have their `pages` text
-  auto-purged; paste/pdf/epub/txt text is kept indefinitely.
-- **Schema upgrades are additive only** (`_ADDED_COLUMNS` in `server/db.py`). The one-time
-  Epic 24/26 migrations were removed 2026-10-21; a `reader.db` backup older than Epic 26
-  must be opened with a checkout from before commit `6d7eb08` to upgrade it. Removed features
-  leave their columns in place (`terms.hanja`, stored and unused since Epic 32).
+- **Storage is one Postgres database** (`DATABASE_URL`, volume `mbxread-pg`), caches
+  included; no SQLite anywhere. `TZ` in `.env` sets the local day for reads and stats.
+  `pages.content` holds raw text in ~1500-char slices (storage only; the reader reads
+  `GET /api/books/{id}/text?offset=`). Discarded article/yt candidates have their `pages`
+  text auto-purged; paste/pdf/epub/txt text is kept indefinitely.
+- **Schema changes:** new columns are `ADD COLUMN IF NOT EXISTS` lines in `init_db`.
+  Removed features leave their columns in place (`terms.hanja`, unused since Epic 32).
+- **Old SQLite data:** `scripts/sqlite_to_pg.py` copies a pre-unit-4 `reader.db` into an
+  empty database once. A `reader.db` older than Epic 26 needs a checkout from before
+  `6d7eb08` first.
 
 ## Next: grow the app (2026-11-13)
 
@@ -117,18 +117,20 @@ never committed; copy `.env.example`.
 | 1 | Dockerfile for the API | done |
 | 2 | Compose: API + static web, env file for keys | done |
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
-| 4 | SQLite to Postgres migration, in compose and CI | **next** |
-| 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | |
+| 4 | SQLite to Postgres migration, in compose and CI | PR open; live cutover pending |
+| 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | **next** |
 | 6 | Agent: a model "decider" that routes between cheap and strong models | |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
-**Unit 4:** raw `sqlite3` in ~11 modules, no ORM. First decision: psycopg 3 or SQLAlchemy
-Core. Snags: `?` vs `%s`, `INSERT OR IGNORE`, `lastrowid`, PRAGMAs, date functions, the
-additive `_ADDED_COLUMNS` scheme, temp-SQLite-per-test fixtures.
+**Unit 4 cutover (after merge):** stop the private repo's tray (`C:\Personal\MbxRead`, live
+on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.py` on its
+`reader.db` + `translate_cache.sqlite3` into the empty compose db, `docker compose up -d
+--build`, check counts, turn on Docker Desktop's start-at-sign-in.
 
 **Unit 5:** build several pipelines (chunking, embeddings, hybrid or keyword search) and
 record where each fails. Public-domain Korean texts only, for the repo, tests and any demo.
+Needs pgvector: swap the `db` image for a pgvector build of the same Postgres major.
 
 **Unit 6:** modelled on Strands' decider
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
@@ -154,5 +156,6 @@ reach desktop Anki, so the deploy unit adds CSV export (Anki imports CSV nativel
 - On Windows, a background `uvicorn` started by a Bash-tool `&` job can outlive its call and
   squat on the port. If a fresh run fails to bind: `netstat -ano | grep :8002` then
   `taskkill //PID <pid> //F`.
-- Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP, temp
-  sqlite per test.
+- Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP, a
+  temp Postgres DB per test (`db_url`). Use `127.0.0.1`, never `localhost`, in Postgres
+  URLs on Windows: `localhost` stalls on IPv6.

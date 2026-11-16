@@ -3,7 +3,7 @@
 Tests mock the extractors at this module's boundary (`imports.fetch_subs`, etc.).
 """
 import hashlib
-import sqlite3
+import psycopg
 from pathlib import Path
 from typing import Callable
 
@@ -36,7 +36,7 @@ def _split_tags(tags: str) -> list[str]:
 
 
 async def _import_file(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     file: UploadFile,
     extract: Callable[[bytes], str],
     source: str,
@@ -70,7 +70,7 @@ async def _import_file(
 
 
 @router.post("/youtube", status_code=201)
-def import_youtube(body: UrlImport, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def import_youtube(body: UrlImport, conn: psycopg.Connection = Depends(db_module.get_db)):
     try:
         title, text, video_id, duration = fetch_subs(body.url)
     except Exception as e:
@@ -92,7 +92,7 @@ def import_youtube(body: UrlImport, conn: sqlite3.Connection = Depends(db_module
 
 
 @router.post("/article", status_code=201)
-def import_article(body: UrlImport, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def import_article(body: UrlImport, conn: psycopg.Connection = Depends(db_module.get_db)):
     try:
         title, text = fetch_article(body.url)
     except ArticleError as e:
@@ -119,7 +119,7 @@ async def import_pdf(
     topic: str = Form(""),
     tags: str = Form(""),
     pages: str = Form(""),
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     try:
         page_range = parse_page_range(pages) if pages else None
@@ -136,7 +136,7 @@ async def import_epub(
     title: str = Form(""),
     topic: str = Form(""),
     tags: str = Form(""),
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     return await _import_file(conn, file, extract_epub, "epub", title, topic, tags)
 
@@ -147,7 +147,7 @@ async def import_subtitles(
     title: str = Form(""),
     topic: str = Form(""),
     tags: str = Form(""),
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     """One book per subtitle file, in filename order so a season lands in episode order.
     Always 201 with a per-file summary, since partial success is normal for a batch."""

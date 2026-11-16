@@ -2,7 +2,8 @@
 Tests mock at the route-module boundary (feeds_route.fetch_feed_xml/fetch_article),
 same convention as test_imports.py/test_translate.py.
 """
-import sqlite3
+import psycopg
+from psycopg.rows import dict_row
 
 from server import db as db_module
 from server.article import ArticleError
@@ -71,20 +72,19 @@ def test_fetch_feed_xml_http_failure_raises(monkeypatch):
 # --- POST /api/feeds/fetch ---
 
 
-def _seeded_feed_id(db_path) -> int:
+def _seeded_feed_id(db_url) -> int:
     # feeds are seeded by init_db (Epic 15) — no CRUD route, read directly.
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg.connect(db_url, row_factory=dict_row)
     row = conn.execute(
-        "SELECT id FROM feeds WHERE url_or_channel_id = ?",
+        "SELECT id FROM feeds WHERE url_or_channel_id = %s",
         ("https://webzine.inven.co.kr/news/rss.php",),
     ).fetchone()
     conn.close()
     return row["id"]
 
 
-def test_fetch_feeds_creates_candidate_from_new_item(client, db_path, monkeypatch):
-    feed_id = _seeded_feed_id(db_path)
+def test_fetch_feeds_creates_candidate_from_new_item(client, db_url, monkeypatch):
+    feed_id = _seeded_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -111,8 +111,8 @@ def test_fetch_feeds_creates_candidate_from_new_item(client, db_path, monkeypatc
     assert candidates[0]["feed_id"] == feed_id
 
 
-def test_fetch_feeds_dedupes_on_second_run(client, db_path, monkeypatch):
-    feed_id = _seeded_feed_id(db_path)
+def test_fetch_feeds_dedupes_on_second_run(client, db_url, monkeypatch):
+    feed_id = _seeded_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -150,11 +150,10 @@ def test_fetch_feeds_isolates_per_feed_failure(client, monkeypatch):
 # --- YouTube feed processing (Epic 14) ---
 
 
-def _seeded_youtube_feed_id(db_path) -> int:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def _seeded_youtube_feed_id(db_url) -> int:
+    conn = psycopg.connect(db_url, row_factory=dict_row)
     row = conn.execute(
-        "SELECT id FROM feeds WHERE url_or_channel_id = ?",
+        "SELECT id FROM feeds WHERE url_or_channel_id = %s",
         ("UCZ0bi2aVJngKLwFTU5g_fLQ",),  # 김성회의 G식백과, a seeded youtube feed
     ).fetchone()
     conn.close()
@@ -179,8 +178,8 @@ def test_parse_youtube_feed_extracts_video_id_and_link():
     assert items[0].title == "영상 제목"
 
 
-def test_fetch_feeds_youtube_creates_candidate(client, db_path, monkeypatch):
-    feed_id = _seeded_youtube_feed_id(db_path)
+def test_fetch_feeds_youtube_creates_candidate(client, db_url, monkeypatch):
+    feed_id = _seeded_youtube_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -210,10 +209,10 @@ def test_fetch_feeds_youtube_creates_candidate(client, db_path, monkeypatch):
     assert candidates[0]["feed_id"] == feed_id
 
 
-def test_fetch_feeds_youtube_skips_video_without_subs(client, db_path, monkeypatch):
+def test_fetch_feeds_youtube_skips_video_without_subs(client, db_url, monkeypatch):
     from import_tools.yt_subs import NoSubtitlesError
 
-    feed_id = _seeded_youtube_feed_id(db_path)
+    feed_id = _seeded_youtube_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -232,8 +231,8 @@ def test_fetch_feeds_youtube_skips_video_without_subs(client, db_path, monkeypat
     assert client.get("/api/books?status=candidate").json() == []
 
 
-def test_fetch_feeds_youtube_dedupes_on_second_run(client, db_path, monkeypatch):
-    feed_id = _seeded_youtube_feed_id(db_path)
+def test_fetch_feeds_youtube_dedupes_on_second_run(client, db_url, monkeypatch):
+    feed_id = _seeded_youtube_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -280,8 +279,8 @@ def test_patch_feed_404(client):
     assert client.patch("/api/feeds/999999", json={"enabled": False}).status_code == 404
 
 
-def test_disabled_feed_not_fetched(client, db_path, monkeypatch):
-    feed_id = _seeded_feed_id(db_path)
+def test_disabled_feed_not_fetched(client, db_url, monkeypatch):
+    feed_id = _seeded_feed_id(db_url)
     client.patch(f"/api/feeds/{feed_id}", json={"enabled": False})
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
@@ -294,8 +293,8 @@ def test_disabled_feed_not_fetched(client, db_path, monkeypatch):
     assert body["candidates_created"] == 0
 
 
-def test_fetch_feeds_isolates_per_item_extraction_failure(client, db_path, monkeypatch):
-    feed_id = _seeded_feed_id(db_path)
+def test_fetch_feeds_isolates_per_item_extraction_failure(client, db_url, monkeypatch):
+    feed_id = _seeded_feed_id(db_url)
     monkeypatch.setattr(feeds_route, "fetch_feed_xml", lambda url: b"")
     monkeypatch.setattr(
         feeds_route,
@@ -323,20 +322,20 @@ def test_fetch_feeds_isolates_per_item_extraction_failure(client, db_path, monke
 # --- Retention / auto-expiry + last-fetch-attempt (Epic 17) ---
 
 
-def _seed_candidate(db_path, title: str, days_old: int) -> None:
-    conn = sqlite3.connect(db_path)
+def _seed_candidate(db_url, title: str, days_old: int) -> None:
+    conn = psycopg.connect(db_url)
     conn.execute(
         "INSERT INTO books (title, source, status, created) "
-        "VALUES (?, 'article', 'candidate', datetime('now', ?))",
+        "VALUES (%s, 'article', 'candidate', now() + %s::interval)",
         (title, f"-{days_old} days"),
     )
     conn.commit()
     conn.close()
 
 
-def test_fetch_feeds_expires_stale_candidates(client, db_path):
-    _seed_candidate(db_path, "Old candidate", days_old=8)  # older than the 7-day default
-    _seed_candidate(db_path, "Fresh candidate", days_old=1)
+def test_fetch_feeds_expires_stale_candidates(client, db_url):
+    _seed_candidate(db_url, "Old candidate", days_old=8)  # older than the 7-day default
+    _seed_candidate(db_url, "Fresh candidate", days_old=1)
 
     # feed_id filters to a feed that doesn't exist, isolating expiry from any actual
     # fetch — expiry runs unconditionally before the feed loop regardless.
@@ -355,79 +354,79 @@ def test_fetch_feeds_expires_stale_candidates(client, db_path):
     assert old["discard_reason"] == "expired"
 
 
-def test_fetch_feeds_expiry_respects_custom_retention_setting(client, db_path):
+def test_fetch_feeds_expiry_respects_custom_retention_setting(client, db_url):
     client.put("/api/settings", json={"candidate_retention_days": 2})
-    _seed_candidate(db_path, "Three days old", days_old=3)
+    _seed_candidate(db_url, "Three days old", days_old=3)
 
     body = client.post("/api/feeds/fetch", params={"feed_id": 999999}).json()
     assert body["expired"] == 1
     assert client.get("/api/books?status=candidate").json() == []
 
 
-def test_fetch_feeds_does_not_expire_candidates_within_the_window(client, db_path):
-    _seed_candidate(db_path, "Two days old", days_old=2)
+def test_fetch_feeds_does_not_expire_candidates_within_the_window(client, db_url):
+    _seed_candidate(db_url, "Two days old", days_old=2)
 
     body = client.post("/api/feeds/fetch", params={"feed_id": 999999}).json()
     assert body["expired"] == 0
     assert len(client.get("/api/books?status=candidate").json()) == 1
 
 
-def _add_page(db_path, book_id: int, text: str = "some text") -> None:
-    conn = sqlite3.connect(db_path)
+def _add_page(db_url, book_id: int, text: str = "some text") -> None:
+    conn = psycopg.connect(db_url)
     conn.execute(
-        "INSERT INTO pages (book_id, page_no, content) VALUES (?, 1, ?)", (book_id, text)
+        "INSERT INTO pages (book_id, page_no, content) VALUES (%s, 1, %s)", (book_id, text)
     )
     conn.commit()
     conn.close()
 
 
-def _book_id(db_path, title: str) -> int:
-    conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT id FROM books WHERE title = ?", (title,)).fetchone()
+def _book_id(db_url, title: str) -> int:
+    conn = psycopg.connect(db_url)
+    row = conn.execute("SELECT id FROM books WHERE title = %s", (title,)).fetchone()
     conn.close()
     return row[0]
 
 
-def _page_count(db_path, book_id: int) -> int:
-    conn = sqlite3.connect(db_path)
-    (count,) = conn.execute("SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)).fetchone()
+def _page_count(db_url, book_id: int) -> int:
+    conn = psycopg.connect(db_url)
+    (count,) = conn.execute("SELECT COUNT(*) FROM pages WHERE book_id = %s", (book_id,)).fetchone()
     conn.close()
     return count
 
 
-def test_expiry_purges_article_and_youtube_text(client, db_path):
+def test_expiry_purges_article_and_youtube_text(client, db_url):
     """The user's storage concern (2026-07-24): an unpromoted queue item shouldn't
     keep its full text forever just because it aged out. Auto-expiry now deletes
     `pages` for the two sources the Queue ever holds (article/yt) — the `books`
     row itself (title/source_ref/stats) stays so dedup and curation stats hold."""
-    _seed_candidate(db_path, "Old article", days_old=8)
-    book_id = _book_id(db_path, "Old article")
-    _add_page(db_path, book_id)
+    _seed_candidate(db_url, "Old article", days_old=8)
+    book_id = _book_id(db_url, "Old article")
+    _add_page(db_url, book_id)
 
     client.post("/api/feeds/fetch", params={"feed_id": 999999})
 
-    assert _page_count(db_path, book_id) == 0
+    assert _page_count(db_url, book_id) == 0
     # the book row itself is kept as a tombstone (dedup / stats), just emptied of text
     assert client.get("/api/books?status=discarded").json()[0]["title"] == "Old article"
 
 
-def test_expiry_keeps_text_for_non_article_yt_sources(client, db_path):
+def test_expiry_keeps_text_for_non_article_yt_sources(client, db_url):
     """Defensive: only article/yt ever reach the Queue in practice, but the purge
     is source-gated regardless — paste/pdf/epub/txt content is never touched by
     auto-expiry, per the user's explicit call to keep those indefinitely."""
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     conn.execute(
         "INSERT INTO books (title, source, status, created) "
-        "VALUES ('Old paste', 'paste', 'candidate', datetime('now', '-8 days'))"
+        "VALUES ('Old paste', 'paste', 'candidate', now() - interval '8 days')"
     )
     conn.commit()
     conn.close()
-    book_id = _book_id(db_path, "Old paste")
-    _add_page(db_path, book_id)
+    book_id = _book_id(db_url, "Old paste")
+    _add_page(db_url, book_id)
 
     client.post("/api/feeds/fetch", params={"feed_id": 999999})
 
-    assert _page_count(db_path, book_id) == 1
+    assert _page_count(db_url, book_id) == 1
 
 
 def test_fetch_feeds_stamps_last_fetch_attempt(client):

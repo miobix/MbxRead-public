@@ -1,5 +1,5 @@
 # MbxRead image: FastAPI + uvicorn on :8002, serving the API and the static web build.
-# Data (SQLite files) lives in the /data volume.
+# Data lives in Postgres (compose db service, DATABASE_URL).
 FROM node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -16,8 +16,7 @@ LABEL org.opencontainers.image.source=https://github.com/miobix/MbxRead-public
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    MBXREAD_DATA_DIR=/data
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
@@ -25,8 +24,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-RUN useradd --system --uid 10001 --no-create-home app \
-    && mkdir /data && chown app /data
+RUN useradd --system --uid 10001 --no-create-home app
 
 # yt-dlp needs a JS runtime for YouTube; it finds deno on PATH.
 COPY --from=deno /deno /usr/local/bin/deno

@@ -1,4 +1,4 @@
-import sqlite3
+import psycopg
 from datetime import date, timedelta
 
 from server.db import get_connection
@@ -100,8 +100,8 @@ def test_new_words_per_book_uses_provenance(client):
     assert rows[0]["days_read"] == 1
 
 
-def test_vocab_depth_buckets_and_beginner_pct(client, db_path):
-    conn = get_connection(db_path)
+def test_vocab_depth_buckets_and_beginner_pct(client, db_url):
+    conn = get_connection(db_url)
     grade_a_lemma = conn.execute(
         "SELECT lemma FROM vocab_levels WHERE grade = 'A' LIMIT 1"
     ).fetchone()["lemma"]
@@ -123,11 +123,11 @@ def test_vocab_depth_buckets_and_beginner_pct(client, db_path):
 # --- curation breakdown (Epic 19) ---
 
 
-def _insert_curation_book(db_path, topic, feed_id, status, discard_reason=None):
-    conn = sqlite3.connect(db_path)
+def _insert_curation_book(db_url, topic, feed_id, status, discard_reason=None):
+    conn = psycopg.connect(db_url)
     conn.execute(
         "INSERT INTO books (title, source, topic, feed_id, status, discard_reason) "
-        "VALUES (?, 'article', ?, ?, ?, ?)",
+        "VALUES (%s, 'article', %s, %s, %s, %s)",
         (f"book-{topic}-{status}-{discard_reason}", topic, feed_id, status, discard_reason),
     )
     conn.commit()
@@ -139,7 +139,7 @@ def test_empty_curation_breakdown(client):
     assert curation == {"by_topic": [], "by_feed": []}
 
 
-def test_curation_breakdown_by_topic_and_feed(client, db_path):
+def test_curation_breakdown_by_topic_and_feed(client, db_url):
     feed_a = client.post(
         "/api/feeds",
         json={"name": "Feed A", "type": "rss", "url_or_channel_id": "https://a", "topic": "gaming"},
@@ -149,11 +149,11 @@ def test_curation_breakdown_by_topic_and_feed(client, db_path):
         json={"name": "Feed B", "type": "rss", "url_or_channel_id": "https://b", "topic": "news"},
     ).json()
 
-    _insert_curation_book(db_path, "gaming", feed_a["id"], "library")
-    _insert_curation_book(db_path, "gaming", feed_a["id"], "discarded", "user")
-    _insert_curation_book(db_path, "gaming", feed_a["id"], "discarded", "expired")
-    _insert_curation_book(db_path, "gaming", feed_a["id"], "candidate")
-    _insert_curation_book(db_path, "news", feed_b["id"], "library")
+    _insert_curation_book(db_url, "gaming", feed_a["id"], "library")
+    _insert_curation_book(db_url, "gaming", feed_a["id"], "discarded", "user")
+    _insert_curation_book(db_url, "gaming", feed_a["id"], "discarded", "expired")
+    _insert_curation_book(db_url, "gaming", feed_a["id"], "candidate")
+    _insert_curation_book(db_url, "news", feed_b["id"], "library")
     # A manually-pasted book has no feed_id and must be excluded entirely.
     client.post("/api/books", json={"title": "manual", "text": STORY})
 
@@ -178,12 +178,12 @@ def test_curation_breakdown_by_topic_and_feed(client, db_path):
     }
 
 
-def test_curation_breakdown_handles_deleted_feed(client, db_path):
+def test_curation_breakdown_handles_deleted_feed(client, db_url):
     feed = client.post(
         "/api/feeds",
         json={"name": "Gone", "type": "rss", "url_or_channel_id": "https://gone", "topic": "tech"},
     ).json()
-    _insert_curation_book(db_path, "tech", feed["id"], "library")
+    _insert_curation_book(db_url, "tech", feed["id"], "library")
     client.delete(f"/api/feeds/{feed['id']}")
 
     by_feed = client.get("/api/stats").json()["curation"]["by_feed"]

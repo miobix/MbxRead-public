@@ -1,225 +1,80 @@
-import sqlite3
+import psycopg
+import pytest
 
 from server import db
 
 
-def test_schema_creates_on_temp_db(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    tables = {
-        row[0]
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    }
-    conn.close()
-
+def test_schema_creates_every_table(db_url):
+    with db.get_connection(db_url) as conn:
+        tables = {
+            r["tablename"]
+            for r in conn.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        }
     assert {
-        "books",
-        "pages",
-        "terms",
-        "settings",
-        "feeds",
-        "vocab_levels",
-        "read_days",
+        "books", "pages", "terms", "term_forms", "term_back_items", "settings", "feeds",
+        "vocab_levels", "read_days", "translate_cache", "krdict_cache", "krdict_state",
     } <= tables
 
 
-def test_terms_migration_adds_epic16_provenance_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(terms)")]
-    conn.close()
-    for name in ("source_book_id", "source_page"):
-        assert cols.count(name) == 1
+def test_init_db_is_idempotent(db_url):
+    db.init_db(db_url)  # the template already ran it once; must not raise
 
 
-def test_terms_migration_adds_epic21_columns_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(terms)")]
-    conn.close()
-    for name in ("examples", "anki_model"):
-        assert cols.count(name) == 1
-
-
-def test_term_forms_migration_adds_kind_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(term_forms)")]
-    conn.close()
-    assert cols.count("kind") == 1
-
-
-def test_term_back_items_table_created_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)  # must not raise — CREATE TABLE IF NOT EXISTS
-
-    conn = sqlite3.connect(db_path)
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(term_back_items)")}
-    conn.close()
-    assert cols == {"id", "term_id", "group_key", "kind", "text", "korean_def"}
-
-
-def test_init_db_is_idempotent(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)  # must not raise
-
-
-def test_books_migration_adds_epic11_columns_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
-    conn.close()
-    for name in ("topic", "tags", "source_url", "source_ref", "fetched", "archived", "read"):
-        assert cols.count(name) == 1
-
-
-def test_books_migration_adds_epic15_columns_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
-    conn.close()
-    for name in ("status", "general_coverage", "general_level"):
-        assert cols.count(name) == 1
-
-
-def test_books_migration_adds_epic18_columns_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
-    conn.close()
-    for name in ("word_count", "duration_seconds"):
-        assert cols.count(name) == 1
-
-
-def test_books_migration_adds_epic19_columns_idempotently(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    db.init_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(books)")]
-    conn.close()
-    for name in ("feed_id", "discard_reason"):
-        assert cols.count(name) == 1
-
-
-def test_existing_books_default_to_library_status(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    conn = db.get_connection(db_path)
-    try:
+def test_new_books_default_to_library_status(db_url):
+    with db.get_connection(db_url) as conn:
         conn.execute("INSERT INTO books (title) VALUES ('a')")
-        conn.commit()
         row = conn.execute("SELECT status FROM books WHERE title = 'a'").fetchone()
-        assert row["status"] == "library"
-    finally:
-        conn.close()
+    assert row["status"] == "library"
 
 
-def test_feeds_seeded_and_idempotent(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    seed_count = len(db._SEED_FEEDS)  # Epic 14: the full curated roster
-    conn = db.get_connection(db_path)
-    try:
+def test_feeds_seeded_and_idempotent(db_url):
+    seed_count = len(db._SEED_FEEDS)
+    with db.get_connection(db_url) as conn:
         rows = conn.execute("SELECT name, url_or_channel_id FROM feeds").fetchall()
         assert len(rows) == seed_count
         urls = {r["url_or_channel_id"] for r in rows}
-        assert "https://webzine.inven.co.kr/news/rss.php" in urls  # a seeded RSS feed
-        assert "UCZ0bi2aVJngKLwFTU5g_fLQ" in urls  # a seeded YouTube channel id
-
+        assert "https://webzine.inven.co.kr/news/rss.php" in urls
+        assert "UCZ0bi2aVJngKLwFTU5g_fLQ" in urls
         # A hand-added feed must survive re-seeding, and seeds must not duplicate.
         conn.execute(
-            "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (?, ?, ?, ?)",
+            "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (%s, %s, %s, %s)",
             ("My channel", "youtube", "UCxxxx", "gaming"),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
-    db.init_db(db_path)
-    conn = db.get_connection(db_path)
-    try:
-        rows = conn.execute("SELECT name FROM feeds").fetchall()
-        assert len(rows) == seed_count + 1  # no seed re-duplicated
-        assert "My channel" in {r["name"] for r in rows}
-    finally:
-        conn.close()
+    db.init_db(db_url)
+    with db.get_connection(db_url) as conn:
+        names = {r["name"] for r in conn.execute("SELECT name FROM feeds")}
+    assert len(names) == seed_count + 1
+    assert "My channel" in names
 
 
-def test_source_ref_unique_index_ignores_nulls(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    conn = db.get_connection(db_path)
-    try:
+def test_source_ref_unique_index_ignores_nulls(db_url):
+    with db.get_connection(db_url) as conn:
         conn.execute("INSERT INTO books (title) VALUES ('a')")
         conn.execute("INSERT INTO books (title) VALUES ('b')")  # two NULL source_refs, fine
-        conn.commit()
         conn.execute("INSERT INTO books (title, source_ref) VALUES ('c', 'x')")
-        conn.commit()
-        try:
+        with pytest.raises(psycopg.errors.UniqueViolation):
             conn.execute("INSERT INTO books (title, source_ref) VALUES ('d', 'x')")
-            conn.commit()
-            assert False, "expected a UNIQUE constraint violation"
-        except sqlite3.IntegrityError:
-            pass
-    finally:
-        conn.close()
 
 
-def test_vocab_levels_seeded_once_and_idempotent(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    conn = db.get_connection(db_path)
-    try:
-        (count_first,) = conn.execute("SELECT COUNT(*) FROM vocab_levels").fetchone()
-        assert count_first > 5000  # the bundled NIKL list has ~5.5k entries
-        row = conn.execute(
-            "SELECT grade FROM vocab_levels WHERE lemma = ?", ("가다",)
-        ).fetchone()
-        assert row["grade"] == "A"
-    finally:
-        conn.close()
+def test_vocab_levels_seeded_once(db_url):
+    count = "SELECT COUNT(*) n FROM vocab_levels"
+    with db.get_connection(db_url) as conn:
+        first = conn.execute(count).fetchone()["n"]
+        grade = conn.execute(
+            "SELECT grade FROM vocab_levels WHERE lemma = %s", ("가다",)
+        ).fetchone()["grade"]
+    assert first > 5000  # the bundled NIKL list has ~5.5k entries
+    assert grade == "A"
 
-    db.init_db(db_path)  # re-running must not duplicate the seed
-    conn = db.get_connection(db_path)
-    try:
-        (count_second,) = conn.execute("SELECT COUNT(*) FROM vocab_levels").fetchone()
-        assert count_second == count_first
-    finally:
-        conn.close()
+    db.init_db(db_url)
+    with db.get_connection(db_url) as conn:
+        assert conn.execute(count).fetchone()["n"] == first
 
 
-def test_get_connection_enables_foreign_keys(tmp_path):
-    db_path = tmp_path / "test.db"
-    db.init_db(db_path)
-    conn = db.get_connection(db_path)
-    try:
-        fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
-        assert fk == 1
-    finally:
-        conn.close()
+def test_foreign_keys_cascade(db_url):
+    with db.get_connection(db_url) as conn:
+        book_id = conn.execute("INSERT INTO books (title) VALUES ('a') RETURNING id").fetchone()["id"]
+        conn.execute("INSERT INTO pages (book_id, page_no, content) VALUES (%s, 1, 'x')", (book_id,))
+        conn.execute("DELETE FROM books WHERE id = %s", (book_id,))
+        assert conn.execute("SELECT COUNT(*) n FROM pages").fetchone()["n"] == 0

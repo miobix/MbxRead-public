@@ -2,8 +2,9 @@
 
 The client pings after a few seconds of visible reading; later pings that day no-op.
 """
-import sqlite3
+from datetime import date
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -17,16 +18,14 @@ class ReadCreate(BaseModel):
 
 
 @router.post("", status_code=201)
-def mark_read(body: ReadCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    book = conn.execute("SELECT id FROM books WHERE id = ?", (body.book_id,)).fetchone()
+def mark_read(body: ReadCreate, conn: psycopg.Connection = Depends(db_module.get_db)):
+    book = conn.execute("SELECT id FROM books WHERE id = %s", (body.book_id,)).fetchone()
     if book is None:
         raise HTTPException(status_code=404, detail="book not found")
-    # Local time, matching how /api/stats buckets every other day — the server runs
-    # on the user's own PC, so server-local is user-local.
+    # Process-local day (TZ in Docker), matching how /api/stats buckets every other day.
     cur = conn.execute(
-        "INSERT OR IGNORE INTO read_days (book_id, day) "
-        "VALUES (?, date('now', 'localtime'))",
-        (body.book_id,),
+        "INSERT INTO read_days (book_id, day) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        (body.book_id, date.today().isoformat()),
     )
     conn.commit()
     # rowcount is 0 when this book was already logged today — a no-op, not counted.

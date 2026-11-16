@@ -6,7 +6,7 @@
 Every saved term counts as known, whatever its status. Below COLD_START_THRESHOLD saved
 terms, grade-A vocabulary also counts as known. Rationale for both: docs/DECISIONS.md.
 """
-import sqlite3
+import psycopg
 
 from .paging import split_pages
 from .tokenizer import tokenize
@@ -14,13 +14,13 @@ from .tokenizer import tokenize
 COLD_START_THRESHOLD = 50
 
 
-def known_lemmas(conn: sqlite3.Connection) -> set[str]:
+def known_lemmas(conn: psycopg.Connection) -> set[str]:
     """Every saved lemma counts as known for scoring (all statuses)."""
     rows = conn.execute("SELECT lemma FROM terms").fetchall()
     return {row["lemma"] for row in rows}
 
 
-def frequency_grades(conn: sqlite3.Connection) -> dict[str, str]:
+def frequency_grades(conn: psycopg.Connection) -> dict[str, str]:
     """lemma -> NIKL grade ('A'..'C'), for score_text's cold-start fallback."""
     rows = conn.execute("SELECT lemma, grade FROM vocab_levels").fetchall()
     return {row["lemma"]: row["grade"] for row in rows}

@@ -1,6 +1,6 @@
 """Terms API. See docs/SPEC.md section 5."""
 import json
-import sqlite3
+import psycopg
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -92,24 +92,24 @@ def _normalize_back_items(items: list[dict]) -> list[dict]:
     return out
 
 
-def _forms_for(conn: sqlite3.Connection, term_id: int) -> list[dict]:
+def _forms_for(conn: psycopg.Connection, term_id: int) -> list[dict]:
     return [
         {"text": r["form"], "kind": r["kind"]}
         for r in conn.execute(
-            "SELECT form, kind FROM term_forms WHERE term_id = ? ORDER BY rowid", (term_id,)
+            "SELECT form, kind FROM term_forms WHERE term_id = %s ORDER BY id", (term_id,)
         )
     ]
 
 
-def _set_forms(conn: sqlite3.Connection, term_id: int, forms: list[dict]) -> None:
-    conn.execute("DELETE FROM term_forms WHERE term_id = ?", (term_id,))
-    conn.executemany(
-        "INSERT INTO term_forms (term_id, form, kind) VALUES (?, ?, ?)",
+def _set_forms(conn: psycopg.Connection, term_id: int, forms: list[dict]) -> None:
+    conn.execute("DELETE FROM term_forms WHERE term_id = %s", (term_id,))
+    conn.cursor().executemany(
+        "INSERT INTO term_forms (term_id, form, kind) VALUES (%s, %s, %s)",
         [(term_id, f["text"], f["kind"]) for f in forms],
     )
 
 
-def _back_items_for(conn: sqlite3.Connection, term_id: int) -> list[dict]:
+def _back_items_for(conn: psycopg.Connection, term_id: int) -> list[dict]:
     return [
         {
             "group": r["group_key"],
@@ -119,22 +119,22 @@ def _back_items_for(conn: sqlite3.Connection, term_id: int) -> list[dict]:
         }
         for r in conn.execute(
             "SELECT group_key, kind, text, korean_def FROM term_back_items "
-            "WHERE term_id = ? ORDER BY id",
+            "WHERE term_id = %s ORDER BY id",
             (term_id,),
         )
     ]
 
 
-def _set_back_items(conn: sqlite3.Connection, term_id: int, items: list[dict]) -> None:
-    conn.execute("DELETE FROM term_back_items WHERE term_id = ?", (term_id,))
-    conn.executemany(
+def _set_back_items(conn: psycopg.Connection, term_id: int, items: list[dict]) -> None:
+    conn.execute("DELETE FROM term_back_items WHERE term_id = %s", (term_id,))
+    conn.cursor().executemany(
         "INSERT INTO term_back_items (term_id, group_key, kind, text, korean_def) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "VALUES (%s, %s, %s, %s, %s)",
         [(term_id, it["group"], it["kind"], it["text"], it["korean_def"]) for it in items],
     )
 
 
-def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+def _term_dict(conn: psycopg.Connection, row: dict) -> dict:
     return {
         "id": row["id"],
         "lemma": row["lemma"],
@@ -155,8 +155,8 @@ def _term_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     }
 
 
-def _get_term_or_404(conn: sqlite3.Connection, term_id: int) -> sqlite3.Row:
-    row = conn.execute("SELECT * FROM terms WHERE id = ?", (term_id,)).fetchone()
+def _get_term_or_404(conn: psycopg.Connection, term_id: int) -> dict:
+    row = conn.execute("SELECT * FROM terms WHERE id = %s", (term_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="term not found")
     return row
@@ -167,18 +167,18 @@ def list_terms(
     status: Status | None = None,
     deck: str | None = None,
     q: str | None = None,
-    conn: sqlite3.Connection = Depends(db_module.get_db),
+    conn: psycopg.Connection = Depends(db_module.get_db),
 ):
     query = "SELECT * FROM terms WHERE 1=1"
     params: list = []
     if status:
-        query += " AND status = ?"
+        query += " AND status = %s"
         params.append(status)
     if deck:
-        query += " AND deck = ?"
+        query += " AND deck = %s"
         params.append(deck)
     if q:
-        query += " AND (lemma LIKE ? OR translation LIKE ? OR notes LIKE ?)"
+        query += " AND (lemma ILIKE %s OR translation ILIKE %s OR notes ILIKE %s)"
         like = f"%{q}%"
         params.extend([like, like, like])
     query += " ORDER BY id DESC"
@@ -188,17 +188,17 @@ def list_terms(
 
 
 @router.get("/by-lemma")
-def get_term_by_lemma(lemma: str, conn: sqlite3.Connection = Depends(db_module.get_db)):
-    """Exact-lemma lookup (the list's `q` is a fuzzy LIKE), so the popover can offer to
+def get_term_by_lemma(lemma: str, conn: psycopg.Connection = Depends(db_module.get_db)):
+    """Exact-lemma lookup (the list's `q` is a fuzzy ILIKE), so the popover can offer to
     add to a word that is already saved."""
-    row = conn.execute("SELECT * FROM terms WHERE lemma = ?", (lemma.strip(),)).fetchone()
+    row = conn.execute("SELECT * FROM terms WHERE lemma = %s", (lemma.strip(),)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="term not found")
     return _term_dict(conn, row)
 
 
 @router.post("", status_code=201)
-def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def create_term(body: TermCreate, conn: psycopg.Connection = Depends(db_module.get_db)):
     back_items = _normalize_back_items([it.model_dump() for it in body.back_items])
     # With Back chips, `translation` mirrors them so /terms search and listing still
     # work; without, it is kept as given.
@@ -207,7 +207,7 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
         cur = conn.execute(
             "INSERT INTO terms (lemma, translation, notes, status, deck, sentence, "
             "examples, source_book_id, source_page) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (
                 body.lemma,
                 translation,
@@ -220,21 +220,22 @@ def create_term(body: TermCreate, conn: sqlite3.Connection = Depends(db_module.g
                 body.source_page,
             ),
         )
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="a term with this lemma already exists")
+    term_id = cur.fetchone()["id"]
     _set_forms(
         conn,
-        cur.lastrowid,
+        term_id,
         _normalize_forms([f.model_dump() for f in body.forms], body.lemma),
     )
-    _set_back_items(conn, cur.lastrowid, back_items)
+    _set_back_items(conn, term_id, back_items)
     conn.commit()
-    return _term_dict(conn, _get_term_or_404(conn, cur.lastrowid))
+    return _term_dict(conn, _get_term_or_404(conn, term_id))
 
 
 @router.patch("/{term_id}")
 def patch_term(
-    term_id: int, body: TermPatch, conn: sqlite3.Connection = Depends(db_module.get_db)
+    term_id: int, body: TermPatch, conn: psycopg.Connection = Depends(db_module.get_db)
 ):
     row = _get_term_or_404(conn, term_id)
     fields = body.model_dump(exclude_unset=True)
@@ -266,7 +267,7 @@ def patch_term(
 
     if "lemma" in fields and fields["lemma"] != row["lemma"]:
         conflict = conn.execute(
-            "SELECT id FROM terms WHERE lemma = ? AND id != ?", (fields["lemma"], term_id)
+            "SELECT id FROM terms WHERE lemma = %s AND id != %s", (fields["lemma"], term_id)
         ).fetchone()
         if conflict is not None:
             raise HTTPException(status_code=409, detail="a term with this lemma already exists")
@@ -281,14 +282,14 @@ def patch_term(
         or back_items_changed
     )
 
-    set_parts = [f"{key} = ?" for key in fields]
+    set_parts = [f"{key} = %s" for key in fields]
     values = list(fields.values())
     set_parts.append("updated = CURRENT_TIMESTAMP")
     if becomes_dirty:
         set_parts.append("anki_dirty = 1")
 
     conn.execute(
-        f"UPDATE terms SET {', '.join(set_parts)} WHERE id = ?", (*values, term_id)
+        f"UPDATE terms SET {', '.join(set_parts)} WHERE id = %s", (*values, term_id)
     )
     if forms_provided:
         _set_forms(conn, term_id, new_forms)
@@ -299,7 +300,7 @@ def patch_term(
 
 
 @router.delete("/{term_id}", status_code=204)
-def delete_term(term_id: int, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def delete_term(term_id: int, conn: psycopg.Connection = Depends(db_module.get_db)):
     _get_term_or_404(conn, term_id)
-    conn.execute("DELETE FROM terms WHERE id = ?", (term_id,))
+    conn.execute("DELETE FROM terms WHERE id = %s", (term_id,))
     conn.commit()

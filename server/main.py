@@ -43,16 +43,14 @@ class _WebOut(StaticFiles):
         return response
 
 
-def create_app(db_path: Path | str | None = None) -> FastAPI:
-    path = Path(db_path) if db_path else db.DEFAULT_DB_PATH
-
+def create_app(database_url: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        db.init_db(path)
+        db.init_db(database_url)
         yield
 
     app = FastAPI(title="MbxRead", lifespan=lifespan)
-    app.state.db_path = path
+    app.state.database_url = database_url
 
     @app.get("/api/health")
     def health():
