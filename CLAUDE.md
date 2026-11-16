@@ -2,7 +2,7 @@
 
 Personal app: read Korean texts, tap words, translate (DeepL/Claude), hand-enrich the
 translation, save terms by **dictionary form (lemma)** so all inflections highlight, and
-bulk-sync terms to Anki via AnkiConnect. FastAPI + SQLite + kiwipiepy backend, Next.js
+bulk-sync terms to Anki via AnkiConnect. FastAPI + Postgres + kiwipiepy backend, Next.js
 frontend (static export), phone access via Tailscale.
 
 ## How to work in this repo
@@ -30,9 +30,11 @@ frontend (static export), phone access via Tailscale.
 
 - Python is `.venv\Scripts\python.exe` (Windows). New deps: pip install **and** add to
   `requirements.txt` (runtime, the only file the Docker image installs) or
-  `requirements-dev.txt` (tests, Windows tray).
-- Never commit or modify: `.env`, `*.sqlite3`, `reader.db`, `.venv/`.
+  `requirements-dev.txt` (tests).
+- Never commit or modify: `.env`, `*.sqlite3`, `reader.db`, `.venv/`. Never write to the
+  live `mbxread` database from tests or experiments (tests use `db_url`).
 - Tests must pass offline with no API keys: mock DeepL/Claude/krdict/AnkiConnect HTTP,
-  temp sqlite per test.
+  a temp Postgres DB per test (`db_url` fixture; needs `docker compose up -d db`).
 - The server runs on port **8002** (8000 is taken on this machine by an unrelated
-  Android app's Docker-based sync service).
+  Android app's Docker-based sync service). The compose Postgres is on **127.0.0.1:5433**
+  (5432 is an unrelated native Postgres service; leave it alone).

@@ -71,13 +71,13 @@ def test_new_per_page_normalizes_by_reader_page_count():
 # --- known_lemmas: every status counts as known ---
 
 
-def test_known_lemmas_includes_all_statuses(client, db_path):
+def test_known_lemmas_includes_all_statuses(client, db_url):
     for lemma, status in [("가", "learning"), ("나", "known"), ("다", "ignored")]:
         resp = client.post(
             "/api/terms", json={"lemma": lemma, "translation": "x", "status": status}
         )
         assert resp.status_code == 201
-    conn = db_module.get_connection(db_path)
+    conn = db_module.get_connection(db_url)
     try:
         assert known_lemmas(conn) == {"가", "나", "다"}
     finally:
@@ -136,26 +136,9 @@ def test_score_missing_book_404(client):
     assert client.post("/api/books/999/score").status_code == 404
 
 
-def test_migration_is_idempotent(client, db_path):
-    # init once via the app fixture already; run again and confirm no duplicate column.
-    db_module.init_db(db_path)
-    db_module.init_db(db_path)
-    conn = db_module.get_connection(db_path)
-    try:
-        cols = [row["name"] for row in conn.execute("PRAGMA table_info(books)")]
-        assert cols.count("coverage") == 1
-        assert cols.count("new_per_page") == 1
-        assert cols.count("scored_at") == 1
-    finally:
-        conn.close()
-
-
-# --- Epic 13: cold-start frequency fallback ---
-
-
-def test_frequency_grades_reads_from_seeded_table(db_path):
-    db_module.init_db(db_path)
-    conn = db_module.get_connection(db_path)
+def test_frequency_grades_reads_from_seeded_table(db_url):
+    db_module.init_db(db_url)
+    conn = db_module.get_connection(db_url)
     try:
         grades = frequency_grades(conn)
         assert len(grades) > 5000

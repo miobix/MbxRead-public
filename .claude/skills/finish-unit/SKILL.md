@@ -15,14 +15,20 @@ cd /c/Personal/MbxRead-public
 cd web && npm run build && npm run lint
 ```
 
-`tsc` alone once missed a real react-hooks bug, so lint is not optional. If the unit touched the Dockerfile or compose, also build and smoke-test the container. Port 8002 is the live tray app, so run it on 8012 in a throwaway project:
+`tsc` alone once missed a real react-hooks bug, so lint is not optional. If the unit touched the Dockerfile or compose, also build and smoke-test the container. Ports 8002 (app) and 5433 (db) belong to the live compose stack, so run a throwaway app + Postgres on a private network, app on 8012 (`compose run` would also start a second `db` on 5433 and collide):
 
 ```bash
-docker compose build
-docker compose -p mbxtest run -d --name mbxtest -p 8012:8002 mbxread
-curl -s localhost:8012/api/health; curl -s -o /dev/null -w "%{http_code}\n" localhost:8012/
-docker rm -f mbxtest && docker compose -p mbxtest down -v
+PG=$(grep -o 'postgres:[^ ]*' compose.yaml)
+docker compose build -q mbxread && docker network create mbxtest
+docker run -d --rm --name mbxtest-db --network mbxtest -e POSTGRES_USER=mbxread -e POSTGRES_PASSWORD=mbxread $PG
+sleep 6 && docker run -d --rm --name mbxtest --network mbxtest -p 8012:8002 -e TZ=Asia/Seoul \
+  -e DATABASE_URL=postgresql://mbxread:mbxread@mbxtest-db:5432/mbxread mbxread
+sleep 12; curl -s 127.0.0.1:8012/api/health; curl -s -o /dev/null -w "%{http_code}\n" 127.0.0.1:8012/
+docker logs mbxtest 2>&1 | grep -c Traceback
+docker rm -f mbxtest mbxtest-db && docker network rm mbxtest
 ```
+
+Post Korean text from a Python script (`urllib`, `\u` escapes), not curl: Git Bash mangles Hangul on the command line.
 
 ## 2. Docs, in the same commit
 

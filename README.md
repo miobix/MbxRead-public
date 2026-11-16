@@ -3,26 +3,21 @@
 Personal Korean reading app: read texts, tap unknown words, translate them (DeepL),
 hand-enrich the translation, save by **dictionary form (lemma)** so every
 inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAPI +
-SQLite + kiwipiepy backend, Next.js frontend (static export), one server, phone access
+Postgres + kiwipiepy backend, Next.js frontend (static export), one server, phone access
 via Tailscale.
 
 ## Daily use
 
-**Runs in the background automatically** — `scripts/tray_app.py` starts at every
-Windows logon (via a shortcut in the Startup folder, `shell:startup`) and shows a
-tray icon: click it to open the app, or right-click for **Restart server** / **Quit**.
-No console window, ever — that's the point, but it means if something breaks you
-won't see a traceback on screen. Check `scripts/server.log` instead (uvicorn's
-stdout/stderr — startup messages, access logs, and any unhandled-exception
-traceback on a 500 all land there, appended across restarts).
+**Runs in Docker.** `docker compose up -d --build` once (see "Run with Docker"). Both the
+app and its Postgres have `restart: unless-stopped`, so they come back whenever Docker
+Desktop starts; turn on "Start Docker Desktop when you sign in" in Docker Desktop's
+settings and the app is just there at `http://localhost:8002`. Logs: `docker compose logs
+-f mbxread`. After pulling changes: `docker compose up -d --build`.
 
-`start.ps1` still exists for **development**: double-click it and it rebuilds
-`web/` if the frontend source is newer than the last build, then launches the
-server in a visible console window (so you *do* see tracebacks live) and opens
-your browser at `http://localhost:8002`. Use this after you change frontend code;
-the tray app assumes `web/out` is already built and doesn't rebuild it. If both
-happen to be running at once, whichever bound port 8002 first wins — quit the
-tray icon (or kill the old console) before starting the other.
+`start.ps1` is for **development**: it rebuilds `web/` if the frontend source is newer
+than the last build, starts the compose Postgres, then runs the server in a visible
+console (tracebacks live) and opens your browser at `http://localhost:8002`. Stop the
+compose app first (`docker compose stop mbxread`), since both want port 8002.
 
 Keep Anki open if you want to sync terms.
 
@@ -83,15 +78,20 @@ docker compose up -d --build
 
 - Open `http://localhost:8002`. One container serves the web UI and the API
   (`/api/health` for a check).
-- Your data (`reader.db`, the translation cache) lives in the `mbxread-data` volume. Outside
-  Docker, `MBXREAD_DATA_DIR` moves those files too (default: the repo root).
+- Your data lives in Postgres (the `db` service, volume `mbxread-pg`), reachable from the
+  host at `127.0.0.1:5433` for dev runs and tests. Set `TZ` in `.env` (e.g. `Asia/Seoul`):
+  it decides which local day a read or a saved word counts for.
+- **Coming from an old SQLite `reader.db`?** With the db up and empty, run once:
+  `.venv\Scripts\python.exe -m scripts.sqlite_to_pg reader.db translate_cache.sqlite3`.
+  It keeps ids (so Anki links survive) and refuses a database that already has data.
 - **Anki sync** works when Anki runs on the same computer as Docker: compose points the
   server at `host.docker.internal:8765` (`ANKICONNECT_URL`). Docker Desktop (Windows/Mac)
   needs nothing else. On Linux, set AnkiConnect's `webBindAddress` to `0.0.0.0` (Anki →
   Tools → Add-ons → AnkiConnect → Config), since its default `127.0.0.1` refuses
   connections from containers.
 - Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
-  pytest and the tray's `pystray`/`pillow`). The image installs `requirements.txt` only.
+  pytest) and `docker compose up -d db`. Tests need that db too (each test gets its own
+  throwaway database). The image installs `requirements.txt` only.
 
 ## Importing texts
 
@@ -117,19 +117,17 @@ scheduled job.
 ## Layout
 
 ```
-server/                 FastAPI app (port 8002): API routes, sqlite (reader.db), tokenizer
+server/                 FastAPI app (port 8002): API routes, Postgres schema, tokenizer
 web/                    Next.js frontend, built to web/out and served by server/main.py
 translate_svc/          DeepL translation + cache + krdict, imported as a library
 import_tools/           yt_subs.py, pdf_text.py
 docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
-scripts/tray_app.py     daily-use launcher: server + tray icon, starts at logon, no console
+scripts/sqlite_to_pg.py one-off copy of an old SQLite reader.db into Postgres
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
 Dockerfile              app image, API + web (see "Run with Docker"); .dockerignore is an allowlist
-compose.yaml            runs the image with .env, the data volume and the route to desktop Anki
+compose.yaml            app + Postgres, .env, the route to desktop Anki: the daily launcher
 requirements.txt        runtime deps (what the image installs)
-requirements-dev.txt    + pytest and the Windows tray deps, for local use
+requirements-dev.txt    + pytest, for local use
 ANKI.md                 Anki sync setup and daily-use guide
 .env                    your API keys (copy from .env.example)
-reader.db               your books/pages/terms — never committed
-translate_cache.sqlite3 translation cache — never committed
 ```

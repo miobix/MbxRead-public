@@ -1,4 +1,4 @@
-import sqlite3
+import psycopg
 
 from server.paging import split_pages
 
@@ -43,13 +43,13 @@ def test_text_payload_shape(client):
     assert "학교" in lemmas
 
 
-def test_text_includes_saved_terms_matching_its_lemmas(client, db_path):
+def test_text_includes_saved_terms_matching_its_lemmas(client, db_url):
     resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
     book_id = resp.json()["id"]
 
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     conn.execute(
-        "INSERT INTO terms (lemma, translation, status, deck) VALUES (?, ?, ?, ?)",
+        "INSERT INTO terms (lemma, translation, status, deck) VALUES (%s, %s, %s, %s)",
         ("입다", "to wear", "learning", "Korean"),
     )
     conn.commit()
@@ -106,16 +106,15 @@ def test_title_patch_persists(client):
     assert patch.json()["title"] == "New"
 
 
-def test_cascade_delete_removes_pages(client, db_path):
+def test_cascade_delete_removes_pages(client, db_url):
     resp = client.post("/api/books", json={"title": "Short", "text": SHORT_STORY})
     book_id = resp.json()["id"]
 
     assert client.delete(f"/api/books/{book_id}").status_code == 204
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = psycopg.connect(db_url)
     remaining = conn.execute(
-        "SELECT COUNT(*) FROM pages WHERE book_id = ?", (book_id,)
+        "SELECT COUNT(*) FROM pages WHERE book_id = %s", (book_id,)
     ).fetchone()[0]
     conn.close()
     assert remaining == 0
@@ -347,12 +346,12 @@ def test_list_books_sort_opened_never_opened_sinks_after_opened(client):
     assert titles == ["A", "B"]
 
 
-def test_list_books_sort_easiest_orders_by_new_per_page(client, db_path):
+def test_list_books_sort_easiest_orders_by_new_per_page(client, db_url):
     easy_id = client.post("/api/books", json={"title": "Easy", "text": SHORT_STORY}).json()["id"]
     hard_id = client.post("/api/books", json={"title": "Hard", "text": SHORT_STORY}).json()["id"]
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE books SET new_per_page = 1.0 WHERE id = ?", (easy_id,))
-    conn.execute("UPDATE books SET new_per_page = 9.0 WHERE id = ?", (hard_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE books SET new_per_page = 1.0 WHERE id = %s", (easy_id,))
+    conn.execute("UPDATE books SET new_per_page = 9.0 WHERE id = %s", (hard_id,))
     conn.commit()
     conn.close()
 

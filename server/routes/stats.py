@@ -3,8 +3,10 @@
 Day buckets use local time (the server runs on the user's PC, so server-local is
 user-local). Active days = days a word was saved UNION days something was read.
 """
-import sqlite3
+from collections import Counter
 from datetime import date, timedelta
+
+import psycopg
 
 from fastapi import APIRouter, Depends
 
@@ -18,7 +20,7 @@ ACTIVITY_WINDOW_DAYS = 365
 CURATION_BUCKETS = ("promoted", "user_discarded", "expired", "pending")
 
 
-def _curation_breakdown(conn: sqlite3.Connection) -> dict:
+def _curation_breakdown(conn: psycopg.Connection) -> dict:
     """Curation outcome counts by topic and by feed, for feed-sourced books only. A
     discard with no reason is ambiguous, so it lands in no bucket."""
     rows = conn.execute(
@@ -26,7 +28,7 @@ def _curation_breakdown(conn: sqlite3.Connection) -> dict:
         "  COUNT(*) c "
         "FROM books b LEFT JOIN feeds f ON f.id = b.feed_id "
         "WHERE b.feed_id IS NOT NULL "
-        "GROUP BY b.topic, b.feed_id, b.status, b.discard_reason"
+        "GROUP BY b.topic, b.feed_id, f.name, b.status, b.discard_reason"
     ).fetchall()
 
     by_topic: dict[str, dict] = {}
@@ -94,7 +96,7 @@ def _streak(active_days: set[date], today: date) -> dict:
 
 
 @router.get("")
-def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
+def get_stats(conn: psycopg.Connection = Depends(db_module.get_db)):
     # --- totals ---
     status_counts = {
         row["status"]: row["c"]
@@ -107,12 +109,10 @@ def get_stats(conn: sqlite3.Connection = Depends(db_module.get_db)):
     ).fetchone()["c"]
 
     # --- daily activity (word saves + books read), local-time buckets ---
-    words_by_day: dict[str, int] = {
-        row["d"]: row["c"]
-        for row in conn.execute(
-            "SELECT date(created, 'localtime') d, COUNT(*) c FROM terms GROUP BY d"
-        )
-    }
+    words_by_day = Counter(
+        row["created"].astimezone().date().isoformat()
+        for row in conn.execute("SELECT created FROM terms WHERE created IS NOT NULL")
+    )
     # Books read that day, not pages: page numbers differ per device.
     read_by_day: dict[str, int] = {
         row["d"]: row["c"]

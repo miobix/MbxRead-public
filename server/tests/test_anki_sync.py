@@ -1,4 +1,4 @@
-import sqlite3
+import psycopg
 
 from server import anki
 
@@ -218,7 +218,7 @@ def test_sync_notes_free_text_appended_after_definitions(client, monkeypatch):
     ]
 
 
-def test_sync_folds_pre_epic_32_sense_chips_into_the_lemma(client, db_path, monkeypatch):
+def test_sync_folds_pre_epic_32_sense_chips_into_the_lemma(client, db_url, monkeypatch):
     """Epic 32: an old multi-sense term's chips are grouped by hanja spelling; they
     still reach the two-way card, under the lemma."""
     monkeypatch.setattr(anki, "ping", lambda: None)
@@ -235,7 +235,7 @@ def test_sync_folds_pre_epic_32_sense_chips_into_the_lemma(client, db_path, monk
             {"group": "市長", "kind": "dict", "text": "mayor", "korean_def": ""},
         ],
     )
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     conn.execute("UPDATE terms SET hanja = '[\"市場\", \"市長\"]'")
     conn.commit()
     conn.close()
@@ -246,7 +246,7 @@ def test_sync_folds_pre_epic_32_sense_chips_into_the_lemma(client, db_path, monk
     assert add_calls == [("Korean", "시장", "a. market<br>b. mayor", "a. 물건을 사고파는 곳")]
 
 
-def test_sync_skips_dirty_legacy_hanja_notes(client, db_path, monkeypatch):
+def test_sync_skips_dirty_legacy_hanja_notes(client, db_url, monkeypatch):
     """Epic 32: a note synced as `Korean Reader Hanja` has other fields; updating it
     as two-way would fail every sync, so it is left as it is in Anki."""
     monkeypatch.setattr(anki, "ping", lambda: None)
@@ -256,9 +256,9 @@ def test_sync_skips_dirty_legacy_hanja_notes(client, db_path, monkeypatch):
     monkeypatch.setattr(anki, "update_note_model", lambda *a: update_calls.append(a))
 
     term = _create(client, lemma="제일")
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     conn.execute(
-        "UPDATE terms SET anki_note_id = 9001, anki_model = ?, anki_dirty = 1 WHERE id = ?",
+        "UPDATE terms SET anki_note_id = 9001, anki_model = %s, anki_dirty = 1 WHERE id = %s",
         (anki.LEGACY_HANJA_MODEL, term["id"]),
     )
     conn.commit()

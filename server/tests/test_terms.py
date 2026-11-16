@@ -1,4 +1,4 @@
-import sqlite3
+import psycopg
 
 
 def _create(client, **overrides):
@@ -31,12 +31,12 @@ def test_create_term_defaults(client):
     assert body["updated"]
 
 
-def test_hanja_is_ignored_in_and_absent_from_terms(client, db_path):
+def test_hanja_is_ignored_in_and_absent_from_terms(client, db_url):
     """Epic 32: the column stays for old DBs but the API neither writes nor returns it."""
     term_id = _create(client, lemma="시장", hanja=["市場"]).json()["id"]
-    conn = sqlite3.connect(db_path)
-    assert conn.execute("SELECT hanja FROM terms WHERE id = ?", (term_id,)).fetchone()[0] == "[]"
-    conn.execute("UPDATE terms SET hanja = '[\"市場\"]' WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    assert conn.execute("SELECT hanja FROM terms WHERE id = %s", (term_id,)).fetchone()[0] == "[]"
+    conn.execute("UPDATE terms SET hanja = '[\"市場\"]' WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
     assert "hanja" not in client.patch(f"/api/terms/{term_id}", json={"hanja": ["市長"]}).json()
@@ -91,6 +91,9 @@ def test_list_terms_filters_by_query(client):
 
     resp = client.get("/api/terms", params={"q": "wear"})
     assert [t["lemma"] for t in resp.json()] == ["입다"]
+    # SQLite's LIKE ignored ASCII case; Postgres keeps that via ILIKE.
+    resp = client.get("/api/terms", params={"q": "WEAR"})
+    assert [t["lemma"] for t in resp.json()] == ["입다"]
 
 
 def test_patch_before_sync_stays_clean(client):
@@ -102,11 +105,11 @@ def test_patch_before_sync_stays_clean(client):
     assert body["anki_dirty"] is False
 
 
-def test_patch_after_sync_marks_dirty(client, db_path):
+def test_patch_after_sync_marks_dirty(client, db_url):
     term_id = _create(client).json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -115,11 +118,11 @@ def test_patch_after_sync_marks_dirty(client, db_path):
     assert resp.json()["anki_dirty"] is True
 
 
-def test_patch_status_change_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_status_change_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client).json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -130,11 +133,11 @@ def test_patch_status_change_after_sync_does_not_mark_dirty(client, db_path):
     assert body["anki_dirty"] is False
 
 
-def test_patch_lemma_change_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_lemma_change_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client).json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -145,11 +148,11 @@ def test_patch_lemma_change_after_sync_does_not_mark_dirty(client, db_path):
     assert body["anki_dirty"] is False
 
 
-def test_patch_setting_same_value_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_setting_same_value_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client, translation="to wear").json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -203,11 +206,11 @@ def test_patch_rewrites_forms(client):
     assert body["forms"] == _forms("승인하다", "승인권")
 
 
-def test_patch_forms_after_sync_marks_dirty(client, db_path):
+def test_patch_forms_after_sync_marks_dirty(client, db_url):
     term_id = _create(client, lemma="승인").json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -216,11 +219,11 @@ def test_patch_forms_after_sync_marks_dirty(client, db_path):
     assert resp.json()["anki_dirty"] is True
 
 
-def test_patch_same_forms_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_same_forms_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client, lemma="승인", forms=_forms("승인서")).json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -228,13 +231,13 @@ def test_patch_same_forms_after_sync_does_not_mark_dirty(client, db_path):
     assert resp.json()["anki_dirty"] is False
 
 
-def test_delete_term_cascades_forms(client, db_path):
+def test_delete_term_cascades_forms(client, db_url):
     term_id = _create(client, lemma="승인", forms=_forms("승인서")).json()["id"]
     assert client.delete(f"/api/terms/{term_id}").status_code == 204
 
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     remaining = conn.execute(
-        "SELECT COUNT(*) FROM term_forms WHERE term_id = ?", (term_id,)
+        "SELECT COUNT(*) FROM term_forms WHERE term_id = %s", (term_id,)
     ).fetchone()[0]
     conn.close()
     assert remaining == 0
@@ -260,13 +263,13 @@ def test_create_term_without_back_items_keeps_translation_as_given(client):
     assert body["translation"] == "hand-typed"
 
 
-def test_patch_back_items_rewrites_and_marks_dirty(client, db_path):
+def test_patch_back_items_rewrites_and_marks_dirty(client, db_url):
     term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
         "id"
     ]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -280,13 +283,13 @@ def test_patch_back_items_rewrites_and_marks_dirty(client, db_path):
     assert body["anki_dirty"] is True
 
 
-def test_patch_same_back_items_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_same_back_items_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
         "id"
     ]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -296,15 +299,15 @@ def test_patch_same_back_items_after_sync_does_not_mark_dirty(client, db_path):
     assert resp.json()["anki_dirty"] is False
 
 
-def test_delete_term_cascades_back_items(client, db_path):
+def test_delete_term_cascades_back_items(client, db_url):
     term_id = _create(client, lemma="승인", back_items=[_back("", "dict", "approval")]).json()[
         "id"
     ]
     assert client.delete(f"/api/terms/{term_id}").status_code == 204
 
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_url)
     remaining = conn.execute(
-        "SELECT COUNT(*) FROM term_back_items WHERE term_id = ?", (term_id,)
+        "SELECT COUNT(*) FROM term_back_items WHERE term_id = %s", (term_id,)
     ).fetchone()[0]
     conn.close()
     assert remaining == 0
@@ -328,11 +331,11 @@ def test_create_and_patch_round_trip_examples(client):
     assert body["examples"] == ["기타를 배우다", "기타를 치다"]
 
 
-def test_patch_examples_after_sync_marks_dirty(client, db_path):
+def test_patch_examples_after_sync_marks_dirty(client, db_url):
     term_id = _create(client, lemma="기타").json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 
@@ -341,11 +344,11 @@ def test_patch_examples_after_sync_marks_dirty(client, db_path):
     assert resp.json()["anki_dirty"] is True
 
 
-def test_patch_same_examples_after_sync_does_not_mark_dirty(client, db_path):
+def test_patch_same_examples_after_sync_does_not_mark_dirty(client, db_url):
     term_id = _create(client, lemma="기타", examples=["기타를 치다"]).json()["id"]
 
-    conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = ?", (term_id,))
+    conn = psycopg.connect(db_url)
+    conn.execute("UPDATE terms SET anki_note_id = 12345 WHERE id = %s", (term_id,))
     conn.commit()
     conn.close()
 

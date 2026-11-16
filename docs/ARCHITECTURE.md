@@ -12,7 +12,7 @@ MbxRead/
   server/                  FastAPI app, port 8002
     __init__.py
     main.py                app factory; mounts /api routers; serves web/out statically at /
-    db.py                  sqlite (reader.db): connection, schema init, query helpers
+    db.py                  Postgres: connection, schema init, seeds (unit 4)
     tokenizer.py           kiwipiepy wrapper: text -> eojeol tokens with lemma
     anki.py                AnkiConnect client (http://127.0.0.1:8765)
     article.py             trafilatura wrapper: url -> (title, cleaned_text) — Epic 12
@@ -32,11 +32,11 @@ MbxRead/
                            now also imported as libraries by routes/imports.py (Epic 12)
   docs/                    living design docs (see Executor conventions)
   requirements.txt         runtime Python deps (the Docker image installs only this)
-  requirements-dev.txt     -r requirements.txt + pytest + Windows tray deps (unit 1)
+  requirements-dev.txt     -r requirements.txt + pytest (unit 1)
   Dockerfile, .dockerignore  app image, API + web (units 1-2); see "Container image" below
-  compose.yaml             runs the image locally (unit 2)
-  start.ps1                single-server launcher — rewritten in Epic 8
-  reader.db                app data — never commit
+  compose.yaml             app + Postgres (`db`), the daily launcher (units 2, 4)
+  start.ps1                dev launcher: compose db + uvicorn with a console
+  scripts/sqlite_to_pg.py  one-off cutover from a pre-unit-4 reader.db (unit 4)
 ```
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
@@ -45,7 +45,8 @@ MbxRead/
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
 
-**Epic 0 status:** `server/main.py` exposes an app factory `create_app(db_path=None)`
+**Epic 0 status** (superseded in unit 4 by `create_app(database_url=None)` and Postgres;
+see Data model): `server/main.py` exposes an app factory `create_app(db_path=None)`
 returning a FastAPI app whose `lifespan` calls `db.init_db(path)` on startup (not at
 import time) — this lets tests point at a temp DB via `create_app(tmp_path / "test.db")`
 without ever touching the real `reader.db`. Module-level `app = create_app()` is the
@@ -54,7 +55,7 @@ uvicorn entrypoint (`uvicorn server.main:app --port 8002`) and uses the default 
 actually serves the Epic 4 frontend build. `.venv` was created with Python 3.10
 (`py -3.10 -m venv .venv`) per kiwipiepy's Windows compatibility story.
 
-**Epic 2 status:** `server/routes/books.py` implements full CRUD plus the page
+**Epic 2 status** (connection details superseded in unit 4): `server/routes/books.py` implements full CRUD plus the page
 payload endpoint, registered in `main.py` via `app.include_router(books.router)`.
 `server/db.py` adds `get_db(request: Request)`, a FastAPI dependency that opens one
 `sqlite3.Connection` per request from `request.app.state.db_path` and closes it after
@@ -63,159 +64,58 @@ holds the page-splitting util (see below). `routes/terms.py`, `translate.py`,
 `anki_sync.py` are now implemented (Epics 3, 3, 6); `settings.py` remains
 unimplemented (Epic 7).
 
-## Data model (`reader.db`, created by `server/db.py` on startup)
+## Data model (Postgres, created by `server/db.py` on startup; unit 4)
 
-```sql
-CREATE TABLE IF NOT EXISTS books (
-  id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT 'paste',          -- paste | txt | yt | pdf | article
-  created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  -- Epic 24: reading position as a character offset into the book's text —
-  -- device-independent, unlike a page number, now that each device paginates for
-  -- its own screen. Replaced current_page (dropped in Epic 24).
-  current_offset INTEGER NOT NULL DEFAULT 0,
-  -- Epic 9 (additive migration): cached difficulty score.
-  coverage REAL,                                 -- fraction of lemmas already known; NULL if unscored
-  new_per_page REAL,                             -- unknown-unique lemmas / page count
-  scored_at TIMESTAMP,
-  -- Epic 11 (additive migration): content-catalog metadata.
-  topic TEXT NOT NULL DEFAULT '',                -- gaming | fitness | news | literature | other | ''
-  tags TEXT NOT NULL DEFAULT '[]',               -- JSON array of free-form strings
-  source_url TEXT NOT NULL DEFAULT '',
-  source_ref TEXT,                               -- stable id (video id/feed guid); see partial UNIQUE index below
-  fetched TIMESTAMP,                             -- set by automated imports (Epic 12+), NULL for manual paste/txt
-  archived INTEGER NOT NULL DEFAULT 0,
-  read INTEGER NOT NULL DEFAULT 0,
-  -- Epic 15 (additive migration): candidate-queue lifecycle + general/public difficulty.
-  status TEXT NOT NULL DEFAULT 'library'        -- library | candidate | discarded
-    CHECK (status IN ('library','candidate','discarded')),
-  general_coverage REAL,                        -- weighted-average NIKL-grade score; NULL if unscored
-  general_level TEXT,                           -- easy | medium | hard; NULL if unscored
-  -- Epic 18 (additive migration): length stat for the Queue.
-  word_count INTEGER,                            -- every source, at insert time
-  duration_seconds INTEGER,                      -- yt only, real yt-dlp video length
-  -- Epic 19 (additive migration): promotion-stats provenance. feed_id is a soft
-  -- reference (no FK, same convention as terms.source_book_id below) — set only for
-  -- feed-sourced candidates (routes/feeds.py), NULL for manual imports/paste, which
-  -- is also how the curation stats query tells them apart. discard_reason ('user' |
-  -- 'expired') is set at the two places status flips to 'discarded'.
-  feed_id INTEGER,
-  discard_reason TEXT
-);
-CREATE TABLE IF NOT EXISTS pages (
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  page_no INTEGER NOT NULL,                      -- 1-based
-  content TEXT NOT NULL,
-  PRIMARY KEY (book_id, page_no)
-);
-CREATE TABLE IF NOT EXISTS terms (
-  id INTEGER PRIMARY KEY,
-  lemma TEXT NOT NULL UNIQUE,                    -- dictionary form; may be a multi-word phrase
-  translation TEXT NOT NULL DEFAULT '',
-  notes TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'learning'
-    CHECK (status IN ('learning','known','ignored')),
-  deck TEXT NOT NULL DEFAULT '',
-  sentence TEXT NOT NULL DEFAULT '',             -- example sentence captured at save time
-  anki_note_id INTEGER,                          -- NULL until first sync
-  anki_dirty INTEGER NOT NULL DEFAULT 0,         -- 1 = edited since last sync
-  created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  source_book_id INTEGER,                        -- Epic 16: book this word was first saved from (nullable, no FK)
-  source_page INTEGER,                           -- Epic 16: page it was first saved from
-  examples TEXT NOT NULL DEFAULT '[]',           -- Epic 21: JSON list of krdict examples + reading sentence, shown on the Anki card back only
-  anki_model TEXT,                               -- Epic 21: note type the term was synced as; 'Korean Reader Hanja' on pre-Epic-32 hanja notes, which sync now skips
-  hanja TEXT NOT NULL DEFAULT '[]'               -- Epic 25/26 hanja senses; stored, unused since Epic 32 (kept so existing DBs keep their data, never written)
-);
--- Epic 20: extra surface forms (aliases) a term also covers — 승인서/승인하다 under 승인.
--- Highlights in the reader (matched alongside the lemma in get_text) and renders on the
--- Anki card's Korean face; lemma stays the single clean dictionary form. Epic 22: `kind`
--- ('dict'|'manual', additive, default 'manual') — dictionary-clicked vs hand-typed via
--- "Add entry"; drives popover chip color only, irrelevant to page-token matching.
-CREATE TABLE IF NOT EXISTS term_forms (
-  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
-  form TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'manual',
-  PRIMARY KEY (term_id, form)
-);
--- Epic 22: the popover's structured Front/Back card builder — one row per Back chip.
--- `group_key` '' = the lemma's own group, else a term_forms.form value — a stable id,
--- not a live join on lemma text, so editing the lemma never orphans its back items.
--- Pre-Epic-32 hanja terms may hold a group that is a hanja spelling, matching no form;
--- sync and the popover show such chips under the lemma.
--- `korean_def` (kind='dict' only) is krdict's Korean definition with any example
--- glued directly onto the end (no separator); feeds the Anki `Examples` field only.
-CREATE TABLE IF NOT EXISTS term_back_items (
-  id INTEGER PRIMARY KEY,
-  term_id INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
-  group_key TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('dict','translate','manual')),
-  text TEXT NOT NULL,
-  korean_def TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- Epic 16 as page_reads, re-keyed by day in Epic 24: reading-activity log for
--- /stats. One row per book per local day read; PRIMARY KEY + INSERT OR IGNORE
--- dedup means every later page that day is a no-op. Page numbers became
--- per-device when pagination moved client-side, so a page key no longer
--- identified the same text across devices. The pages-read *counts* were dropped
--- as unhelpful; the table survives because /api/stats derives the streak from
--- days-with-a-word-saved UNION days-with-reading — without it, a day spent
--- reading but saving nothing would break the streak. Old page_reads history was
--- folded in during Epic 24, not discarded.
-CREATE TABLE IF NOT EXISTS read_days (
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  day TEXT NOT NULL,
-  PRIMARY KEY (book_id, day)
-);
--- Epic 11: the subscription roster the fetch job iterates. Epic 14 seeds the full
--- curated multi-topic roster (db._SEED_FEEDS; see docs/CONTENT_CATALOG.md) and adds
--- CRUD (GET/POST/PATCH/DELETE /api/feeds) edited by the /feeds page — the user can
--- swap/enable/disable sources by hand. youtube feeds store the bare UC channel id
--- in url_or_channel_id.
-CREATE TABLE IF NOT EXISTS feeds (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('rss','youtube','scraper')),  -- API accepts rss/youtube only (2026-10-21)
-  url_or_channel_id TEXT NOT NULL,
-  topic TEXT NOT NULL DEFAULT '',
-  enabled INTEGER NOT NULL DEFAULT 1,
-  difficulty_min REAL,  -- unused, dropped from the API 2026-10-21
-  difficulty_max REAL,  -- unused, dropped from the API 2026-10-21
-  last_fetched TIMESTAMP
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_books_source_ref
-  ON books(source_ref) WHERE source_ref IS NOT NULL;
--- Epic 13: cold-start difficulty signal. grade A (beginner/common) .. C (advanced/
--- rare); rank is a frequency rank across the whole list (lower = more frequent),
--- nullable since ~1% of source rows have no rank recorded. Seeded once from
--- server/data/vocab_levels.tsv by db._seed_vocab_levels, not hand-maintained.
-CREATE TABLE IF NOT EXISTS vocab_levels (
-  lemma TEXT PRIMARY KEY,
-  grade TEXT NOT NULL CHECK (grade IN ('A','B','C')),
-  rank INTEGER
-);
-```
+The schema is `SCHEMA` in `server/db.py`: the source of truth, with per-column comments.
+Tables: `books`, `pages`, `terms`, `term_forms`, `term_back_items`, `settings`,
+`read_days`, `feeds`, `vocab_levels`, plus the caches `translate_cache`, `krdict_cache`,
+`krdict_state` (used by `translate_svc/`). Postgres is the only database; there is no
+SQLite anywhere in the app.
 
-Foreign keys ON (`PRAGMA foreign_keys=ON` per connection, set in `db.get_connection`).
-Settings keys used: `decks` (JSON array of deck names, default `["Korean"]`),
-`default_deck`, `translator_backend`. All columns and tables marked "Epic 9"/"Epic 11"/
-"Epic 15" above are applied via `db._apply_migrations()` (additive `ALTER TABLE`s + the
-partial index, guarded by `PRAGMA table_info` so re-running `init_db` never double-adds)
-rather than being in the base `CREATE TABLE`, so an existing `reader.db` upgrades in
-place. `status` (Epic 15) is the one additive column with a `CHECK` constraint — see
-DECISIONS.md for why, a deliberate deviation from every other additive column here.
-`vocab_levels` (Epic 13) is a brand-new table (`CREATE TABLE IF NOT EXISTS` directly,
-same as `feeds` in Epic 11 — no migration entry needed for a new table) but its *rows*
-are seeded, not hand-written: `db._seed_vocab_levels()` runs after `_apply_migrations`
-in `init_db`, reads `server/data/vocab_levels.tsv`, and bulk-inserts only if the table
-is currently empty (`SELECT COUNT(*)` guard), so re-running `init_db` never duplicates
-the ~5,543 rows. `feeds` (Epic 15) gets its own seeding, `db._seed_feeds()` — but keyed
-per-`url_or_channel_id` rather than a blanket `COUNT(*)` guard, since (unlike
-`vocab_levels`) it's a small, individually-meaningful roster expected to grow by hand
-across future curation sessions; a hand-added row must survive re-seeding the two
-built-in feeds after an upgrade, and re-running `init_db` must never duplicate those two.
+- **Types:** ids `BIGINT GENERATED BY DEFAULT AS IDENTITY` (BY DEFAULT so the cutover
+  script can keep old ids); timestamps `TIMESTAMPTZ DEFAULT now()`, serialized to JSON
+  as ISO 8601 with an offset; 0/1 flags (`archived`, `read`, `enabled`, `anki_dirty`)
+  stay `INTEGER`, so routes `int()` incoming bools; JSON lists (`tags`, `examples`,
+  `hanja`) are `TEXT`; `read_days.day` is `YYYY-MM-DD` text.
+- `term_forms.id` exists only to keep insertion order (it replaced SQLite's `rowid`);
+  the key is `(term_id, form)`.
+- **Schema changes:** `init_db` runs `SCHEMA` (all `IF NOT EXISTS`) then seeds. A future
+  column is an `ALTER TABLE … ADD COLUMN IF NOT EXISTS` line in `init_db`. The old
+  `_ADDED_COLUMNS` / `PRAGMA table_info` scheme is gone.
+- **Seeds:** `_seed_vocab_levels` bulk-inserts `server/data/vocab_levels.tsv` (~5,543
+  rows) only into an empty table; `_seed_feeds` inserts each roster feed keyed by
+  `url_or_channel_id`, so hand-added or edited feeds survive.
+- **Constraints:** foreign keys always on (Postgres default) with `ON DELETE CASCADE` on
+  `pages`, `term_forms`, `term_back_items`, `read_days`; partial unique index
+  `idx_books_source_ref` (NULL source_refs never collide). A duplicate raises
+  `psycopg.errors.UniqueViolation`, which `books`/`terms` turn into 409.
+- **Local day:** read days (`date.today()`) and the stats word buckets
+  (`created.astimezone()`) use the **process** local time, as SQLite's `'localtime'`
+  did. In Docker that is `TZ` from `.env`. Candidate expiry compares absolute times
+  (`now() - make_interval(days => n)`).
+- **Settings keys:** `decks`, `default_deck`, `candidate_retention_days`,
+  `last_fetch_attempt` (ISO string; values from before unit 4 are naive UTC, which the
+  Queue's formatter still reads).
+
+**Connection:** `DATABASE_URL` (`translate_svc/config.py`, default
+`postgresql://mbxread:mbxread@127.0.0.1:5433/mbxread`, the compose db seen from the host;
+`127.0.0.1` because `localhost` tries IPv6 first and stalls on Windows).
+`create_app(database_url=None)` stores it on `app.state.database_url`; `db.get_db` opens
+one psycopg 3 connection per request (`row_factory=dict_row`, so `row["col"]`) and
+closes it after. Routes take `conn: psycopg.Connection = Depends(db.get_db)`. No pool.
+
+**Tests** (`server/tests/conftest.py`): `TEST_DATABASE_URL` (default: the compose db's
+`postgres` database). A session fixture builds `mbxread_test_template` once; the `db_url`
+fixture creates a fresh database from it per test and drops it after. An autouse fixture
+points `config.DATABASE_URL` at a dead address, so a test that doesn't ask for `db_url`
+fails instead of reaching the live database.
+
+**Cutover** (`scripts/sqlite_to_pg.py`): copies a pre-unit-4 `reader.db` (and the old
+`translate_cache.sqlite3`) into an empty target, table by table over the columns both
+sides share, with the session in UTC (SQLite's timestamps were naive UTC), replacing the
+seeded feeds/vocab with the old DB's, then resetting identity sequences. It refuses a
+target that already has books, terms or settings. It is the only code that imports
+`sqlite3`.
 
 ### Page splitting (`server/paging.py`, Epic 2 — implemented; row-based reader split 2026-07-24)
 
@@ -891,18 +791,25 @@ by root and read-only, process runs as `app` (uid 10001), `uvicorn server.main:a
 `.dockerignore` is an allowlist: `requirements.txt`, `server/` (minus `tests/`),
 `translate_svc/`, `import_tools/`, `web/` (minus `node_modules/`, `out/`, `.next/`).
 
-**Data:** `MBXREAD_DATA_DIR` (default: repo root) sets where `reader.db`
-(`server/db.py` `DATA_DIR`) and `translate_cache.sqlite3` (`translate_svc/config.py`)
-live; the image sets `/data`, the only path `app` can write. Keys come from the
-environment (`--env-file .env`); `load_dotenv` finds no `.env` in the image.
+**Data:** none in the image; everything is in Postgres (`DATABASE_URL`). Keys and `TZ`
+come from the environment (`env_file: .env`); `load_dotenv` finds no `.env` in the image.
 
-**Compose** (`compose.yaml`, unit 2): one service on 8002, `env_file: .env`, the
-`mbxread-data` volume at `/data`, `restart: unless-stopped`. `ANKICONNECT_URL`
-(`server/anki.py`, default `http://127.0.0.1:8765`) is set to
-`http://host.docker.internal:8765`, with `extra_hosts: host-gateway` so the name also
-resolves on Linux. Sync reaches Anki only on the machine running Docker; elsewhere it
-returns its 503. Size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`,
-`pymupdf` and `numpy`.
+**Compose** (`compose.yaml`, units 2 and 4): the daily launcher. `docker compose up -d`
+once; `restart: unless-stopped` brings both services back whenever Docker Desktop starts
+(the Windows tray launcher was deleted in unit 4).
+- `mbxread`: the image on 8002, `env_file: .env`, `DATABASE_URL` pointing at `db`,
+  `depends_on: db: service_healthy`. `ANKICONNECT_URL` (`server/anki.py`, default
+  `http://127.0.0.1:8765`) is `http://host.docker.internal:8765`, with
+  `extra_hosts: host-gateway` so the name also resolves on Linux. Sync reaches Anki only
+  on the machine running Docker; elsewhere it returns its 503.
+- `db`: `postgres:18.6-trixie` pinned by digest, user/db `mbxread`, password
+  `POSTGRES_PASSWORD` (default `mbxread`), volume `mbxread-pg` at `/var/lib/postgresql`
+  (the Postgres 18 image layout), `pg_isready` healthcheck, published on
+  `127.0.0.1:5433` only (5432 is taken on this machine by an unrelated native Postgres
+  service). Dev runs and tests reach it there.
+
+Image size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`, `pymupdf` and
+`numpy`.
 
 ## CI (unit 3)
 
@@ -910,7 +817,8 @@ returns its 503. Size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model
 `ubuntu-24.04`, with every action pinned to a commit SHA (tag in a comment):
 
 - **`test`**: Python 3.14.10, `pip install -r requirements-dev.txt`, the full pytest suite
-  (offline, no keys, like local runs).
+  (offline, no keys, like local runs) against a `postgres` service container (same pinned
+  image as compose) on port 5433, so the default `TEST_DATABASE_URL` works unchanged.
 - **`web`**: Node 24.18.0, `npm ci`, `npm run lint`, `npm run build` in `web/`.
 - **`image`** (after both pass): builds the Dockerfile with buildx and the GitHub Actions
   cache. On a PR it only builds; on a push to `main` it logs in with `GITHUB_TOKEN`

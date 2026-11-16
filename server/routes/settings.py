@@ -1,6 +1,7 @@
 """Settings API. See docs/SPEC.md sections 4-5, 7."""
 import json
-import sqlite3
+from datetime import datetime, timezone
+import psycopg
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -30,22 +31,21 @@ class SettingsPut(BaseModel):
     # No last_fetch_attempt: pydantic drops it from a PUT body, so users can't set it.
 
 
-def _read(conn: sqlite3.Connection) -> dict:
+def _read(conn: psycopg.Connection) -> dict:
     rows = conn.execute("SELECT key, value FROM settings").fetchall()
     stored = {row["key"]: json.loads(row["value"]) for row in rows}
     return {**DEFAULTS, **stored}
 
 
-def get_candidate_retention_days(conn: sqlite3.Connection) -> int:
+def get_candidate_retention_days(conn: psycopg.Connection) -> int:
     return _read(conn)["candidate_retention_days"]
 
 
-def stamp_last_fetch_attempt(conn: sqlite3.Connection) -> None:
-    """Record a fetch attempt, successful or not. SQLite's clock keeps the format of
-    every other TIMESTAMP column."""
-    now = conn.execute("SELECT CURRENT_TIMESTAMP").fetchone()[0]
+def stamp_last_fetch_attempt(conn: psycopg.Connection) -> None:
+    """Record a fetch attempt, successful or not."""
+    now = datetime.now(timezone.utc).isoformat()
     conn.execute(
-        "INSERT INTO settings (key, value) VALUES ('last_fetch_attempt', ?) "
+        "INSERT INTO settings (key, value) VALUES ('last_fetch_attempt', %s) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (json.dumps(now),),
     )
@@ -53,16 +53,16 @@ def stamp_last_fetch_attempt(conn: sqlite3.Connection) -> None:
 
 
 @router.get("")
-def get_settings(conn: sqlite3.Connection = Depends(db_module.get_db)):
+def get_settings(conn: psycopg.Connection = Depends(db_module.get_db)):
     return _read(conn)
 
 
 @router.put("")
-def put_settings(body: SettingsPut, conn: sqlite3.Connection = Depends(db_module.get_db)):
+def put_settings(body: SettingsPut, conn: psycopg.Connection = Depends(db_module.get_db)):
     fields = body.model_dump(exclude_unset=True)
     for key, value in fields.items():
         conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "INSERT INTO settings (key, value) VALUES (%s, %s) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, json.dumps(value)),
         )

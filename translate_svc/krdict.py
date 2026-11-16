@@ -4,15 +4,15 @@ Free API key: https://krdict.korean.go.kr/openApi/openApiInfo
 """
 
 import json
-import sqlite3
 import time
 import xml.etree.ElementTree as ET
-from contextlib import closing
 from datetime import datetime
 
 import httpx
+import psycopg
 
-from .config import CACHE_DB, KRDICT_API_KEY
+from . import config
+from .config import KRDICT_API_KEY
 
 API_URL = "https://krdict.korean.go.kr/api/search"
 VIEW_URL = "https://krdict.korean.go.kr/api/view"
@@ -23,36 +23,30 @@ class KrdictUnavailable(Exception):
     pass
 
 
-def _conn():
-    conn = sqlite3.connect(CACHE_DB)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS krdict_cache (key TEXT PRIMARY KEY, body TEXT NOT NULL,"
-        " created TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-    )
-    conn.execute("CREATE TABLE IF NOT EXISTS krdict_state (k TEXT PRIMARY KEY, v REAL NOT NULL)")
-    return conn
+def _conn() -> psycopg.Connection:
+    return psycopg.connect(config.DATABASE_URL)
 
 
 def blocked_until() -> float | None:
-    with closing(_conn()) as conn:
+    with _conn() as conn:
         row = conn.execute("SELECT v FROM krdict_state WHERE k = 'blocked_until'").fetchone()
     return row[0] if row and row[0] > time.time() else None
 
 
 def _trip() -> None:
-    with closing(_conn()) as conn:
+    with _conn() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO krdict_state (k, v) VALUES ('blocked_until', ?)",
+            "INSERT INTO krdict_state (k, v) VALUES ('blocked_until', %s) "
+            "ON CONFLICT (k) DO UPDATE SET v = excluded.v",
             (time.time() + COOLDOWN_S,),
         )
-        conn.commit()
 
 
 def _get(url: str, params: dict) -> ET.Element:
     """Cached GET. The first failure opens a cooldown during which nothing is sent."""
     key = json.dumps([url, {k: v for k, v in params.items() if k != "key"}], sort_keys=True)
-    with closing(_conn()) as conn:
-        row = conn.execute("SELECT body FROM krdict_cache WHERE key = ?", (key,)).fetchone()
+    with _conn() as conn:
+        row = conn.execute("SELECT body FROM krdict_cache WHERE key = %s", (key,)).fetchone()
     if row:
         return ET.fromstring(row[0])
     until = blocked_until()
@@ -66,9 +60,12 @@ def _get(url: str, params: dict) -> ET.Element:
     except Exception as e:
         _trip()
         raise KrdictUnavailable(f"krdict request failed ({e}); paused for {COOLDOWN_S // 60} min") from e
-    with closing(_conn()) as conn:
-        conn.execute("INSERT OR REPLACE INTO krdict_cache (key, body) VALUES (?, ?)", (key, r.text))
-        conn.commit()
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO krdict_cache (key, body) VALUES (%s, %s) "
+            "ON CONFLICT (key) DO UPDATE SET body = excluded.body",
+            (key, r.text),
+        )
     return root
 
 

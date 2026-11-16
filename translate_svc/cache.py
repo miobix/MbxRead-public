@@ -1,34 +1,20 @@
-import sqlite3
-from contextlib import closing
+import psycopg
 
-from .config import CACHE_DB
-
-
-def _conn():
-    conn = sqlite3.connect(CACHE_DB)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS cache ("
-        " backend TEXT NOT NULL,"
-        " text TEXT NOT NULL,"
-        " result TEXT NOT NULL,"
-        " created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-        " PRIMARY KEY (backend, text))"
-    )
-    return conn
+from . import config
 
 
 def get(backend: str, text: str) -> str | None:
-    with closing(_conn()) as conn:
+    with psycopg.connect(config.DATABASE_URL) as conn:
         row = conn.execute(
-            "SELECT result FROM cache WHERE backend=? AND text=?", (backend, text)
+            "SELECT result FROM translate_cache WHERE backend=%s AND text=%s", (backend, text)
         ).fetchone()
     return row[0] if row else None
 
 
 def put(backend: str, text: str, result: str) -> None:
-    with closing(_conn()) as conn:
+    with psycopg.connect(config.DATABASE_URL) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO cache (backend, text, result) VALUES (?,?,?)",
+            "INSERT INTO translate_cache (backend, text, result) VALUES (%s,%s,%s) "
+            "ON CONFLICT (backend, text) DO UPDATE SET result = excluded.result",
             (backend, text, result),
         )
-        conn.commit()

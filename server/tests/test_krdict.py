@@ -5,6 +5,11 @@ import pytest
 
 from translate_svc import krdict
 
+
+@pytest.fixture(autouse=True)
+def _cache_db(db_url):
+    """The response cache and the cooldown live in Postgres."""
+
 SEARCH_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <channel>
   <item>

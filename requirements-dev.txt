@@ -1,5 +1,3 @@
 -r requirements.txt
-# Local only: tests and the Windows tray launcher (scripts/tray_app.py).
+# Local only: tests.
 pytest==9.1.1
-pystray==0.19.5
-pillow==12.3.0
