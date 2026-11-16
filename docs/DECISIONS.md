@@ -1899,3 +1899,32 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   explain 3.3 s, cached 0.03 s); image builds at 617 MB. Pinned: pgvector
   `0.8.7-pg18-trixie`, TEI `cpu-1.9.3`, Ollama `0.40.15` (one release behind latest),
   all by digest.
+
+## 2026-11-16 — Unit 6: Explain eval (swapped ahead of the router)
+
+- **Swap (user's call):** the router (now unit 7) only has a job if the local model
+  fails often, so the eval came first.
+- **Method:** `scripts/eval_usage.py --explain`. Same scratch-DB setup as unit 5; for
+  each of the 100 labeled sentences, the default retrieval (vector, top 5) feeds
+  `usage.explain` with a fixed English sense list per lemma instead of krdict
+  (reproducible, no key). Scored deterministically against the labels; no LLM judge,
+  because the labels already are the ground truth for sense and example picks.
+- **Results (`gemma4:e4b`, CPU, median 3.2 s, max 11.8 s):**
+
+  | format | right sense | pick precision | pick recall | rejects wrong-sense examples |
+  |---|---|---|---|---|
+  | 0.98 | 0.96 | 0.93 | 0.85 | 0.95 |
+
+  Of the 4 sense misses, 2 are real (both 차다: 이불을 찬다 and 컵에 가득 찼어요 read as
+  "cold") and the other misses on 눈/다리 were right answers with a stray trailing quote or a
+  second clause. Recall misses are the model citing fewer examples than it could:
+  harmless on a card. Weakest word: 차다 (sense 0.87, precision 0.77), matching unit 5's
+  retrieval weakness.
+- **Fix from the eval:** `explain` keeps the first line and strips stray quotes (the
+  quote would have landed on the Anki card).
+- **Verdict for unit 7 (router): no-go on current evidence.** The cheap model names the
+  right sense ~96-98% of the time; a stronger model could only win on 차다-like cases,
+  ~2 sentences in 100. Revisit if real use shows wrong Explain lines, or the eval grows
+  harder words. The roadmap row stays, marked as not justified.
+- **PR deferred by the user:** committed on branch `unit-6-explain-eval`, not pushed, so
+  the user can review at their own pace. Verified: pytest 299, build and lint clean.

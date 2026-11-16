@@ -535,6 +535,30 @@ models (unit 6).
 services; on real data the button returns same-sense hits for 타다-like words and
 Explain returns a grounded line; eval numbers recorded.
 
+### Unit 6 — Explain eval (swapped ahead of the router)
+
+**Why:** before the Explain line goes on a card, know how often it is right; and the
+router (unit 7) only has a job if the local model fails often.
+
+**How:** `scripts/eval_usage.py --explain` reuses the unit 5 setup (scratch DB, real
+`embed`, each lemma isolated). For every labeled sentence: retrieve with the app's
+default method (k=5), call `usage.explain` with a fixed English sense list per lemma
+(instead of krdict, so runs are reproducible and need no key), parse the line, score:
+- **format:** parses as `<sense> (<gloss>). Same sense: <numbers|none>`.
+- **sense:** the named sense equals the label.
+- **examples:** precision / recall of the "same sense" picks against the labels, and
+  how often the model *excludes* wrong-sense examples retrieval put in the top 5.
+- **latency** per call.
+Per-lemma table + every miss printed; results to DECISIONS. Pure deterministic
+scoring: the labels are ground truth, so no LLM judge is needed for these questions.
+
+**Tests (offline):** the line parser and the scorer.
+
+**Out of scope:** judging the free-text gloss (an LLM judge, only if the numbers say
+glosses are the problem), the router itself.
+
+**Accept:** pytest/build/lint green; numbers recorded; a written go / no-go for unit 7.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

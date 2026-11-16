@@ -144,6 +144,12 @@ def test_explain_grounds_prompt_and_caches(client, monkeypatch):
     assert fake.calls[0]["model"] == config.OLLAMA_MODEL
 
 
+def test_explain_keeps_first_line_without_stray_quotes(client, monkeypatch):
+    monkeypatch.setattr(usage.httpx, "post", FakeOllama(content="eye (sight). Same sense: 1.'\nmore"))
+    monkeypatch.setattr(usage.krdict, "lookup", lambda w, with_examples=False: [])
+    assert client.post("/api/usage/explain", json=EXPLAIN).json()["explanation"] == "eye (sight). Same sense: 1."
+
+
 def test_explain_missing_model_is_a_readable_503(client, monkeypatch):
     monkeypatch.setattr(usage.httpx, "post", FakeOllama(status=404))
     monkeypatch.setattr(usage.krdict, "lookup", lambda w, with_examples=False: [])

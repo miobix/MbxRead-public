@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose, phone access over Tailscale.
 
-**Test suite: 290 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 299 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -121,8 +121,8 @@ never committed; copy `.env.example`.
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
 | 4 | SQLite to Postgres migration, in compose and CI | done; live cutover deferred |
 | 5 | RAG as same-sense usage search: pgvector, keyword/vector/hybrid compared, local LLM explains | done |
-| 6 | Agent: a model "decider" that routes between cheap and strong models | **next** |
-| 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
+| 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done locally, PR deferred (branch `unit-6-explain-eval`, unpushed) |
+| 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
 **Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
@@ -131,12 +131,14 @@ on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.p
 `reader.db` + `translate_cache.sqlite3` into the empty compose db, `docker compose up -d
 --build`, check counts, turn on Docker Desktop's start-at-sign-in.
 
-**Unit 6:** modelled on Strands' decider
+**Units 6-7 swapped (user, 2026-11-16).** Unit 6's eval says the router has no job yet
+(`gemma4:e4b` names the right sense ~96% of the time; misses are 차다-like). Revisit only
+if real use shows wrong Explain lines; it would be modelled on Strands' decider
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
-The Claude translator is gone and the app uses no paid LLM API, so the "strong" tier needs
-a decision first (a bigger local model? a free hosted tier?). Natural job: the unit 5
-explain call (cheap `gemma4:e4b` vs stronger), judged on the unit 5 eval words.
-Unit 5 results and failure cases: `docs/DECISIONS.md` (2026-11-16).
+Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
+
+**PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
+units as local commits on their branch; push and open the PR only when asked.
 
 **Before the first deploy:** add a LICENSE (MIT is the usual pick). A remote server can't
 reach desktop Anki, so the deploy unit adds CSV export (Anki imports CSV natively).

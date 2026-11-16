@@ -225,6 +225,7 @@ def explain(lemma: str, sentence: str, examples: list[str]) -> str:
         )
     if r.status_code != 200:
         raise Unavailable(f"LLM service error {r.status_code}: {r.text[:200]}")
-    answer = r.json()["message"]["content"].strip()
+    # gemma sometimes trails a stray quote or a second line (unit 6 eval).
+    answer = r.json()["message"]["content"].strip().splitlines()[0].strip().strip("'\"")
     cache.put(backend, key, answer)
     return answer
