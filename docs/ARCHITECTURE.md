@@ -835,6 +835,18 @@ once; `restart: unless-stopped` brings both services back whenever Docker Deskto
   pulled.
 - **Popover:** "Similar usage" (single words) lists the hits, "Explain sense" shows the
   line, "Add to back" adds it as a manual Back chip.
+- **Failures:** embedder unreachable or 5xx → the indexer backs off and retries the same
+  book; any other error on a book (a 4xx for its input, a tokenizer crash) → logged, the
+  book is stamped indexed with no sentences and the queue moves on. Re-queue it with
+  `UPDATE books SET indexed_at = NULL WHERE id = …`.
+- **Changing the embedding model** (drift trap): old vectors stay and silently mismatch.
+  Change `vector(1024)` if the dimension differs, then `TRUNCATE sentences; UPDATE books
+  SET indexed_at = NULL;` and let the indexer rebuild (~2.5 min per 6,000 sentences on CPU).
+- **Deploy check:** `docker compose exec ollama ollama list` shows `gemma4:e4b` with ID
+  `dc35e8d9c606` (Ollama pins by tag only; a re-pull can move it). bge-m3 is pinned by
+  revision in `compose.yaml`; images by digest.
+- **Logs:** every compose service rotates at 10 MB × 3 (`x-logging`); Ollama writes about
+  115 lines per request.
 
 Image size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`, `pymupdf` and
 `numpy`.

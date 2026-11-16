@@ -63,6 +63,30 @@ def test_index_next_skips_candidates_and_deleting_a_book_cascades(client, conn, 
     assert conn.execute("SELECT count(*) AS n FROM sentences").fetchone()["n"] == 0
 
 
+def test_a_bad_book_is_skipped_but_a_down_service_is_retried(client, conn, db_url, monkeypatch):
+    add_book(client, "나쁜 책이에요.")
+    good = add_book(client, TEXT)
+
+    def down(texts):
+        raise usage.Unavailable("down")
+
+    monkeypatch.setattr(usage, "embed", down)
+    with pytest.raises(usage.Unavailable):
+        usage.index_next(db_url)
+    assert usage.pending_count(conn) == 2
+
+    def picky(texts):
+        if "나쁜" in texts[0]:
+            raise ValueError("bad input")
+        return fake_embed(texts)
+
+    monkeypatch.setattr(usage, "embed", picky)
+    assert usage.index_next(db_url) and usage.index_next(db_url)
+    assert usage.pending_count(conn) == 0
+    rows = conn.execute("SELECT book_id, count(*) AS n FROM sentences GROUP BY book_id").fetchall()
+    assert {r["book_id"]: r["n"] for r in rows} == {good: 5}
+
+
 @pytest.mark.parametrize("method", usage.METHODS)
 def test_search_ranks_same_sense_first_and_excludes_query(client, conn, method):
     usage.index_book(conn, add_book(client, TEXT))

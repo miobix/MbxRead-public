@@ -1,5 +1,5 @@
 """Same-sense usage search + LLM explanation. See SPEC, unit 5."""
-from typing import Literal
+from typing import Annotated, Literal
 
 import psycopg
 from fastapi import APIRouter, Depends
@@ -12,17 +12,21 @@ from .. import usage
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 
 
+Lemma = Annotated[str, Field(min_length=1, max_length=100)]
+Sentence = Annotated[str, Field(min_length=1, max_length=2000)]
+
+
 class UsageQuery(BaseModel):
-    lemma: str = Field(min_length=1)
-    sentence: str = Field(min_length=1)
+    lemma: Lemma
+    sentence: Sentence
     k: int = Field(5, ge=1, le=20)
     method: Literal["keyword", "vector", "hybrid"] = usage.DEFAULT_METHOD
 
 
 class ExplainBody(BaseModel):
-    lemma: str = Field(min_length=1)
-    sentence: str = Field(min_length=1)
-    examples: list[str] = Field(max_length=10)
+    lemma: Lemma
+    sentence: Sentence
+    examples: list[Sentence] = Field(max_length=10)
 
 
 @router.post("")

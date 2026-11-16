@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose, phone access over Tailscale.
 
-**Test suite: 299 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 300 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
