@@ -1785,3 +1785,13 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
 - **No CI-only requirements file.** CI installs `requirements-dev.txt`; pystray and pillow
   install fine on Linux and cost seconds.
 - **Not run locally** (no `act` here); the first PR run is the test of the workflow.
+
+## 2026-11-16 — Skills: finish-unit, pin-versions
+
+- **`finish-unit`** (`.claude/skills/`, project): the end-of-unit routine was done the same
+  way in units 1-3 and grew a CI watch, a post-merge sync and a GHCR check in unit 3. Holds
+  the gotchas that cost a retry: port 8002 taken by the tray (smoke-test on 8012), Git Bash
+  mangling `gh api /path`, the token lacking `read:packages`. Indexed in `CLAUDE.md` rule 4.
+- **`pin-versions`** (`~/.claude/skills/`, user-level): digest and SHA pinning was done by
+  hand twice (base images in unit 2, actions in unit 3) and applies to every repo with a
+  Dockerfile or workflow. Indexed in the user-level `CLAUDE.md`.

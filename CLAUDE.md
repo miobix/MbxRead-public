@@ -22,7 +22,9 @@ frontend (static export), phone access via Tailscale.
    epics 0–32 (see `docs/README.md`). End every unit with: full test suite green
    (`.venv\Scripts\python.exe -m pytest server/tests -q`), `npm run build` **and**
    `npm run lint` in `web/` green (`tsc` alone once missed a real react-hooks bug), and
-   one branch + PR titled `<summary> (unit N)` that includes the docs updates.
+   one branch + PR titled `<summary> (unit N)` that includes the docs updates. The
+   **`finish-unit`** skill (`.claude/skills/finish-unit/`) is that whole routine: gate,
+   docs, PR, CI watch, post-merge sync. Reach for it at the end of every unit.
 
 ## Hard rules
 
