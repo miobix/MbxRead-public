@@ -15,12 +15,13 @@ Read Korean texts → tap a word → translate (DeepL/krdict) → hand-enrich in
 Anki card → save the term by dictionary form so every inflection highlights → bulk-sync to
 Anki. Content arrives two ways: manual import (paste/txt/YouTube/PDF/EPUB/subtitle
 files/article) and an automated feed roster (RSS + YouTube) that fetches candidates into a
-review Queue. A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
+review Queue. "Similar usage" in the word popover finds the word in other library
+sentences ranked by sense (embeddings) and a local LLM names the sense (unit 5). A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose, phone access over Tailscale.
 
-**Test suite: 275 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 290 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -74,8 +75,9 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 
 - **Server runs on port 8002.** Port 8000 belongs to an unrelated Docker-based Android sync
   service on this machine — don't use it or kill things on it without checking. No app code hardcodes the port (passed via `uvicorn --port`).
-- **Daily launcher is compose** (unit 4): `docker compose up -d --build` runs the app (8002)
-  and Postgres (`db`, `127.0.0.1:5433`); `restart: unless-stopped` brings both back when
+- **Daily launcher is compose** (unit 4): `docker compose up -d --build` runs the app (8002),
+  Postgres with pgvector (`db`, `127.0.0.1:5433`), `embed` (bge-m3, `127.0.0.1:8081`) and
+  `ollama` (`gemma4:e4b`, `127.0.0.1:11434`, runs on CPU: see follow-ups); `restart: unless-stopped` brings both back when
   Docker Desktop starts. The Windows tray launcher was deleted. `start.ps1` = the *dev*
   launcher (compose db + uvicorn in a visible console, rebuilds `web/` if stale); stop the
   compose app first, both want 8002.
@@ -117,29 +119,35 @@ never committed; copy `.env.example`.
 | 1 | Dockerfile for the API | done |
 | 2 | Compose: API + static web, env file for keys | done |
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
-| 4 | SQLite to Postgres migration, in compose and CI | PR open; live cutover pending |
-| 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | **next** |
-| 6 | Agent: a model "decider" that routes between cheap and strong models | |
+| 4 | SQLite to Postgres migration, in compose and CI | done; live cutover deferred |
+| 5 | RAG as same-sense usage search: pgvector, keyword/vector/hybrid compared, local LLM explains | done |
+| 6 | Agent: a model "decider" that routes between cheap and strong models | **next** |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
-**Unit 4 cutover (after merge):** stop the private repo's tray (`C:\Personal\MbxRead`, live
+**Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
+daily app for now; don't propose the switch unprompted. When asked: stop the private repo's tray (`C:\Personal\MbxRead`, live
 on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.py` on its
 `reader.db` + `translate_cache.sqlite3` into the empty compose db, `docker compose up -d
 --build`, check counts, turn on Docker Desktop's start-at-sign-in.
 
-**Unit 5:** build several pipelines (chunking, embeddings, hybrid or keyword search) and
-record where each fails. Public-domain Korean texts only, for the repo, tests and any demo.
-Needs pgvector: swap the `db` image for a pgvector build of the same Postgres major.
-
 **Unit 6:** modelled on Strands' decider
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
-Translation already calls DeepL/Claude, so the router has a real job.
+The Claude translator is gone and the app uses no paid LLM API, so the "strong" tier needs
+a decision first (a bigger local model? a free hosted tier?). Natural job: the unit 5
+explain call (cheap `gemma4:e4b` vs stronger), judged on the unit 5 eval words.
+Unit 5 results and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
 **Before the first deploy:** add a LICENSE (MIT is the usual pick). A remote server can't
 reach desktop Anki, so the deploy unit adds CSV export (Anki imports CSV natively).
 
 ## Open follow-ups (not blockers)
+
+- **Ollama GPU:** CUDA init fails inside WSL2 (`cuInit failed: named symbol not found`)
+  though `nvidia-smi` works in containers; Ollama runs on CPU (~3 s per explanation).
+  Likely an NVIDIA driver / Docker Desktop update. Compose already requests the GPU.
+- **Revisit the model containers** (user, unit 5): each model got its own container to
+  start with; review what runs where once it has been used for a while.
 
 - **Live sync through Docker not yet exercised:** compose points at
   `host.docker.internal:8765`, but Anki was closed when unit 2 was verified. Try one sync

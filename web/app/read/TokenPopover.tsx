@@ -9,6 +9,7 @@ import {
   type Term,
   type TermStatus,
   type TermSummary,
+  type UsageResult,
 } from "@/lib/api";
 
 export type PopoverTarget = {
@@ -76,7 +77,11 @@ export function TokenPopover({
   const [manualFront, setManualFront] = useState("");
   const [manualBack, setManualBack] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"translate" | "dict" | "save" | null>(null);
+  const [usage, setUsage] = useState<UsageResult | null>(null);
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"translate" | "dict" | "save" | "usage" | "explain" | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
 
   // A term never touched by this card builder (no back_items) shows its old flat
@@ -206,6 +211,43 @@ export function TokenPopover({
     } finally {
       setBusy(null);
     }
+  };
+
+  const findUsage = async () => {
+    if (!lemma.trim() || !target.sentence) return;
+    setBusy("usage");
+    setError(null);
+    setExplanation(null);
+    try {
+      setUsage(await api.usage(lemma.trim(), target.sentence));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Usage search failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const explainUsage = async () => {
+    if (!usage) return;
+    setBusy("explain");
+    setError(null);
+    try {
+      const examples = usage.hits.map((h) => h.text);
+      setExplanation((await api.explainUsage(lemma.trim(), target.sentence, examples)).explanation);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Explain failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addExplanation = () => {
+    if (!explanation) return;
+    setBackItems((prev) =>
+      prev.some((b) => b.group === LEMMA_GROUP && b.text === explanation)
+        ? prev
+        : [...prev, { group: LEMMA_GROUP, kind: "manual", text: explanation, korean_def: "" }]
+    );
   };
 
   const save = async () => {
@@ -394,7 +436,44 @@ export function TokenPopover({
               {busy === "dict" ? "Looking up…" : "Dictionary"}
             </button>
           )}
+          {!isPhrase && target.sentence && (
+            <button onClick={findUsage} disabled={busy !== null} className="btn-link">
+              {busy === "usage" ? "Searching…" : "Similar usage"}
+            </button>
+          )}
         </div>
+
+        {usage && (
+          <div className="flex flex-col gap-2 text-sm">
+            {usage.hits.length === 0 ? (
+              <p className="text-muted">No other sentences with {lemma} in your library yet.</p>
+            ) : (
+              <ol className="flex flex-col gap-1.5 list-decimal pl-5">
+                {usage.hits.map((h, i) => (
+                  <li key={i} className="leading-relaxed">
+                    {h.text} <span className="text-muted">· {h.title}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {usage.pending_books > 0 && (
+              <p className="text-muted">{usage.pending_books} book(s) still being indexed.</p>
+            )}
+            {usage.hits.length > 0 &&
+              (explanation ? (
+                <p className="flex flex-wrap items-baseline gap-x-3">
+                  <span>{explanation}</span>
+                  <button type="button" onClick={addExplanation} className="btn-link">
+                    Add to back
+                  </button>
+                </p>
+              ) : (
+                <button onClick={explainUsage} disabled={busy !== null} className="btn-link self-start">
+                  {busy === "explain" ? "Explaining…" : "Explain sense"}
+                </button>
+              ))}
+          </div>
+        )}
 
         {/* Front → Back preview, a WYSIWYG of what syncs to Anki: one row per front
             entry, so each Back chip sits next to the word it belongs to. */}

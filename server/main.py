@@ -1,4 +1,6 @@
 """FastAPI app factory: mounts /api routers, serves web/out statically."""
+import asyncio
+import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -6,7 +8,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import db
+from translate_svc import config
+
+from . import db, usage
 from .routes import (
     anki_sync,
     books,
@@ -19,6 +23,9 @@ from .routes import (
     terms,
     translate,
 )
+from .routes import usage as usage_routes
+
+log = logging.getLogger(__name__)
 
 WEB_OUT = Path(__file__).resolve().parent.parent / "web" / "out"
 
@@ -43,11 +50,27 @@ class _WebOut(StaticFiles):
         return response
 
 
+async def _index_loop(database_url: str | None) -> None:
+    """Index pending library books for usage search; never exits, backs off on errors."""
+    delay = 30
+    while True:
+        try:
+            did = await asyncio.to_thread(usage.index_next, database_url)
+            delay = 1 if did else 30
+        except Exception as e:
+            delay = min(max(delay * 2, 60), 900)
+            log.warning("usage index failed (retry in %ss): %s", delay, e)
+        await asyncio.sleep(delay)
+
+
 def create_app(database_url: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         db.init_db(database_url)
+        task = asyncio.create_task(_index_loop(database_url)) if config.EMBED_URL else None
         yield
+        if task:
+            task.cancel()
 
     app = FastAPI(title="MbxRead", lifespan=lifespan)
     app.state.database_url = database_url
@@ -66,6 +89,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(feeds.router)
     app.include_router(reads.router)
     app.include_router(stats.router)
+    app.include_router(usage_routes.router)
 
     if WEB_OUT.is_dir():
         app.mount("/", _WebOut(directory=WEB_OUT, html=True), name="web")

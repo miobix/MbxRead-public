@@ -8,6 +8,8 @@ services:
     environment:
       ANKICONNECT_URL: http://host.docker.internal:8765
       DATABASE_URL: postgresql://mbxread:${POSTGRES_PASSWORD:-mbxread}@db:5432/mbxread
+      EMBED_URL: http://embed:80
+      OLLAMA_URL: http://ollama:11434
     # Docker Desktop defines host.docker.internal already; Linux needs this line.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -17,7 +19,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
     environment:
       POSTGRES_USER: mbxread
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mbxread}
@@ -34,5 +36,35 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Sentence embeddings for same-sense search; weights download into the volume once.
+  embed:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
+    command: ["--model-id", "BAAI/bge-m3", "--revision", "5617a9f61b028005a4858fdac845db406aefb181"]
+    # Localhost only, so dev runs and the eval script can reach it.
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - mbxread-embed:/data
+    restart: unless-stopped
+
+  # Local LLM for the sense explanation. Pull the model once:
+  #   docker compose exec ollama ollama pull <OLLAMA_MODEL>
+  ollama:
+    image: ollama/ollama:0.40.15@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - mbxread-ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
 volumes:
   mbxread-pg:
+  mbxread-embed:
+  mbxread-ollama:

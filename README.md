@@ -89,6 +89,10 @@ docker compose up -d --build
   needs nothing else. On Linux, set AnkiConnect's `webBindAddress` to `0.0.0.0` (Anki →
   Tools → Add-ons → AnkiConnect → Config), since its default `127.0.0.1` refuses
   connections from containers.
+- **Similar usage** (popover button) needs two more services that compose starts: `embed`
+  (sentence embeddings, downloads ~2 GB of weights on first start) and `ollama` (local
+  LLM). Pull its model once: `docker compose exec ollama ollama pull gemma4:e4b`. New
+  library books are indexed in the background.
 - Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
   pytest) and `docker compose up -d db`. Tests need that db too (each test gets its own
   throwaway database). The image installs `requirements.txt` only.
@@ -125,7 +129,7 @@ docs/                   architecture/spec/decision docs — read docs/STATUS.md 
 scripts/sqlite_to_pg.py one-off copy of an old SQLite reader.db into Postgres
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
 Dockerfile              app image, API + web (see "Run with Docker"); .dockerignore is an allowlist
-compose.yaml            app + Postgres, .env, the route to desktop Anki: the daily launcher
+compose.yaml            app + Postgres + embed + ollama, .env, the route to desktop Anki: the daily launcher
 requirements.txt        runtime deps (what the image installs)
 requirements-dev.txt    + pytest, for local use
 ANKI.md                 Anki sync setup and daily-use guide
