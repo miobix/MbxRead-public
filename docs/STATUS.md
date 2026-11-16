@@ -117,13 +117,14 @@ never committed; copy `.env.example`.
 | 1 | Dockerfile for the API | done |
 | 2 | Compose: API + static web, env file for keys | done |
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
-| 4 | SQLite to Postgres migration, in compose and CI | PR open; live cutover pending |
+| 4 | SQLite to Postgres migration, in compose and CI | done; live cutover deferred |
 | 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | **next** |
 | 6 | Agent: a model "decider" that routes between cheap and strong models | |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
-**Unit 4 cutover (after merge):** stop the private repo's tray (`C:\Personal\MbxRead`, live
+**Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
+daily app for now; don't propose the switch unprompted. When asked: stop the private repo's tray (`C:\Personal\MbxRead`, live
 on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.py` on its
 `reader.db` + `translate_cache.sqlite3` into the empty compose db, `docker compose up -d
 --build`, check counts, turn on Docker Desktop's start-at-sign-in.
