@@ -1770,3 +1770,18 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   `/api/health` ok, deno 2.9.6 present, YouTube subs fetched in-container without the JS
   warning, sync 503 with the right message (Anki was closed, so a live sync through
   `host.docker.internal` was not exercised).
+
+## 2026-11-16 — Unit 3: CI
+
+- **Three jobs, not one.** `test` and `web` run in parallel and fail separately, so a red
+  check names the broken half. `image` waits for both: no point building an image whose
+  code fails its tests.
+- **PRs build the image without pushing**, so a broken Dockerfile is caught before merge.
+  Only `main` publishes, as `latest` plus the commit SHA (an exact, pullable version
+  for a later deploy).
+- **Actions pinned to commit SHAs**, the same reasoning as the digest-pinned base images:
+  a moved tag can't change what CI runs.
+- **`packages: write` only on `image`**; the workflow default is `contents: read`.
+- **No CI-only requirements file.** CI installs `requirements-dev.txt`; pystray and pillow
+  install fine on Linux and cost seconds.
+- **Not run locally** (no `act` here); the first PR run is the test of the workflow.

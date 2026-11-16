@@ -80,6 +80,9 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
   this environment). Server output → `scripts/server.log` (gitignored).
 - **Docker:** `docker compose up -d --build` runs web + API in one container on 8002 (the
   daily tray app also uses 8002, so stop one before starting the other).
+- **CI** (`.github/workflows/ci.yml`): jobs `test`, `web`, `image` on every PR and push
+  to `main`; all three are required to merge. Pushes to `main` publish
+  `ghcr.io/miobix/mbxread:latest` and `:<sha>`.
 - **Feed fetch is manual:** the Queue's "Fetch new candidates" button (`POST
   /api/feeds/fetch`). Each fetch also expires stale candidates and stamps
   `last_fetch_attempt`.
@@ -113,15 +116,12 @@ never committed; copy `.env.example`.
 | 0 | Remove the hanja feature and the Windows Task Scheduler automation | done (Epic 32) |
 | 1 | Dockerfile for the API | done |
 | 2 | Compose: API + static web, env file for keys | done |
-| 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | **next** |
-| 4 | SQLite to Postgres migration, in compose and CI | |
+| 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
+| 4 | SQLite to Postgres migration, in compose and CI | **next** |
 | 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | |
 | 6 | Agent: a model "decider" that routes between cheap and strong models | |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
-
-**Unit 3 before unit 4,** so the migration lands behind a working CI gate. The image
-build now needs the whole `web/` (node stage), so CI can build it as-is.
 
 **Unit 4:** raw `sqlite3` in ~11 modules, no ORM. First decision: psycopg 3 or SQLAlchemy
 Core. Snags: `?` vs `%s`, `INSERT OR IGNORE`, `lastrowid`, PRAGMAs, date functions, the
