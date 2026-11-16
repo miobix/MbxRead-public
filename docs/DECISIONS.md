@@ -1744,3 +1744,29 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   almost nothing; ~507 MB is mostly `kiwipiepy_model` (105 MB), pymupdf and numpy.
 - **Non-root `app` (uid 10001)**, code owned by root and read-only; healthcheck uses
   `urllib` because slim has no curl.
+
+## 2026-11-16 — Unit 2: Compose, API + static web
+
+- **One container serves the web and the API.** A node stage builds `web/out` and the
+  final image copies only that folder; `main.py` already mounts it. A separate web-server
+  container was rejected: a second image and a reverse proxy for files FastAPI serves fine.
+- **AnkiConnect stays.** `ANKICONNECT_URL` (default `127.0.0.1:8765`, so local runs are
+  unchanged) is set by compose to `host.docker.internal:8765`, plus `extra_hosts:
+  host-gateway` for Linux. Anyone running compose next to their own Anki can sync. Linux
+  also needs AnkiConnect's `webBindAddress` at `0.0.0.0` (documented, not automatable).
+  A server on another machine can't reach desktop Anki; CSV export is the answer there,
+  deferred to the deploy unit.
+- **deno in the image** (`denoland/deno:bin-2.9.6`, by digest), about 100 MB. YouTube
+  import still worked without it on 2026-11-16, but yt-dlp warns that runtime-less
+  extraction is deprecated; with deno on PATH the warning is gone. Not installed in the
+  local venv setup: local runs still work, and the warning says when they stop.
+- **Claude translator removed** (backend, `ANTHROPIC_API_KEY`, the Settings picker). It was
+  never installable (`anthropic` not in requirements) and never used. The
+  `translator_backend` setting and the backend plumbing stay; unit 6 may route models
+  through them. A stored `claude` value now fails with "Unknown backend".
+- **`env_file: .env` is required**, not `required: false`: that syntax needs Compose 2.24
+  and this machine has 2.18. The README says to copy `.env.example` first.
+- Verified in a throwaway compose project on port 8012: `/` and `/settings/` 200,
+  `/api/health` ok, deno 2.9.6 present, YouTube subs fetched in-container without the JS
+  warning, sync 503 with the right message (Anki was closed, so a live sync through
+  `host.docker.internal` was not exercised).

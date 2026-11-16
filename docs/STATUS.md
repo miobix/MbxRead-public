@@ -78,6 +78,8 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
   (Open / Restart / Quit), auto-started at logon via a **Startup-folder shortcut**
   (`shell:startup`), *not* Task Scheduler (logon-trigger registration hits Access Denied in
   this environment). Server output → `scripts/server.log` (gitignored).
+- **Docker:** `docker compose up -d --build` runs web + API in one container on 8002 (the
+  daily tray app also uses 8002, so stop one before starting the other).
 - **Feed fetch is manual:** the Queue's "Fetch new candidates" button (`POST
   /api/feeds/fetch`). Each fetch also expires stale candidates and stamps
   `last_fetch_attempt`.
@@ -87,6 +89,8 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
   exactly N rendered lines; N lives in **localStorage per device** (`readerLines`, default
   15, editable on `/settings`). The footer shows a percentage, not a page number. Position is
   `books.current_offset`, a character offset, so devices stay in sync.
+- **Python 3.14.10 everywhere:** the repo's `.venv` (`pip install -r requirements-dev.txt`)
+  and the Docker image run the same version; the suite passes on both.
 - **Data directory:** `MBXREAD_DATA_DIR` holds `reader.db` and `translate_cache.sqlite3`
   (default: repo root; `/data` in the Docker image).
 - **Storage** is one plain SQLite `reader.db`; `pages.content` holds raw text in ~1500-char
@@ -108,19 +112,16 @@ never committed; copy `.env.example`.
 |---|---|---|
 | 0 | Remove the hanja feature and the Windows Task Scheduler automation | done (Epic 32) |
 | 1 | Dockerfile for the API | done |
-| 2 | Compose: API + static web, env file for keys | **next** |
-| 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | |
+| 2 | Compose: API + static web, env file for keys | done |
+| 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | **next** |
 | 4 | SQLite to Postgres migration, in compose and CI | |
 | 5 | RAG: several retrieval pipelines compared on public-domain Korean texts, pgvector | |
 | 6 | Agent: a model "decider" that routes between cheap and strong models | |
 | 7 | Eval: eval set + LLM judge on the unit 5-6 data, quality vs cost | |
 | 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
-**Unit 2:** AnkiConnect runs on the desktop: `host.docker.internal` locally, off when
-deployed. Possible replacement: CSV export (Anki imports CSV natively). The unit 1 image
-is API only (`/` is 404 without `web/out`); compose decides how the web is served.
-
-**Unit 3 before unit 4,** so the migration lands behind a working CI gate.
+**Unit 3 before unit 4,** so the migration lands behind a working CI gate. The image
+build now needs the whole `web/` (node stage), so CI can build it as-is.
 
 **Unit 4:** raw `sqlite3` in ~11 modules, no ORM. First decision: psycopg 3 or SQLAlchemy
 Core. Snags: `?` vs `%s`, `INSERT OR IGNORE`, `lastrowid`, PRAGMAs, date functions, the
@@ -133,20 +134,17 @@ record where each fails. Public-domain Korean texts only, for the repo, tests an
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
 Translation already calls DeepL/Claude, so the router has a real job.
 
-**Before the first deploy:** add a LICENSE (MIT is the usual pick).
+**Before the first deploy:** add a LICENSE (MIT is the usual pick). A remote server can't
+reach desktop Anki, so the deploy unit adds CSV export (Anki imports CSV natively).
 
 ## Open follow-ups (not blockers)
 
-- **Claude translator is selectable but not installable:** Settings offers it, but
-  `anthropic` is not in `requirements.txt`. Unused today (DeepL in settings and `.env`, no
-  Anthropic key); the user deferred adding the dependency (2026-10-21).
-- **Upgrade the local venv's Python.** The Docker image runs **3.14.10** and the full suite
-  passes there (unit 1); the local venv is still **3.10.11**. Install 3.14, rebuild
-  `.venv`, `pip install -r requirements-dev.txt`, rerun the suite. yt-dlp has deprecated
-  3.10, so its next upgrade (the usual fix when YouTube breaks) needs this first.
-- **yt-dlp wants a JS runtime (deno) for YouTube.** Not installed locally or in the image;
-  check whether YouTube import still works without it, and add it to the image if not.
-- **Epic 28 light mode** was only checked in dark mode; worth one look on a light-mode device.
+- **Live sync through Docker not yet exercised:** compose points at
+  `host.docker.internal:8765`, but Anki was closed when unit 2 was verified. Try one sync
+  with Anki open.
+- **Local yt-dlp has no JS runtime** (deno is only in the image). YouTube import works
+  today with a deprecation warning; install deno locally if it stops.
+- **Aesthetics later:** the design is dark-mode only, by choice. Deployment comes first.
 - **Content idea: early-school basics (2026-10-23).** Everyday terms a Korean picks up in
   elementary school: grammar and linguistics words (자모, 자음, 모음, 받침…), the names of each
   자모 (기역, 니은, 디귿…), school-subject vocabulary. No feature or scope decided yet.

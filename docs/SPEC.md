@@ -23,10 +23,10 @@ Repo root: `C:\Personal\MbxRead` (venv at `.venv`, Python 3.10, Windows).
 
 | Path | Role | Action |
 |---|---|---|
-| `translate_svc/translators.py` | DeepL/Claude translation with cache, `translate(text, backend) -> (result, backend, cached)` | import as library |
+| `translate_svc/translators.py` | DeepL translation with cache, `translate(text, backend) -> (result, backend, cached)` | import as library |
 | `translate_svc/cache.py` | sqlite translation cache (`translate_cache.sqlite3`) | as-is |
 | `translate_svc/krdict.py` | krdict dictionary lookup returning entry dicts | import as library |
-| `translate_svc/config.py` | loads `.env` (TRANSLATOR, DEEPL_API_KEY, ANTHROPIC_API_KEY, KRDICT_API_KEY) | extend if needed |
+| `translate_svc/config.py` | loads `.env` (TRANSLATOR, DEEPL_API_KEY, KRDICT_API_KEY) | extend if needed |
 | `translate_svc/main.py` | HTML tooltip page for Lute | keep until Epic 8, then delete |
 | `import_tools/yt_subs.py`, `import_tools/pdf_text.py` | produce cleaned .txt from YouTube/PDF | keep as CLI |
 | `start.ps1` | launches Lute (:5001) + translator (:8001) | replaced in Epic 8 |
@@ -181,7 +181,7 @@ Routes:
   - **Text selection** (long-press drag) of a phrase → same popover with the raw selection as lemma.
   - Page prev/next (client-side CSS-column pages since Epic 24); on page change `PATCH` `current_offset`. Sentence extraction: from previous sentence-end to next sentence-end around the token.
 - `/terms` — table (filter: status, deck, search), newest first, 50 at a time with "Show more" (Epic 31), inline edit, delete, "**Sync to Anki**" button showing `{added, updated, failed, promoted}` toast.
-- `/settings` — deck list editor, default deck, translator backend (deepl/claude).
+- `/settings` — deck list editor, default deck. (The translator-backend picker was removed in unit 2: DeepL is the only backend.)
 
 Keep dependencies minimal: Next + Tailwind only; no state library (React context/props suffice), no component kit. Small shared `lib/api.ts` fetch wrapper.
 

@@ -4,6 +4,10 @@
 !server/
 !translate_svc/
 !import_tools/
+!web/
 server/tests/
+web/node_modules/
+web/out/
+web/.next/
 **/__pycache__/
 **/*.pyc

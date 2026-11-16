@@ -129,21 +129,6 @@ export default function SettingsPage() {
           </section>
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-muted">Translator backend</h2>
-            <select
-              value={settings.translator_backend}
-              onChange={(e) =>
-                save({ ...settings, translator_backend: e.target.value as Settings["translator_backend"] })
-              }
-              disabled={saving}
-              className="field"
-            >
-              <option value="deepl">DeepL</option>
-              <option value="claude">Claude</option>
-            </select>
-          </section>
-
-          <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium text-muted">
               Lines per page{" "}
               <span className="font-normal text-xs">· this device only</span>

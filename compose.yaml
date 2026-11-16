@@ -1,0 +1,18 @@
+services:
+  mbxread:
+    build: .
+    image: mbxread
+    ports:
+      - "8002:8002"
+    env_file: .env
+    environment:
+      ANKICONNECT_URL: http://host.docker.internal:8765
+    # Docker Desktop defines host.docker.internal already; Linux needs this line.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - mbxread-data:/data
+    restart: unless-stopped
+
+volumes:
+  mbxread-data:
