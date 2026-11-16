@@ -123,7 +123,8 @@ never committed; copy `.env.example`.
 | 5 | RAG as same-sense usage search: pgvector, keyword/vector/hybrid compared, local LLM explains | done |
 | 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done locally, PR deferred (branch `unit-6-explain-eval`, unpushed) |
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
-| 8+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
+| 8 | Blind audits: vulnerabilities, user mistakes, error handling; curated fix list | before the first deploy |
+| 9+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
 **Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
 daily app for now; don't propose the switch unprompted. When asked: stop the private repo's tray (`C:\Personal\MbxRead`, live
@@ -136,6 +137,20 @@ on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.p
 if real use shows wrong Explain lines; it would be modelled on Strands' decider
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
 Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
+
+**Unit 8 (user, 2026-11-16):** three *blind* agents, each with a fresh context and only
+the repo (no session history, no design rationale, so they don't inherit our
+assumptions), one per target:
+a) **vulnerabilities**: trust boundaries, injection (SQL, prompt via library text into
+   the LLM), file uploads/imports, secrets, exposed ports, the containers;
+b) **user mistakes**: what a user can do wrong in the UI or API (bad imports, wrong
+   lemma, deleting the wrong thing, double clicks, phone use) and whether the app
+   prevents, explains or recovers;
+c) **error handling**: every external call and failure path (DeepL, krdict, AnkiConnect,
+   yt-dlp, embed, Ollama, Postgres), silent swallows, unclear messages, lost data.
+Each agent reports findings with evidence; the main session dedupes and verifies them,
+then curates one ranked fix list for the user to pick from. The fixes themselves are a
+follow-up unit; the audit unit only produces the list (into DECISIONS or `docs/archive`).
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.
