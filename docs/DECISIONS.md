@@ -1963,3 +1963,48 @@ Evidence first, then code. Findings, each with what was done:
   `exist_ok`-style overwrite paths (the per-book rebuild is intended); eval scripts use
   uuid scratch databases dropped in `finally`.
 - **Not checked:** behaviour under a large library (only 10 books exist); GPU path.
+
+## 2026-11-17 — Unit 8: blind audits + ponytail audit
+
+Six fresh-context agents, each given only the repo path, its target and safety rules (no
+session history, no design rationale), ran in parallel; `/ponytail-audit` ran in the main
+session. The main session deduped, verified the top claims against the code, and wrote the
+pick list: `docs/UNIT_8_AUDIT.md` (21 items + ponytail). No fixes in this unit.
+
+- **Strongest signal:** Anki sync commits once at the end, so a mid-run crash orphans notes
+  Anki already created (three agents found it independently). Two agents each found the
+  missing `lemma` dirty trigger and the reseeding of deleted feeds (three for the feeds).
+- **Lemma audit, borderline cases for the user** (137 sentences, 388 tokens): auxiliary
+  absorbed into the main verb (도와줬어요 → 돕다, 물어봤어요 → 묻다, 지어졌다 → 짓다) while
+  추워졌다 → 춥다 but 빨개졌어요 → 빨개지다 (kiwi lexicalizes some -아지다 only); separate
+  VX tokens (보다, 있다, 주다) share a lemma with the VV; 그건 → 그거 but 그게 → 그것;
+  거예요 → 거; numeral determiners (세 명) drop the numeral; homographs get one lemma.
+  Irregulars, passives/causatives, honorifics, contractions: all correct.
+- **Ponytail:** lean; four small cuts (one-backend translator registry, import CLIs,
+  `scraper` CHECK value, `method` on `/api/usage`) and ebooklib → stdlib, merged with the
+  EPUB zip-bomb fix.
+
+**Incident: the fresh-setup agent wrote to the compose `mbxread` db (5433).** In its
+clone, with no `DATABASE_URL` in `.env`, it ran `python -m scripts.sqlite_to_pg --help`;
+the script took `--help` as a SQLite path, created an empty file, passed the "target is
+empty" check and committed `DELETE FROM feeds` and `DELETE FROM vocab_levels` on the code
+default URL. Checked after: books, terms, settings and sentences were already 0 (unit 4
+cutover deferred, the daily app is still the private repo's tray on SQLite, PID traced,
+`reader.db` untouched). Lost: the 15 seeded feeds and the NIKL vocab rows, both rebuilt by
+`init_db` on the next app start against that db. Root causes, both now fix-list items: the
+script has no existence check (item 3) and every tool's default URL is the live db.
+Lesson for future blind agents: give each one its own `DATABASE_URL` explicitly and say
+which commands may write; "don't touch 5433" was not enough because the default pointed
+there silently.
+
+**Which agents earned their keep** (trial of the audit tooling):
+- Vulnerabilities: high value, unique findings (LAN exposure, EPUB bomb, Anki HTML), ~100k
+  tokens.
+- Lemma: high value per token (~70k), a domain nobody else covers, concrete wrapper fixes.
+- Error handling, user mistakes, data integrity: each solid, but they overlapped heavily on
+  Anki sync and seed feeds. The overlap was good corroboration; next time merge data
+  integrity into error handling and keep user mistakes as the UI-facing one.
+- Fresh setup: the slowest (~10 min) and the only one to break a rule, but it found real
+  doc drift (README import section, ANKI.md note type, GPU requirement, `npm ci`) and
+  caused, then reported, the item 3 footgun. Keep it, sandboxed harder.
+- Ponytail audit: small yield on an already-pruned repo; cheap enough to keep.
