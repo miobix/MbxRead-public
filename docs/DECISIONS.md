@@ -2055,3 +2055,28 @@ nothing to review but a list of problems (deviation from one-PR-per-unit, user's
   The 100 MB cap stops reading into memory, but Starlette still spools an oversized
   upload to disk first. Container not rebuilt locally; CI's `image` job builds it
   without ebooklib.
+
+## 2026-11-17 — Roadmap after unit 9: units 10-12, no paid hosting
+
+- **No paid hosting or model serving (user).** A VPS with room for the models
+  (bge-m3 + gemma4) costs roughly €15-25/month, and the small tiers can't hold them; the
+  models already run free on the user's own hardware. So the app stays local.
+- **Unit 10, the move:** compose becomes the daily app, published on `127.0.0.1` only,
+  which settles issue #8 for this setup without a login (phone access dropped by the user;
+  Tailscale's free plan can restore it later, still with no login). The unit 4 cutover
+  happens on this PC so the later move is a tested dump/restore. Nightly `pg_dump`, 14
+  kept. LICENSE. CSV export dropped from the plan: local Anki keeps syncing.
+- **Unit 11, Pages demo** instead of a public live app: a public app would need a login,
+  HTTPS and the audit's hardening list; a static demo needs none. Samples: two
+  Claude-written texts designed to show the features (proofread by the user) and one
+  credited Korean Wikipedia excerpt (CC BY-SA). Similar usage and Explain are seeded with
+  real local-model output for a few words, labeled as not live (user's condition).
+  Codespaces skipped: Pages covers visitors.
+- **Unit 12, Terraform with the Docker provider:** infrastructure-as-code practice with no
+  cloud, in its own environment so it never manages the daily compose stack; CI runs an
+  apply/health/destroy cycle per PR. Roadmap ends here.
+- **Oracle Always Free, deferred.** Checked 2026-11-17: 2 ARM OCPUs / 12 GB (halved in
+  mid-2026), idle reclaim after 7 days under 20% CPU, network and memory. MbxRead's
+  native wheels (kiwipiepy, PyMuPDF, psycopg) and pinned images have arm64 builds; TEI
+  needs its separate `cpu-arm64` tag; CI would need a multi-arch build. If it comes back,
+  private only (Tailscale, no public ports).
