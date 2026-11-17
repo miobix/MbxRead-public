@@ -1,0 +1,3774 @@
+{
+ "generated": "2026-11-17",
+ "credits": {
+  "3": "Excerpt (introduction and 근·현대 section) of \"김치\", Korean Wikipedia, revision 42547847 (2026-09-24), CC BY-SA 4.0."
+ },
+ "seeded_usage_lemmas": [
+  "풀리다",
+  "다리",
+  "눈"
+ ],
+ "books": [
+  {
+   "id": 1,
+   "title": "봄이 오는 산",
+   "source": "paste",
+   "current_offset": 0,
+   "created": "2026-11-17T08:01:36.858316+00:00",
+   "coverage": 0.6709,
+   "new_per_page": 26.0,
+   "scored_at": "2026-11-17T08:01:36.864220+00:00",
+   "topic": "travel",
+   "tags": [],
+   "source_url": "",
+   "source_ref": null,
+   "fetched": null,
+   "archived": false,
+   "read": false,
+   "status": "library",
+   "general_coverage": 0.8032,
+   "general_level": "easy",
+   "word_count": 97,
+   "duration_seconds": null,
+   "feed_id": null,
+   "discard_reason": null,
+   "last_opened": null,
+   "indexed_at": "2026-11-17T08:01:38.067026+00:00",
+   "page_count": 1,
+   "total_chars": 387
+  },
+  {
+   "id": 2,
+   "title": "동네 빵집",
+   "source": "paste",
+   "current_offset": 0,
+   "created": "2026-11-17T08:01:38.504464+00:00",
+   "coverage": 0.6786,
+   "new_per_page": 27.0,
+   "scored_at": "2026-11-17T08:01:38.508710+00:00",
+   "topic": "food",
+   "tags": [],
+   "source_url": "",
+   "source_ref": null,
+   "fetched": null,
+   "archived": false,
+   "read": false,
+   "status": "library",
+   "general_coverage": 0.7988,
+   "general_level": "easy",
+   "word_count": 112,
+   "duration_seconds": null,
+   "feed_id": null,
+   "discard_reason": null,
+   "last_opened": null,
+   "indexed_at": "2026-11-17T08:01:38.533156+00:00",
+   "page_count": 1,
+   "total_chars": 422
+  },
+  {
+   "id": 3,
+   "title": "김치",
+   "source": "article",
+   "current_offset": 0,
+   "created": "2026-11-17T08:01:39.157115+00:00",
+   "coverage": 0.3,
+   "new_per_page": 70.0,
+   "scored_at": "2026-11-17T08:01:39.163415+00:00",
+   "topic": "culture",
+   "tags": [],
+   "source_url": "https://ko.wikipedia.org/w/index.php?title=%EA%B9%80%EC%B9%98&oldid=42547847",
+   "source_ref": null,
+   "fetched": null,
+   "archived": false,
+   "read": false,
+   "status": "library",
+   "general_coverage": 0.49,
+   "general_level": "medium",
+   "word_count": 141,
+   "duration_seconds": null,
+   "feed_id": null,
+   "discard_reason": null,
+   "last_opened": null,
+   "indexed_at": "2026-11-17T08:01:39.192731+00:00",
+   "page_count": 1,
+   "total_chars": 595
+  }
+ ],
+ "details": {
+  "1": {
+   "id": 1,
+   "title": "봄이 오는 산",
+   "current_offset": 0,
+   "total_chars": 387,
+   "page_count": 1
+  },
+  "2": {
+   "id": 2,
+   "title": "동네 빵집",
+   "current_offset": 0,
+   "total_chars": 422,
+   "page_count": 1
+  },
+  "3": {
+   "id": 3,
+   "title": "김치",
+   "current_offset": 0,
+   "total_chars": 595,
+   "page_count": 1
+  }
+ },
+ "texts": {
+  "1": {
+   "offset": 0,
+   "total_chars": 387,
+   "content": "지난 주말에 친구와 함께 북한산에 갔어요. 3월 초인데도 날씨가 많이 풀려서 걷기에 딱 좋았어요. 산 아래에서는 사람들이 김밥을 사고 있었고, 우리도 두 줄을 샀어요.\n\n처음에는 길이 넓고 편했지만, 위로 갈수록 점점 가팔라졌어요. 그늘진 곳에는 아직 눈이 조금 남아 있어서 미끄러웠어요. 친구는 다리가 아프다고 몇 번이나 쉬자고 했어요. 저도 숨이 찼지만 정상까지 꼭 가고 싶었어요.\n\n한 시간 정도 더 걸어가니 드디어 정상이 보였어요. 위에서 내려다본 서울은 생각보다 훨씬 넓었어요. 바람은 차가웠지만 땀을 흘리고 나니 스트레스가 다 풀리는 것 같았어요.\n\n내려오는 길에 작은 다리를 건너서 계곡 옆 식당에 들어갔어요. 따뜻한 국수를 먹으면서 다음 달에는 다른 산에 가 보자고 약속했어요.",
+   "tokens": [
+    {
+     "s": 0,
+     "e": 2,
+     "surface": "지난",
+     "lemma": "지나다",
+     "pos": "VV"
+    },
+    {
+     "s": 3,
+     "e": 6,
+     "surface": "주말에",
+     "lemma": "주말",
+     "pos": "NNG"
+    },
+    {
+     "s": 7,
+     "e": 10,
+     "surface": "친구와",
+     "lemma": "친구",
+     "pos": "NNG"
+    },
+    {
+     "s": 11,
+     "e": 13,
+     "surface": "함께",
+     "lemma": "함께",
+     "pos": "MAG"
+    },
+    {
+     "s": 14,
+     "e": 18,
+     "surface": "북한산에",
+     "lemma": "북한산",
+     "pos": "NNP"
+    },
+    {
+     "s": 19,
+     "e": 22,
+     "surface": "갔어요",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 27,
+     "e": 31,
+     "surface": "초인데도",
+     "lemma": "초",
+     "pos": "NNB"
+    },
+    {
+     "s": 32,
+     "e": 35,
+     "surface": "날씨가",
+     "lemma": "날씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 36,
+     "e": 38,
+     "surface": "많이",
+     "lemma": "많이",
+     "pos": "MAG"
+    },
+    {
+     "s": 39,
+     "e": 42,
+     "surface": "풀려서",
+     "lemma": "풀리다",
+     "pos": "VV"
+    },
+    {
+     "s": 43,
+     "e": 46,
+     "surface": "걷기에",
+     "lemma": "걷다",
+     "pos": "VV-I"
+    },
+    {
+     "s": 47,
+     "e": 48,
+     "surface": "딱",
+     "lemma": "딱",
+     "pos": "MAG"
+    },
+    {
+     "s": 49,
+     "e": 53,
+     "surface": "좋았어요",
+     "lemma": "좋다",
+     "pos": "VA"
+    },
+    {
+     "s": 55,
+     "e": 56,
+     "surface": "산",
+     "lemma": "산",
+     "pos": "NNG"
+    },
+    {
+     "s": 57,
+     "e": 62,
+     "surface": "아래에서는",
+     "lemma": "아래",
+     "pos": "NNG"
+    },
+    {
+     "s": 63,
+     "e": 67,
+     "surface": "사람들이",
+     "lemma": "사람",
+     "pos": "NNG"
+    },
+    {
+     "s": 68,
+     "e": 71,
+     "surface": "김밥을",
+     "lemma": "김밥",
+     "pos": "NNG"
+    },
+    {
+     "s": 72,
+     "e": 74,
+     "surface": "사고",
+     "lemma": "사다",
+     "pos": "VV"
+    },
+    {
+     "s": 75,
+     "e": 78,
+     "surface": "있었고",
+     "lemma": "있다",
+     "pos": "VX"
+    },
+    {
+     "s": 80,
+     "e": 83,
+     "surface": "우리도",
+     "lemma": "우리",
+     "pos": "NP"
+    },
+    {
+     "s": 86,
+     "e": 88,
+     "surface": "줄을",
+     "lemma": "줄",
+     "pos": "NNG"
+    },
+    {
+     "s": 89,
+     "e": 92,
+     "surface": "샀어요",
+     "lemma": "사다",
+     "pos": "VV"
+    },
+    {
+     "s": 95,
+     "e": 99,
+     "surface": "처음에는",
+     "lemma": "처음",
+     "pos": "NNG"
+    },
+    {
+     "s": 100,
+     "e": 102,
+     "surface": "길이",
+     "lemma": "길",
+     "pos": "NNG"
+    },
+    {
+     "s": 103,
+     "e": 105,
+     "surface": "넓고",
+     "lemma": "넓다",
+     "pos": "VA"
+    },
+    {
+     "s": 106,
+     "e": 110,
+     "surface": "편했지만",
+     "lemma": "편하다",
+     "pos": "VA"
+    },
+    {
+     "s": 112,
+     "e": 114,
+     "surface": "위로",
+     "lemma": "위",
+     "pos": "NNG"
+    },
+    {
+     "s": 115,
+     "e": 118,
+     "surface": "갈수록",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 119,
+     "e": 121,
+     "surface": "점점",
+     "lemma": "점점",
+     "pos": "MAG"
+    },
+    {
+     "s": 122,
+     "e": 128,
+     "surface": "가팔라졌어요",
+     "lemma": "가파르다",
+     "pos": "VA"
+    },
+    {
+     "s": 130,
+     "e": 133,
+     "surface": "그늘진",
+     "lemma": "그늘지다",
+     "pos": "VV"
+    },
+    {
+     "s": 134,
+     "e": 137,
+     "surface": "곳에는",
+     "lemma": "곳",
+     "pos": "NNG"
+    },
+    {
+     "s": 138,
+     "e": 140,
+     "surface": "아직",
+     "lemma": "아직",
+     "pos": "MAG"
+    },
+    {
+     "s": 141,
+     "e": 143,
+     "surface": "눈이",
+     "lemma": "눈",
+     "pos": "NNG"
+    },
+    {
+     "s": 144,
+     "e": 146,
+     "surface": "조금",
+     "lemma": "조금",
+     "pos": "MAG"
+    },
+    {
+     "s": 147,
+     "e": 149,
+     "surface": "남아",
+     "lemma": "남다",
+     "pos": "VV"
+    },
+    {
+     "s": 150,
+     "e": 153,
+     "surface": "있어서",
+     "lemma": "있다",
+     "pos": "VX"
+    },
+    {
+     "s": 154,
+     "e": 160,
+     "surface": "미끄러웠어요",
+     "lemma": "미끄럽다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 162,
+     "e": 165,
+     "surface": "친구는",
+     "lemma": "친구",
+     "pos": "NNG"
+    },
+    {
+     "s": 166,
+     "e": 169,
+     "surface": "다리가",
+     "lemma": "다리",
+     "pos": "NNG"
+    },
+    {
+     "s": 170,
+     "e": 174,
+     "surface": "아프다고",
+     "lemma": "아프다",
+     "pos": "VA"
+    },
+    {
+     "s": 177,
+     "e": 180,
+     "surface": "번이나",
+     "lemma": "번",
+     "pos": "NNB"
+    },
+    {
+     "s": 181,
+     "e": 184,
+     "surface": "쉬자고",
+     "lemma": "쉬다",
+     "pos": "VV"
+    },
+    {
+     "s": 185,
+     "e": 188,
+     "surface": "했어요",
+     "lemma": "하다",
+     "pos": "VV"
+    },
+    {
+     "s": 190,
+     "e": 192,
+     "surface": "저도",
+     "lemma": "저",
+     "pos": "NP"
+    },
+    {
+     "s": 193,
+     "e": 195,
+     "surface": "숨이",
+     "lemma": "숨",
+     "pos": "NNG"
+    },
+    {
+     "s": 196,
+     "e": 199,
+     "surface": "찼지만",
+     "lemma": "차다",
+     "pos": "VV"
+    },
+    {
+     "s": 200,
+     "e": 204,
+     "surface": "정상까지",
+     "lemma": "정상",
+     "pos": "NNG"
+    },
+    {
+     "s": 205,
+     "e": 206,
+     "surface": "꼭",
+     "lemma": "꼭",
+     "pos": "MAG"
+    },
+    {
+     "s": 207,
+     "e": 209,
+     "surface": "가고",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 210,
+     "e": 214,
+     "surface": "싶었어요",
+     "lemma": "싶다",
+     "pos": "VX"
+    },
+    {
+     "s": 219,
+     "e": 221,
+     "surface": "시간",
+     "lemma": "시간",
+     "pos": "NNG"
+    },
+    {
+     "s": 222,
+     "e": 224,
+     "surface": "정도",
+     "lemma": "정도",
+     "pos": "NNG"
+    },
+    {
+     "s": 225,
+     "e": 226,
+     "surface": "더",
+     "lemma": "더",
+     "pos": "MAG"
+    },
+    {
+     "s": 227,
+     "e": 231,
+     "surface": "걸어가니",
+     "lemma": "걸어가다",
+     "pos": "VV"
+    },
+    {
+     "s": 232,
+     "e": 235,
+     "surface": "드디어",
+     "lemma": "드디어",
+     "pos": "MAG"
+    },
+    {
+     "s": 236,
+     "e": 239,
+     "surface": "정상이",
+     "lemma": "정상",
+     "pos": "NNG"
+    },
+    {
+     "s": 240,
+     "e": 244,
+     "surface": "보였어요",
+     "lemma": "보이다",
+     "pos": "VV"
+    },
+    {
+     "s": 246,
+     "e": 249,
+     "surface": "위에서",
+     "lemma": "위",
+     "pos": "NNG"
+    },
+    {
+     "s": 250,
+     "e": 254,
+     "surface": "내려다본",
+     "lemma": "내려다보다",
+     "pos": "VV"
+    },
+    {
+     "s": 255,
+     "e": 258,
+     "surface": "서울은",
+     "lemma": "서울",
+     "pos": "NNP"
+    },
+    {
+     "s": 259,
+     "e": 263,
+     "surface": "생각보다",
+     "lemma": "생각",
+     "pos": "NNG"
+    },
+    {
+     "s": 264,
+     "e": 266,
+     "surface": "훨씬",
+     "lemma": "훨씬",
+     "pos": "MAG"
+    },
+    {
+     "s": 267,
+     "e": 271,
+     "surface": "넓었어요",
+     "lemma": "넓다",
+     "pos": "VA"
+    },
+    {
+     "s": 273,
+     "e": 276,
+     "surface": "바람은",
+     "lemma": "바람",
+     "pos": "NNG"
+    },
+    {
+     "s": 277,
+     "e": 282,
+     "surface": "차가웠지만",
+     "lemma": "차갑다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 283,
+     "e": 285,
+     "surface": "땀을",
+     "lemma": "땀",
+     "pos": "NNG"
+    },
+    {
+     "s": 286,
+     "e": 289,
+     "surface": "흘리고",
+     "lemma": "흘리다",
+     "pos": "VV"
+    },
+    {
+     "s": 290,
+     "e": 292,
+     "surface": "나니",
+     "lemma": "나다",
+     "pos": "VX"
+    },
+    {
+     "s": 293,
+     "e": 298,
+     "surface": "스트레스가",
+     "lemma": "스트레스",
+     "pos": "NNG"
+    },
+    {
+     "s": 299,
+     "e": 300,
+     "surface": "다",
+     "lemma": "다",
+     "pos": "MAG"
+    },
+    {
+     "s": 301,
+     "e": 304,
+     "surface": "풀리는",
+     "lemma": "풀리다",
+     "pos": "VV"
+    },
+    {
+     "s": 305,
+     "e": 306,
+     "surface": "것",
+     "lemma": "것",
+     "pos": "NNB"
+    },
+    {
+     "s": 307,
+     "e": 311,
+     "surface": "같았어요",
+     "lemma": "같다",
+     "pos": "VA"
+    },
+    {
+     "s": 314,
+     "e": 318,
+     "surface": "내려오는",
+     "lemma": "내려오다",
+     "pos": "VV"
+    },
+    {
+     "s": 319,
+     "e": 321,
+     "surface": "길에",
+     "lemma": "길",
+     "pos": "NNG"
+    },
+    {
+     "s": 322,
+     "e": 324,
+     "surface": "작은",
+     "lemma": "작다",
+     "pos": "VA"
+    },
+    {
+     "s": 325,
+     "e": 328,
+     "surface": "다리를",
+     "lemma": "다리",
+     "pos": "NNG"
+    },
+    {
+     "s": 329,
+     "e": 332,
+     "surface": "건너서",
+     "lemma": "건너다",
+     "pos": "VV"
+    },
+    {
+     "s": 333,
+     "e": 335,
+     "surface": "계곡",
+     "lemma": "계곡",
+     "pos": "NNG"
+    },
+    {
+     "s": 336,
+     "e": 337,
+     "surface": "옆",
+     "lemma": "옆",
+     "pos": "NNG"
+    },
+    {
+     "s": 338,
+     "e": 341,
+     "surface": "식당에",
+     "lemma": "식당",
+     "pos": "NNG"
+    },
+    {
+     "s": 342,
+     "e": 347,
+     "surface": "들어갔어요",
+     "lemma": "들어가다",
+     "pos": "VV"
+    },
+    {
+     "s": 349,
+     "e": 352,
+     "surface": "따뜻한",
+     "lemma": "따뜻하다",
+     "pos": "VA"
+    },
+    {
+     "s": 353,
+     "e": 356,
+     "surface": "국수를",
+     "lemma": "국수",
+     "pos": "NNG"
+    },
+    {
+     "s": 357,
+     "e": 361,
+     "surface": "먹으면서",
+     "lemma": "먹다",
+     "pos": "VV"
+    },
+    {
+     "s": 362,
+     "e": 364,
+     "surface": "다음",
+     "lemma": "다음",
+     "pos": "NNG"
+    },
+    {
+     "s": 365,
+     "e": 368,
+     "surface": "달에는",
+     "lemma": "달",
+     "pos": "NNG"
+    },
+    {
+     "s": 372,
+     "e": 374,
+     "surface": "산에",
+     "lemma": "산",
+     "pos": "NNG"
+    },
+    {
+     "s": 375,
+     "e": 376,
+     "surface": "가",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 377,
+     "e": 380,
+     "surface": "보자고",
+     "lemma": "보다",
+     "pos": "VX"
+    },
+    {
+     "s": 381,
+     "e": 386,
+     "surface": "약속했어요",
+     "lemma": "약속하다",
+     "pos": "VV"
+    }
+   ]
+  },
+  "2": {
+   "offset": 0,
+   "total_chars": 422,
+   "content": "우리 동네에는 작은 빵집이 하나 있다. 주인 아저씨는 매일 새벽 네 시에 일어나서 졸린 눈을 비비며 빵을 굽는다. 처음 가게를 열었을 때는 손님이 거의 없었다고 한다. 그래도 아저씨는 포기하지 않고 날마다 새로운 빵을 만들어 보았다.\n\n어느 날 동네 아이들이 아저씨가 구운 식빵을 먹고 맛있다고 소문을 냈다. 그 뒤로 가게 앞에는 아침마다 긴 줄이 생겼다. 요즘은 빵이 오전에 다 팔려서 늦게 가면 아무것도 살 수 없다.\n\n나도 주말이면 일찍 일어나 그 빵집에 간다. 갓 구운 빵 냄새를 맡으면 기분이 금방 좋아진다. 얼마 전에는 아저씨에게 맛있는 빵의 비결을 물어보았다.\n\n아저씨는 웃으면서 좋은 재료와 충분한 시간이면 된다고 대답했다. 그리고 어려운 문제가 생겨도 서두르지 말고 차근차근 풀면 된다는 말도 덧붙였다. 나는 그 말을 오래 기억하고 싶다.",
+   "tokens": [
+    {
+     "s": 0,
+     "e": 2,
+     "surface": "우리",
+     "lemma": "우리",
+     "pos": "NP"
+    },
+    {
+     "s": 3,
+     "e": 7,
+     "surface": "동네에는",
+     "lemma": "동네",
+     "pos": "NNG"
+    },
+    {
+     "s": 8,
+     "e": 10,
+     "surface": "작은",
+     "lemma": "작다",
+     "pos": "VA"
+    },
+    {
+     "s": 11,
+     "e": 14,
+     "surface": "빵집이",
+     "lemma": "빵집",
+     "pos": "NNG"
+    },
+    {
+     "s": 15,
+     "e": 17,
+     "surface": "하나",
+     "lemma": "하나",
+     "pos": "NR"
+    },
+    {
+     "s": 18,
+     "e": 20,
+     "surface": "있다",
+     "lemma": "있다",
+     "pos": "VV"
+    },
+    {
+     "s": 22,
+     "e": 24,
+     "surface": "주인",
+     "lemma": "주인",
+     "pos": "NNG"
+    },
+    {
+     "s": 25,
+     "e": 29,
+     "surface": "아저씨는",
+     "lemma": "아저씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 30,
+     "e": 32,
+     "surface": "매일",
+     "lemma": "매일",
+     "pos": "MAG"
+    },
+    {
+     "s": 33,
+     "e": 35,
+     "surface": "새벽",
+     "lemma": "새벽",
+     "pos": "NNG"
+    },
+    {
+     "s": 38,
+     "e": 40,
+     "surface": "시에",
+     "lemma": "시",
+     "pos": "NNB"
+    },
+    {
+     "s": 41,
+     "e": 45,
+     "surface": "일어나서",
+     "lemma": "일어나다",
+     "pos": "VV"
+    },
+    {
+     "s": 46,
+     "e": 48,
+     "surface": "졸린",
+     "lemma": "졸리다",
+     "pos": "VV"
+    },
+    {
+     "s": 49,
+     "e": 51,
+     "surface": "눈을",
+     "lemma": "눈",
+     "pos": "NNG"
+    },
+    {
+     "s": 52,
+     "e": 55,
+     "surface": "비비며",
+     "lemma": "비비다",
+     "pos": "VV"
+    },
+    {
+     "s": 56,
+     "e": 58,
+     "surface": "빵을",
+     "lemma": "빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 59,
+     "e": 62,
+     "surface": "굽는다",
+     "lemma": "굽다",
+     "pos": "VV-I"
+    },
+    {
+     "s": 64,
+     "e": 66,
+     "surface": "처음",
+     "lemma": "처음",
+     "pos": "NNG"
+    },
+    {
+     "s": 67,
+     "e": 70,
+     "surface": "가게를",
+     "lemma": "가게",
+     "pos": "NNG"
+    },
+    {
+     "s": 71,
+     "e": 74,
+     "surface": "열었을",
+     "lemma": "열다",
+     "pos": "VV"
+    },
+    {
+     "s": 75,
+     "e": 77,
+     "surface": "때는",
+     "lemma": "때",
+     "pos": "NNG"
+    },
+    {
+     "s": 78,
+     "e": 81,
+     "surface": "손님이",
+     "lemma": "손님",
+     "pos": "NNG"
+    },
+    {
+     "s": 82,
+     "e": 84,
+     "surface": "거의",
+     "lemma": "거의",
+     "pos": "MAG"
+    },
+    {
+     "s": 85,
+     "e": 89,
+     "surface": "없었다고",
+     "lemma": "없다",
+     "pos": "VA"
+    },
+    {
+     "s": 90,
+     "e": 92,
+     "surface": "한다",
+     "lemma": "하다",
+     "pos": "VV"
+    },
+    {
+     "s": 94,
+     "e": 97,
+     "surface": "그래도",
+     "lemma": "그래도",
+     "pos": "MAJ"
+    },
+    {
+     "s": 98,
+     "e": 102,
+     "surface": "아저씨는",
+     "lemma": "아저씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 103,
+     "e": 107,
+     "surface": "포기하지",
+     "lemma": "포기하다",
+     "pos": "VV"
+    },
+    {
+     "s": 108,
+     "e": 110,
+     "surface": "않고",
+     "lemma": "않다",
+     "pos": "VX"
+    },
+    {
+     "s": 111,
+     "e": 114,
+     "surface": "날마다",
+     "lemma": "날",
+     "pos": "NNG"
+    },
+    {
+     "s": 115,
+     "e": 118,
+     "surface": "새로운",
+     "lemma": "새롭다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 119,
+     "e": 121,
+     "surface": "빵을",
+     "lemma": "빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 122,
+     "e": 125,
+     "surface": "만들어",
+     "lemma": "만들다",
+     "pos": "VV"
+    },
+    {
+     "s": 126,
+     "e": 129,
+     "surface": "보았다",
+     "lemma": "보다",
+     "pos": "VX"
+    },
+    {
+     "s": 135,
+     "e": 136,
+     "surface": "날",
+     "lemma": "날",
+     "pos": "NNG"
+    },
+    {
+     "s": 137,
+     "e": 139,
+     "surface": "동네",
+     "lemma": "동네",
+     "pos": "NNG"
+    },
+    {
+     "s": 140,
+     "e": 144,
+     "surface": "아이들이",
+     "lemma": "아이",
+     "pos": "NNG"
+    },
+    {
+     "s": 145,
+     "e": 149,
+     "surface": "아저씨가",
+     "lemma": "아저씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 150,
+     "e": 152,
+     "surface": "구운",
+     "lemma": "굽다",
+     "pos": "VV-I"
+    },
+    {
+     "s": 153,
+     "e": 156,
+     "surface": "식빵을",
+     "lemma": "식빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 157,
+     "e": 159,
+     "surface": "먹고",
+     "lemma": "먹다",
+     "pos": "VV"
+    },
+    {
+     "s": 160,
+     "e": 164,
+     "surface": "맛있다고",
+     "lemma": "맛있다",
+     "pos": "VA"
+    },
+    {
+     "s": 165,
+     "e": 168,
+     "surface": "소문을",
+     "lemma": "소문",
+     "pos": "NNG"
+    },
+    {
+     "s": 169,
+     "e": 171,
+     "surface": "냈다",
+     "lemma": "내다",
+     "pos": "VV"
+    },
+    {
+     "s": 175,
+     "e": 177,
+     "surface": "뒤로",
+     "lemma": "뒤",
+     "pos": "NNG"
+    },
+    {
+     "s": 178,
+     "e": 180,
+     "surface": "가게",
+     "lemma": "가게",
+     "pos": "NNG"
+    },
+    {
+     "s": 181,
+     "e": 184,
+     "surface": "앞에는",
+     "lemma": "앞",
+     "pos": "NNG"
+    },
+    {
+     "s": 185,
+     "e": 189,
+     "surface": "아침마다",
+     "lemma": "아침",
+     "pos": "NNG"
+    },
+    {
+     "s": 190,
+     "e": 191,
+     "surface": "긴",
+     "lemma": "길다",
+     "pos": "VA"
+    },
+    {
+     "s": 192,
+     "e": 194,
+     "surface": "줄이",
+     "lemma": "줄",
+     "pos": "NNG"
+    },
+    {
+     "s": 195,
+     "e": 198,
+     "surface": "생겼다",
+     "lemma": "생기다",
+     "pos": "VV"
+    },
+    {
+     "s": 200,
+     "e": 203,
+     "surface": "요즘은",
+     "lemma": "요즘",
+     "pos": "NNG"
+    },
+    {
+     "s": 204,
+     "e": 206,
+     "surface": "빵이",
+     "lemma": "빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 207,
+     "e": 210,
+     "surface": "오전에",
+     "lemma": "오전",
+     "pos": "NNG"
+    },
+    {
+     "s": 211,
+     "e": 212,
+     "surface": "다",
+     "lemma": "다",
+     "pos": "MAG"
+    },
+    {
+     "s": 213,
+     "e": 216,
+     "surface": "팔려서",
+     "lemma": "팔리다",
+     "pos": "VV"
+    },
+    {
+     "s": 217,
+     "e": 219,
+     "surface": "늦게",
+     "lemma": "늦다",
+     "pos": "VA"
+    },
+    {
+     "s": 220,
+     "e": 222,
+     "surface": "가면",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 223,
+     "e": 227,
+     "surface": "아무것도",
+     "lemma": "아무것",
+     "pos": "NNG"
+    },
+    {
+     "s": 228,
+     "e": 229,
+     "surface": "살",
+     "lemma": "사다",
+     "pos": "VV"
+    },
+    {
+     "s": 230,
+     "e": 231,
+     "surface": "수",
+     "lemma": "수",
+     "pos": "NNB"
+    },
+    {
+     "s": 232,
+     "e": 234,
+     "surface": "없다",
+     "lemma": "없다",
+     "pos": "VA"
+    },
+    {
+     "s": 237,
+     "e": 239,
+     "surface": "나도",
+     "lemma": "나",
+     "pos": "NP"
+    },
+    {
+     "s": 240,
+     "e": 244,
+     "surface": "주말이면",
+     "lemma": "주말",
+     "pos": "NNG"
+    },
+    {
+     "s": 245,
+     "e": 247,
+     "surface": "일찍",
+     "lemma": "일찍",
+     "pos": "MAG"
+    },
+    {
+     "s": 248,
+     "e": 251,
+     "surface": "일어나",
+     "lemma": "일어나다",
+     "pos": "VV"
+    },
+    {
+     "s": 254,
+     "e": 257,
+     "surface": "빵집에",
+     "lemma": "빵집",
+     "pos": "NNG"
+    },
+    {
+     "s": 258,
+     "e": 260,
+     "surface": "간다",
+     "lemma": "가다",
+     "pos": "VV"
+    },
+    {
+     "s": 262,
+     "e": 263,
+     "surface": "갓",
+     "lemma": "갓",
+     "pos": "MAG"
+    },
+    {
+     "s": 264,
+     "e": 266,
+     "surface": "구운",
+     "lemma": "굽다",
+     "pos": "VV-I"
+    },
+    {
+     "s": 267,
+     "e": 268,
+     "surface": "빵",
+     "lemma": "빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 269,
+     "e": 272,
+     "surface": "냄새를",
+     "lemma": "냄새",
+     "pos": "NNG"
+    },
+    {
+     "s": 273,
+     "e": 276,
+     "surface": "맡으면",
+     "lemma": "맡다",
+     "pos": "VV"
+    },
+    {
+     "s": 277,
+     "e": 280,
+     "surface": "기분이",
+     "lemma": "기분",
+     "pos": "NNG"
+    },
+    {
+     "s": 281,
+     "e": 283,
+     "surface": "금방",
+     "lemma": "금방",
+     "pos": "MAG"
+    },
+    {
+     "s": 284,
+     "e": 288,
+     "surface": "좋아진다",
+     "lemma": "좋다",
+     "pos": "VA"
+    },
+    {
+     "s": 290,
+     "e": 292,
+     "surface": "얼마",
+     "lemma": "얼마",
+     "pos": "NNG"
+    },
+    {
+     "s": 293,
+     "e": 296,
+     "surface": "전에는",
+     "lemma": "전",
+     "pos": "NNG"
+    },
+    {
+     "s": 297,
+     "e": 302,
+     "surface": "아저씨에게",
+     "lemma": "아저씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 303,
+     "e": 306,
+     "surface": "맛있는",
+     "lemma": "맛있다",
+     "pos": "VA"
+    },
+    {
+     "s": 307,
+     "e": 309,
+     "surface": "빵의",
+     "lemma": "빵",
+     "pos": "NNG"
+    },
+    {
+     "s": 310,
+     "e": 313,
+     "surface": "비결을",
+     "lemma": "비결",
+     "pos": "NNG"
+    },
+    {
+     "s": 314,
+     "e": 319,
+     "surface": "물어보았다",
+     "lemma": "묻다",
+     "pos": "VV-I"
+    },
+    {
+     "s": 322,
+     "e": 326,
+     "surface": "아저씨는",
+     "lemma": "아저씨",
+     "pos": "NNG"
+    },
+    {
+     "s": 327,
+     "e": 331,
+     "surface": "웃으면서",
+     "lemma": "웃다",
+     "pos": "VV-R"
+    },
+    {
+     "s": 332,
+     "e": 334,
+     "surface": "좋은",
+     "lemma": "좋다",
+     "pos": "VA"
+    },
+    {
+     "s": 335,
+     "e": 338,
+     "surface": "재료와",
+     "lemma": "재료",
+     "pos": "NNG"
+    },
+    {
+     "s": 339,
+     "e": 342,
+     "surface": "충분한",
+     "lemma": "충분하다",
+     "pos": "VA"
+    },
+    {
+     "s": 343,
+     "e": 347,
+     "surface": "시간이면",
+     "lemma": "시간",
+     "pos": "NNG"
+    },
+    {
+     "s": 348,
+     "e": 351,
+     "surface": "된다고",
+     "lemma": "되다",
+     "pos": "VV"
+    },
+    {
+     "s": 352,
+     "e": 356,
+     "surface": "대답했다",
+     "lemma": "대답하다",
+     "pos": "VV"
+    },
+    {
+     "s": 358,
+     "e": 361,
+     "surface": "그리고",
+     "lemma": "그리고",
+     "pos": "MAJ"
+    },
+    {
+     "s": 362,
+     "e": 365,
+     "surface": "어려운",
+     "lemma": "어렵다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 366,
+     "e": 369,
+     "surface": "문제가",
+     "lemma": "문제",
+     "pos": "NNG"
+    },
+    {
+     "s": 370,
+     "e": 373,
+     "surface": "생겨도",
+     "lemma": "생기다",
+     "pos": "VV"
+    },
+    {
+     "s": 374,
+     "e": 378,
+     "surface": "서두르지",
+     "lemma": "서두르다",
+     "pos": "VV"
+    },
+    {
+     "s": 379,
+     "e": 381,
+     "surface": "말고",
+     "lemma": "말다",
+     "pos": "VX"
+    },
+    {
+     "s": 382,
+     "e": 386,
+     "surface": "차근차근",
+     "lemma": "차근차근",
+     "pos": "MAG"
+    },
+    {
+     "s": 387,
+     "e": 389,
+     "surface": "풀면",
+     "lemma": "풀다",
+     "pos": "VV"
+    },
+    {
+     "s": 390,
+     "e": 393,
+     "surface": "된다는",
+     "lemma": "되다",
+     "pos": "VV"
+    },
+    {
+     "s": 394,
+     "e": 396,
+     "surface": "말도",
+     "lemma": "말",
+     "pos": "NNG"
+    },
+    {
+     "s": 397,
+     "e": 401,
+     "surface": "덧붙였다",
+     "lemma": "덧붙이다",
+     "pos": "VV"
+    },
+    {
+     "s": 403,
+     "e": 405,
+     "surface": "나는",
+     "lemma": "나",
+     "pos": "NP"
+    },
+    {
+     "s": 408,
+     "e": 410,
+     "surface": "말을",
+     "lemma": "말",
+     "pos": "NNG"
+    },
+    {
+     "s": 411,
+     "e": 413,
+     "surface": "오래",
+     "lemma": "오래",
+     "pos": "MAG"
+    },
+    {
+     "s": 414,
+     "e": 418,
+     "surface": "기억하고",
+     "lemma": "기억하다",
+     "pos": "VV"
+    },
+    {
+     "s": 419,
+     "e": 421,
+     "surface": "싶다",
+     "lemma": "싶다",
+     "pos": "VX"
+    }
+   ]
+  },
+  "3": {
+   "offset": 0,
+   "total_chars": 595,
+   "content": "김치는 한국의 전통 발효식품이다. 소금에 절인 배추나, 무 등을 고춧가루, 파, 마늘 등의 양념에 버무린 뒤 발효시켜 만든다. 한국의 국민 음식 가운데 하나로 여겨진다. 한국식 식사에서 빠지지 않는 부식이며, 지방에 따라 재료와 조리 방법가에 따라 많은 종류가 있다. 다양한 한국 요리에 식재료로 사용되기도 한다. 김치는 올림픽, 아시안 게임, FIFA 월드컵 공식 지정 식품이기도 하다.\n\n겨울내 먹기 위하여 김치를 한꺼번에 많이 담그는 것은 김장이라 하며, 그렇게 담근 김장 김치는 겨울에 얼지 않고 더운 여름에는 시원하게 유지하기 위해 옹기라 불리는 큰 토기 발효 용기에 땅속에 보관했다. 또한 야외에 장독대라고 불리는 용기에 보관된다. 현대에는 가정용 김치냉장고가 더 많이 사용된다.\n\n과거에는 무가 배추에 앞서는 김치 재료였으나, 속이 꽉 찬 결구배추가 육종되고 널리 보급된 20세기부터 배추김치가 무김치를 압도하게 되었다.\n\n1988년 서울 올림픽 이후 김치가 세계에 널리 알려졌으며, 2001년 7월 5일에는 국제 식품 규격(Codex)에 김치가 등록되었다. 2008년 유산균을 보존한 김치가 국제우주정거장에서 먹을 수 있는 우주 식품으로 인증받았다.",
+   "tokens": [
+    {
+     "s": 0,
+     "e": 3,
+     "surface": "김치는",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 4,
+     "e": 7,
+     "surface": "한국의",
+     "lemma": "한국",
+     "pos": "NNP"
+    },
+    {
+     "s": 8,
+     "e": 10,
+     "surface": "전통",
+     "lemma": "전통",
+     "pos": "NNG"
+    },
+    {
+     "s": 11,
+     "e": 17,
+     "surface": "발효식품이다",
+     "lemma": "발효",
+     "pos": "NNG"
+    },
+    {
+     "s": 19,
+     "e": 22,
+     "surface": "소금에",
+     "lemma": "소금",
+     "pos": "NNG"
+    },
+    {
+     "s": 23,
+     "e": 25,
+     "surface": "절인",
+     "lemma": "절이다",
+     "pos": "VV"
+    },
+    {
+     "s": 26,
+     "e": 29,
+     "surface": "배추나",
+     "lemma": "배추",
+     "pos": "NNG"
+    },
+    {
+     "s": 31,
+     "e": 32,
+     "surface": "무",
+     "lemma": "무",
+     "pos": "NNG"
+    },
+    {
+     "s": 33,
+     "e": 35,
+     "surface": "등을",
+     "lemma": "등",
+     "pos": "NNB"
+    },
+    {
+     "s": 36,
+     "e": 40,
+     "surface": "고춧가루",
+     "lemma": "고춧가루",
+     "pos": "NNG"
+    },
+    {
+     "s": 42,
+     "e": 43,
+     "surface": "파",
+     "lemma": "파",
+     "pos": "NNG"
+    },
+    {
+     "s": 45,
+     "e": 47,
+     "surface": "마늘",
+     "lemma": "마늘",
+     "pos": "NNG"
+    },
+    {
+     "s": 48,
+     "e": 50,
+     "surface": "등의",
+     "lemma": "등",
+     "pos": "NNB"
+    },
+    {
+     "s": 51,
+     "e": 54,
+     "surface": "양념에",
+     "lemma": "양념",
+     "pos": "NNG"
+    },
+    {
+     "s": 55,
+     "e": 58,
+     "surface": "버무린",
+     "lemma": "버무리다",
+     "pos": "VV"
+    },
+    {
+     "s": 59,
+     "e": 60,
+     "surface": "뒤",
+     "lemma": "뒤",
+     "pos": "NNG"
+    },
+    {
+     "s": 61,
+     "e": 65,
+     "surface": "발효시켜",
+     "lemma": "발효하다",
+     "pos": "VV"
+    },
+    {
+     "s": 66,
+     "e": 69,
+     "surface": "만든다",
+     "lemma": "만들다",
+     "pos": "VV"
+    },
+    {
+     "s": 71,
+     "e": 74,
+     "surface": "한국의",
+     "lemma": "한국",
+     "pos": "NNP"
+    },
+    {
+     "s": 75,
+     "e": 77,
+     "surface": "국민",
+     "lemma": "국민",
+     "pos": "NNG"
+    },
+    {
+     "s": 78,
+     "e": 80,
+     "surface": "음식",
+     "lemma": "음식",
+     "pos": "NNG"
+    },
+    {
+     "s": 81,
+     "e": 84,
+     "surface": "가운데",
+     "lemma": "가운데",
+     "pos": "NNG"
+    },
+    {
+     "s": 85,
+     "e": 88,
+     "surface": "하나로",
+     "lemma": "하나",
+     "pos": "NR"
+    },
+    {
+     "s": 89,
+     "e": 93,
+     "surface": "여겨진다",
+     "lemma": "여기다",
+     "pos": "VV"
+    },
+    {
+     "s": 95,
+     "e": 98,
+     "surface": "한국식",
+     "lemma": "한국식",
+     "pos": "NNG"
+    },
+    {
+     "s": 99,
+     "e": 103,
+     "surface": "식사에서",
+     "lemma": "식사",
+     "pos": "NNG"
+    },
+    {
+     "s": 104,
+     "e": 107,
+     "surface": "빠지지",
+     "lemma": "빠지다",
+     "pos": "VV"
+    },
+    {
+     "s": 108,
+     "e": 110,
+     "surface": "않는",
+     "lemma": "않다",
+     "pos": "VX"
+    },
+    {
+     "s": 111,
+     "e": 115,
+     "surface": "부식이며",
+     "lemma": "부식",
+     "pos": "NNG"
+    },
+    {
+     "s": 117,
+     "e": 120,
+     "surface": "지방에",
+     "lemma": "지방",
+     "pos": "NNG"
+    },
+    {
+     "s": 121,
+     "e": 123,
+     "surface": "따라",
+     "lemma": "따르다",
+     "pos": "VV"
+    },
+    {
+     "s": 124,
+     "e": 127,
+     "surface": "재료와",
+     "lemma": "재료",
+     "pos": "NNG"
+    },
+    {
+     "s": 128,
+     "e": 130,
+     "surface": "조리",
+     "lemma": "조리",
+     "pos": "NNG"
+    },
+    {
+     "s": 131,
+     "e": 135,
+     "surface": "방법가에",
+     "lemma": "방법",
+     "pos": "NNG"
+    },
+    {
+     "s": 136,
+     "e": 138,
+     "surface": "따라",
+     "lemma": "따르다",
+     "pos": "VV"
+    },
+    {
+     "s": 139,
+     "e": 141,
+     "surface": "많은",
+     "lemma": "많다",
+     "pos": "VA"
+    },
+    {
+     "s": 142,
+     "e": 145,
+     "surface": "종류가",
+     "lemma": "종류",
+     "pos": "NNG"
+    },
+    {
+     "s": 146,
+     "e": 148,
+     "surface": "있다",
+     "lemma": "있다",
+     "pos": "VV"
+    },
+    {
+     "s": 150,
+     "e": 153,
+     "surface": "다양한",
+     "lemma": "다양하다",
+     "pos": "VA"
+    },
+    {
+     "s": 154,
+     "e": 156,
+     "surface": "한국",
+     "lemma": "한국",
+     "pos": "NNP"
+    },
+    {
+     "s": 157,
+     "e": 160,
+     "surface": "요리에",
+     "lemma": "요리",
+     "pos": "NNG"
+    },
+    {
+     "s": 161,
+     "e": 165,
+     "surface": "식재료로",
+     "lemma": "식재료",
+     "pos": "NNG"
+    },
+    {
+     "s": 166,
+     "e": 171,
+     "surface": "사용되기도",
+     "lemma": "사용하다",
+     "pos": "VV"
+    },
+    {
+     "s": 172,
+     "e": 174,
+     "surface": "한다",
+     "lemma": "하다",
+     "pos": "VX"
+    },
+    {
+     "s": 176,
+     "e": 179,
+     "surface": "김치는",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 180,
+     "e": 183,
+     "surface": "올림픽",
+     "lemma": "올림픽",
+     "pos": "NNG"
+    },
+    {
+     "s": 185,
+     "e": 188,
+     "surface": "아시안",
+     "lemma": "아시안",
+     "pos": "NNP"
+    },
+    {
+     "s": 189,
+     "e": 191,
+     "surface": "게임",
+     "lemma": "게임",
+     "pos": "NNG"
+    },
+    {
+     "s": 198,
+     "e": 201,
+     "surface": "월드컵",
+     "lemma": "월드컵",
+     "pos": "NNG"
+    },
+    {
+     "s": 202,
+     "e": 204,
+     "surface": "공식",
+     "lemma": "공식",
+     "pos": "NNG"
+    },
+    {
+     "s": 205,
+     "e": 207,
+     "surface": "지정",
+     "lemma": "지정",
+     "pos": "NNG"
+    },
+    {
+     "s": 208,
+     "e": 213,
+     "surface": "식품이기도",
+     "lemma": "식품",
+     "pos": "NNG"
+    },
+    {
+     "s": 214,
+     "e": 216,
+     "surface": "하다",
+     "lemma": "하다",
+     "pos": "VX"
+    },
+    {
+     "s": 219,
+     "e": 222,
+     "surface": "겨울내",
+     "lemma": "겨울",
+     "pos": "NNG"
+    },
+    {
+     "s": 223,
+     "e": 225,
+     "surface": "먹기",
+     "lemma": "먹다",
+     "pos": "VX"
+    },
+    {
+     "s": 226,
+     "e": 229,
+     "surface": "위하여",
+     "lemma": "위하다",
+     "pos": "VV"
+    },
+    {
+     "s": 230,
+     "e": 233,
+     "surface": "김치를",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 234,
+     "e": 238,
+     "surface": "한꺼번에",
+     "lemma": "한꺼번에",
+     "pos": "MAG"
+    },
+    {
+     "s": 239,
+     "e": 241,
+     "surface": "많이",
+     "lemma": "많이",
+     "pos": "MAG"
+    },
+    {
+     "s": 242,
+     "e": 245,
+     "surface": "담그는",
+     "lemma": "담그다",
+     "pos": "VV"
+    },
+    {
+     "s": 246,
+     "e": 248,
+     "surface": "것은",
+     "lemma": "것",
+     "pos": "NNB"
+    },
+    {
+     "s": 249,
+     "e": 253,
+     "surface": "김장이라",
+     "lemma": "김장",
+     "pos": "NNG"
+    },
+    {
+     "s": 254,
+     "e": 256,
+     "surface": "하며",
+     "lemma": "하다",
+     "pos": "VV"
+    },
+    {
+     "s": 258,
+     "e": 261,
+     "surface": "그렇게",
+     "lemma": "그렇다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 262,
+     "e": 264,
+     "surface": "담근",
+     "lemma": "담그다",
+     "pos": "VV"
+    },
+    {
+     "s": 265,
+     "e": 267,
+     "surface": "김장",
+     "lemma": "김장",
+     "pos": "NNG"
+    },
+    {
+     "s": 268,
+     "e": 271,
+     "surface": "김치는",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 272,
+     "e": 275,
+     "surface": "겨울에",
+     "lemma": "겨울",
+     "pos": "NNG"
+    },
+    {
+     "s": 276,
+     "e": 278,
+     "surface": "얼지",
+     "lemma": "얼다",
+     "pos": "VV"
+    },
+    {
+     "s": 279,
+     "e": 281,
+     "surface": "않고",
+     "lemma": "않다",
+     "pos": "VX"
+    },
+    {
+     "s": 282,
+     "e": 284,
+     "surface": "더운",
+     "lemma": "덥다",
+     "pos": "VA-I"
+    },
+    {
+     "s": 285,
+     "e": 289,
+     "surface": "여름에는",
+     "lemma": "여름",
+     "pos": "NNG"
+    },
+    {
+     "s": 290,
+     "e": 294,
+     "surface": "시원하게",
+     "lemma": "시원하다",
+     "pos": "VA"
+    },
+    {
+     "s": 295,
+     "e": 299,
+     "surface": "유지하기",
+     "lemma": "유지하다",
+     "pos": "VV"
+    },
+    {
+     "s": 300,
+     "e": 302,
+     "surface": "위해",
+     "lemma": "위하다",
+     "pos": "VV"
+    },
+    {
+     "s": 303,
+     "e": 306,
+     "surface": "옹기라",
+     "lemma": "옹기",
+     "pos": "NNG"
+    },
+    {
+     "s": 307,
+     "e": 310,
+     "surface": "불리는",
+     "lemma": "불리다",
+     "pos": "VV"
+    },
+    {
+     "s": 311,
+     "e": 312,
+     "surface": "큰",
+     "lemma": "크다",
+     "pos": "VA"
+    },
+    {
+     "s": 313,
+     "e": 315,
+     "surface": "토기",
+     "lemma": "토기",
+     "pos": "NNG"
+    },
+    {
+     "s": 316,
+     "e": 318,
+     "surface": "발효",
+     "lemma": "발효",
+     "pos": "NNG"
+    },
+    {
+     "s": 319,
+     "e": 322,
+     "surface": "용기에",
+     "lemma": "용기",
+     "pos": "NNG"
+    },
+    {
+     "s": 323,
+     "e": 326,
+     "surface": "땅속에",
+     "lemma": "땅속",
+     "pos": "NNG"
+    },
+    {
+     "s": 327,
+     "e": 331,
+     "surface": "보관했다",
+     "lemma": "보관하다",
+     "pos": "VV"
+    },
+    {
+     "s": 333,
+     "e": 335,
+     "surface": "또한",
+     "lemma": "또한",
+     "pos": "MAG"
+    },
+    {
+     "s": 336,
+     "e": 339,
+     "surface": "야외에",
+     "lemma": "야외",
+     "pos": "NNG"
+    },
+    {
+     "s": 340,
+     "e": 345,
+     "surface": "장독대라고",
+     "lemma": "장독대",
+     "pos": "NNG"
+    },
+    {
+     "s": 346,
+     "e": 349,
+     "surface": "불리는",
+     "lemma": "불리다",
+     "pos": "VV"
+    },
+    {
+     "s": 350,
+     "e": 353,
+     "surface": "용기에",
+     "lemma": "용기",
+     "pos": "NNG"
+    },
+    {
+     "s": 354,
+     "e": 358,
+     "surface": "보관된다",
+     "lemma": "보관하다",
+     "pos": "VV"
+    },
+    {
+     "s": 360,
+     "e": 364,
+     "surface": "현대에는",
+     "lemma": "현대",
+     "pos": "NNG"
+    },
+    {
+     "s": 365,
+     "e": 368,
+     "surface": "가정용",
+     "lemma": "가정용",
+     "pos": "NNG"
+    },
+    {
+     "s": 369,
+     "e": 375,
+     "surface": "김치냉장고가",
+     "lemma": "김치냉장고",
+     "pos": "NNG"
+    },
+    {
+     "s": 376,
+     "e": 377,
+     "surface": "더",
+     "lemma": "더",
+     "pos": "MAG"
+    },
+    {
+     "s": 378,
+     "e": 380,
+     "surface": "많이",
+     "lemma": "많이",
+     "pos": "MAG"
+    },
+    {
+     "s": 381,
+     "e": 385,
+     "surface": "사용된다",
+     "lemma": "사용하다",
+     "pos": "VV"
+    },
+    {
+     "s": 388,
+     "e": 392,
+     "surface": "과거에는",
+     "lemma": "과거",
+     "pos": "NNG"
+    },
+    {
+     "s": 393,
+     "e": 395,
+     "surface": "무가",
+     "lemma": "무",
+     "pos": "NNG"
+    },
+    {
+     "s": 396,
+     "e": 399,
+     "surface": "배추에",
+     "lemma": "배추",
+     "pos": "NNG"
+    },
+    {
+     "s": 400,
+     "e": 403,
+     "surface": "앞서는",
+     "lemma": "앞서다",
+     "pos": "VV"
+    },
+    {
+     "s": 404,
+     "e": 406,
+     "surface": "김치",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 407,
+     "e": 412,
+     "surface": "재료였으나",
+     "lemma": "재료",
+     "pos": "NNG"
+    },
+    {
+     "s": 414,
+     "e": 416,
+     "surface": "속이",
+     "lemma": "속",
+     "pos": "NNG"
+    },
+    {
+     "s": 417,
+     "e": 418,
+     "surface": "꽉",
+     "lemma": "꽉",
+     "pos": "MAG"
+    },
+    {
+     "s": 419,
+     "e": 420,
+     "surface": "찬",
+     "lemma": "차다",
+     "pos": "VV"
+    },
+    {
+     "s": 421,
+     "e": 426,
+     "surface": "결구배추가",
+     "lemma": "결구",
+     "pos": "NNG"
+    },
+    {
+     "s": 427,
+     "e": 431,
+     "surface": "육종되고",
+     "lemma": "육종하다",
+     "pos": "VV"
+    },
+    {
+     "s": 432,
+     "e": 434,
+     "surface": "널리",
+     "lemma": "널리",
+     "pos": "MAG"
+    },
+    {
+     "s": 435,
+     "e": 438,
+     "surface": "보급된",
+     "lemma": "보급하다",
+     "pos": "VV"
+    },
+    {
+     "s": 446,
+     "e": 451,
+     "surface": "배추김치가",
+     "lemma": "배추",
+     "pos": "NNG"
+    },
+    {
+     "s": 452,
+     "e": 456,
+     "surface": "무김치를",
+     "lemma": "무김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 457,
+     "e": 461,
+     "surface": "압도하게",
+     "lemma": "압도하다",
+     "pos": "VV"
+    },
+    {
+     "s": 462,
+     "e": 465,
+     "surface": "되었다",
+     "lemma": "되다",
+     "pos": "VV"
+    },
+    {
+     "s": 474,
+     "e": 476,
+     "surface": "서울",
+     "lemma": "서울",
+     "pos": "NNP"
+    },
+    {
+     "s": 477,
+     "e": 480,
+     "surface": "올림픽",
+     "lemma": "올림픽",
+     "pos": "NNG"
+    },
+    {
+     "s": 481,
+     "e": 483,
+     "surface": "이후",
+     "lemma": "이후",
+     "pos": "NNG"
+    },
+    {
+     "s": 484,
+     "e": 487,
+     "surface": "김치가",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 488,
+     "e": 491,
+     "surface": "세계에",
+     "lemma": "세계",
+     "pos": "NNG"
+    },
+    {
+     "s": 492,
+     "e": 494,
+     "surface": "널리",
+     "lemma": "널리",
+     "pos": "MAG"
+    },
+    {
+     "s": 495,
+     "e": 500,
+     "surface": "알려졌으며",
+     "lemma": "알리다",
+     "pos": "VV"
+    },
+    {
+     "s": 516,
+     "e": 518,
+     "surface": "국제",
+     "lemma": "국제",
+     "pos": "NNG"
+    },
+    {
+     "s": 519,
+     "e": 521,
+     "surface": "식품",
+     "lemma": "식품",
+     "pos": "NNG"
+    },
+    {
+     "s": 522,
+     "e": 532,
+     "surface": "규격(Codex)에",
+     "lemma": "규격",
+     "pos": "NNG"
+    },
+    {
+     "s": 533,
+     "e": 536,
+     "surface": "김치가",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 537,
+     "e": 542,
+     "surface": "등록되었다",
+     "lemma": "등록하다",
+     "pos": "VV"
+    },
+    {
+     "s": 550,
+     "e": 554,
+     "surface": "유산균을",
+     "lemma": "유산균",
+     "pos": "NNG"
+    },
+    {
+     "s": 555,
+     "e": 558,
+     "surface": "보존한",
+     "lemma": "보존하다",
+     "pos": "VV"
+    },
+    {
+     "s": 559,
+     "e": 562,
+     "surface": "김치가",
+     "lemma": "김치",
+     "pos": "NNG"
+    },
+    {
+     "s": 563,
+     "e": 572,
+     "surface": "국제우주정거장에서",
+     "lemma": "국제우주정거장",
+     "pos": "NNP"
+    },
+    {
+     "s": 573,
+     "e": 575,
+     "surface": "먹을",
+     "lemma": "먹다",
+     "pos": "VV"
+    },
+    {
+     "s": 576,
+     "e": 577,
+     "surface": "수",
+     "lemma": "수",
+     "pos": "NNB"
+    },
+    {
+     "s": 578,
+     "e": 580,
+     "surface": "있는",
+     "lemma": "있다",
+     "pos": "VA"
+    },
+    {
+     "s": 581,
+     "e": 583,
+     "surface": "우주",
+     "lemma": "우주",
+     "pos": "NNG"
+    },
+    {
+     "s": 584,
+     "e": 588,
+     "surface": "식품으로",
+     "lemma": "식품",
+     "pos": "NNG"
+    },
+    {
+     "s": 589,
+     "e": 594,
+     "surface": "인증받았다",
+     "lemma": "인증하다",
+     "pos": "VV"
+    }
+   ]
+  }
+ },
+ "settings": {
+  "decks": [
+   "Korean"
+  ],
+  "default_deck": "Korean",
+  "translator_backend": "deepl",
+  "candidate_retention_days": 7,
+  "last_fetch_attempt": null
+ },
+ "stats": {
+  "totals": {
+   "words_learning": 0,
+   "words_known": 0,
+   "words_total": 0,
+   "books_finished": 0,
+   "words_week": 0,
+   "days_read_week": 0
+  },
+  "streak": {
+   "current": 0,
+   "longest": 0
+  },
+  "activity": [],
+  "new_words_per_book": [],
+  "vocab_depth": {
+   "buckets": {
+    "A": 0,
+    "B": 0,
+    "C": 0,
+    "unlisted": 0
+   },
+   "beginner_pct": 0.0,
+   "total_a": 894
+  },
+  "curation": {
+   "by_topic": [],
+   "by_feed": []
+  }
+ },
+ "translations": {
+  "가게": {
+   "translation": "Store",
+   "backend": "deepl",
+   "cached": false
+  },
+  "가다": {
+   "translation": "Go",
+   "backend": "deepl",
+   "cached": false
+  },
+  "가운데": {
+   "translation": "In the middle",
+   "backend": "deepl",
+   "cached": false
+  },
+  "가정용": {
+   "translation": "For home use",
+   "backend": "deepl",
+   "cached": false
+  },
+  "가파르다": {
+   "translation": "Steep",
+   "backend": "deepl",
+   "cached": false
+  },
+  "갓": {
+   "translation": "Gat",
+   "backend": "deepl",
+   "cached": false
+  },
+  "같다": {
+   "translation": "Same",
+   "backend": "deepl",
+   "cached": false
+  },
+  "거의": {
+   "translation": "Almost",
+   "backend": "deepl",
+   "cached": false
+  },
+  "건너다": {
+   "translation": "Cross",
+   "backend": "deepl",
+   "cached": false
+  },
+  "걷다": {
+   "translation": "Walking",
+   "backend": "deepl",
+   "cached": false
+  },
+  "걸어가다": {
+   "translation": "While walking",
+   "backend": "deepl",
+   "cached": false
+  },
+  "것": {
+   "translation": "thing",
+   "backend": "deepl",
+   "cached": false
+  },
+  "게임": {
+   "translation": "Game",
+   "backend": "deepl",
+   "cached": false
+  },
+  "겨울": {
+   "translation": "Winter",
+   "backend": "deepl",
+   "cached": false
+  },
+  "결구": {
+   "translation": "Conclusion",
+   "backend": "deepl",
+   "cached": false
+  },
+  "계곡": {
+   "translation": "Valley",
+   "backend": "deepl",
+   "cached": false
+  },
+  "고춧가루": {
+   "translation": "Chili powder",
+   "backend": "deepl",
+   "cached": false
+  },
+  "곳": {
+   "translation": "Place",
+   "backend": "deepl",
+   "cached": false
+  },
+  "공식": {
+   "translation": "Formula",
+   "backend": "deepl",
+   "cached": false
+  },
+  "과거": {
+   "translation": "Past",
+   "backend": "deepl",
+   "cached": false
+  },
+  "국민": {
+   "translation": "Citizens",
+   "backend": "deepl",
+   "cached": false
+  },
+  "국수": {
+   "translation": "Noodles",
+   "backend": "deepl",
+   "cached": false
+  },
+  "국제": {
+   "translation": "International",
+   "backend": "deepl",
+   "cached": false
+  },
+  "국제우주정거장": {
+   "translation": "International Space Station",
+   "backend": "deepl",
+   "cached": false
+  },
+  "굽다": {
+   "translation": "Bake",
+   "backend": "deepl",
+   "cached": false
+  },
+  "규격": {
+   "translation": "Specifications",
+   "backend": "deepl",
+   "cached": false
+  },
+  "그늘지다": {
+   "translation": "to be in the shade",
+   "backend": "deepl",
+   "cached": false
+  },
+  "그래도": {
+   "translation": "Still,",
+   "backend": "deepl",
+   "cached": false
+  },
+  "그렇다": {
+   "translation": "That's right.",
+   "backend": "deepl",
+   "cached": false
+  },
+  "그리고": {
+   "translation": "And",
+   "backend": "deepl",
+   "cached": false
+  },
+  "금방": {
+   "translation": "In a moment",
+   "backend": "deepl",
+   "cached": false
+  },
+  "기분": {
+   "translation": "Mood",
+   "backend": "deepl",
+   "cached": false
+  },
+  "기억하다": {
+   "translation": "To remember",
+   "backend": "deepl",
+   "cached": false
+  },
+  "길": {
+   "translation": "Road",
+   "backend": "deepl",
+   "cached": false
+  },
+  "길다": {
+   "translation": "It's long",
+   "backend": "deepl",
+   "cached": false
+  },
+  "김밥": {
+   "translation": "Gimbap",
+   "backend": "deepl",
+   "cached": false
+  },
+  "김장": {
+   "translation": "Kimchi-making",
+   "backend": "deepl",
+   "cached": false
+  },
+  "김치": {
+   "translation": "Kimchi",
+   "backend": "deepl",
+   "cached": false
+  },
+  "김치냉장고": {
+   "translation": "Kimchi Refrigerator",
+   "backend": "deepl",
+   "cached": false
+  },
+  "꼭": {
+   "translation": "Be sure to",
+   "backend": "deepl",
+   "cached": false
+  },
+  "꽉": {
+   "translation": "Tight",
+   "backend": "deepl",
+   "cached": false
+  },
+  "나": {
+   "translation": "I",
+   "backend": "deepl",
+   "cached": false
+  },
+  "나다": {
+   "translation": "It's me",
+   "backend": "deepl",
+   "cached": false
+  },
+  "날": {
+   "translation": "Day",
+   "backend": "deepl",
+   "cached": false
+  },
+  "날씨": {
+   "translation": "Weather",
+   "backend": "deepl",
+   "cached": false
+  },
+  "남다": {
+   "translation": "Namda",
+   "backend": "deepl",
+   "cached": false
+  },
+  "내다": {
+   "translation": "Look",
+   "backend": "deepl",
+   "cached": false
+  },
+  "내려다보다": {
+   "translation": "To look down on",
+   "backend": "deepl",
+   "cached": false
+  },
+  "내려오다": {
+   "translation": "Coming down",
+   "backend": "deepl",
+   "cached": false
+  },
+  "냄새": {
+   "translation": "Smell",
+   "backend": "deepl",
+   "cached": false
+  },
+  "널리": {
+   "translation": "Widely",
+   "backend": "deepl",
+   "cached": false
+  },
+  "넓다": {
+   "translation": "Spacious",
+   "backend": "deepl",
+   "cached": false
+  },
+  "눈": {
+   "translation": "Snow",
+   "backend": "deepl",
+   "cached": false
+  },
+  "늦다": {
+   "translation": "Late",
+   "backend": "deepl",
+   "cached": false
+  },
+  "다": {
+   "translation": "All",
+   "backend": "deepl",
+   "cached": false
+  },
+  "다리": {
+   "translation": "Leg",
+   "backend": "deepl",
+   "cached": false
+  },
+  "다양하다": {
+   "translation": "Diverse",
+   "backend": "deepl",
+   "cached": false
+  },
+  "다음": {
+   "translation": "Next",
+   "backend": "deepl",
+   "cached": false
+  },
+  "달": {
+   "translation": "Moon",
+   "backend": "deepl",
+   "cached": false
+  },
+  "담그다": {
+   "translation": "Soak",
+   "backend": "deepl",
+   "cached": false
+  },
+  "대답하다": {
+   "translation": "Answer",
+   "backend": "deepl",
+   "cached": false
+  },
+  "더": {
+   "translation": "More",
+   "backend": "deepl",
+   "cached": false
+  },
+  "덥다": {
+   "translation": "It's hot",
+   "backend": "deepl",
+   "cached": false
+  },
+  "덧붙이다": {
+   "translation": "In addition",
+   "backend": "deepl",
+   "cached": false
+  },
+  "동네": {
+   "translation": "Neighborhood",
+   "backend": "deepl",
+   "cached": false
+  },
+  "되다": {
+   "translation": "to become",
+   "backend": "deepl",
+   "cached": false
+  },
+  "뒤": {
+   "translation": "Back",
+   "backend": "deepl",
+   "cached": false
+  },
+  "드디어": {
+   "translation": "Finally",
+   "backend": "deepl",
+   "cached": false
+  },
+  "들어가다": {
+   "translation": "Enter",
+   "backend": "deepl",
+   "cached": false
+  },
+  "등": {
+   "translation": "etc.",
+   "backend": "deepl",
+   "cached": false
+  },
+  "등록하다": {
+   "translation": "Register",
+   "backend": "deepl",
+   "cached": false
+  },
+  "따뜻하다": {
+   "translation": "It's warm",
+   "backend": "deepl",
+   "cached": false
+  },
+  "따르다": {
+   "translation": "Follow",
+   "backend": "deepl",
+   "cached": false
+  },
+  "딱": {
+   "translation": "Exactly",
+   "backend": "deepl",
+   "cached": false
+  },
+  "땀": {
+   "translation": "Sweat",
+   "backend": "deepl",
+   "cached": false
+  },
+  "땅속": {
+   "translation": "Underground",
+   "backend": "deepl",
+   "cached": false
+  },
+  "때": {
+   "translation": "Time",
+   "backend": "deepl",
+   "cached": false
+  },
+  "또한": {
+   "translation": "Also,",
+   "backend": "deepl",
+   "cached": false
+  },
+  "마늘": {
+   "translation": "Garlic",
+   "backend": "deepl",
+   "cached": false
+  },
+  "만들다": {
+   "translation": "Make",
+   "backend": "deepl",
+   "cached": false
+  },
+  "많다": {
+   "translation": "There are many",
+   "backend": "deepl",
+   "cached": false
+  },
+  "많이": {
+   "translation": "A lot",
+   "backend": "deepl",
+   "cached": false
+  },
+  "말": {
+   "translation": "Horse",
+   "backend": "deepl",
+   "cached": false
+  },
+  "말다": {
+   "translation": "Stop talking",
+   "backend": "deepl",
+   "cached": false
+  },
+  "맛있다": {
+   "translation": "It's delicious.",
+   "backend": "deepl",
+   "cached": false
+  },
+  "맡다": {
+   "translation": "Take on",
+   "backend": "deepl",
+   "cached": false
+  },
+  "매일": {
+   "translation": "Every day",
+   "backend": "deepl",
+   "cached": false
+  },
+  "먹다": {
+   "translation": "to eat",
+   "backend": "deepl",
+   "cached": false
+  },
+  "무": {
+   "translation": "Mu",
+   "backend": "deepl",
+   "cached": false
+  },
+  "무김치": {
+   "translation": "Kimchi without radish",
+   "backend": "deepl",
+   "cached": false
+  },
+  "문제": {
+   "translation": "Problem",
+   "backend": "deepl",
+   "cached": false
+  },
+  "묻다": {
+   "translation": "Ask",
+   "backend": "deepl",
+   "cached": false
+  },
+  "미끄럽다": {
+   "translation": "It's slippery",
+   "backend": "deepl",
+   "cached": false
+  },
+  "바람": {
+   "translation": "Wind",
+   "backend": "deepl",
+   "cached": false
+  },
+  "발효": {
+   "translation": "Fermentation",
+   "backend": "deepl",
+   "cached": false
+  },
+  "발효하다": {
+   "translation": "To ferment",
+   "backend": "deepl",
+   "cached": false
+  },
+  "방법": {
+   "translation": "Method",
+   "backend": "deepl",
+   "cached": false
+  },
+  "배추": {
+   "translation": "Napa cabbage",
+   "backend": "deepl",
+   "cached": false
+  },
+  "버무리다": {
+   "translation": "To mix",
+   "backend": "deepl",
+   "cached": false
+  },
+  "번": {
+   "translation": "Time",
+   "backend": "deepl",
+   "cached": false
+  },
+  "보관하다": {
+   "translation": "Store",
+   "backend": "deepl",
+   "cached": false
+  },
+  "보급하다": {
+   "translation": "Distribute",
+   "backend": "deepl",
+   "cached": false
+  },
+  "보다": {
+   "translation": "See",
+   "backend": "deepl",
+   "cached": false
+  },
+  "보이다": {
+   "translation": "appear",
+   "backend": "deepl",
+   "cached": false
+  },
+  "보존하다": {
+   "translation": "Preserve",
+   "backend": "deepl",
+   "cached": false
+  },
+  "부식": {
+   "translation": "Corrosion",
+   "backend": "deepl",
+   "cached": false
+  },
+  "북한산": {
+   "translation": "Bukhansan",
+   "backend": "deepl",
+   "cached": false
+  },
+  "불리다": {
+   "translation": "To be called",
+   "backend": "deepl",
+   "cached": false
+  },
+  "비결": {
+   "translation": "The Secret",
+   "backend": "deepl",
+   "cached": false
+  },
+  "비비다": {
+   "translation": "Rub",
+   "backend": "deepl",
+   "cached": false
+  },
+  "빠지다": {
+   "translation": "to fall",
+   "backend": "deepl",
+   "cached": false
+  },
+  "빵": {
+   "translation": "Bread",
+   "backend": "deepl",
+   "cached": false
+  },
+  "빵집": {
+   "translation": "Bakery",
+   "backend": "deepl",
+   "cached": false
+  },
+  "사다": {
+   "translation": "Buy",
+   "backend": "deepl",
+   "cached": false
+  },
+  "사람": {
+   "translation": "Person",
+   "backend": "deepl",
+   "cached": false
+  },
+  "사용하다": {
+   "translation": "Use",
+   "backend": "deepl",
+   "cached": false
+  },
+  "산": {
+   "translation": "Mountain",
+   "backend": "deepl",
+   "cached": false
+  },
+  "새롭다": {
+   "translation": "New",
+   "backend": "deepl",
+   "cached": false
+  },
+  "새벽": {
+   "translation": "Dawn",
+   "backend": "deepl",
+   "cached": false
+  },
+  "생각": {
+   "translation": "Thoughts",
+   "backend": "deepl",
+   "cached": false
+  },
+  "생기다": {
+   "translation": "To arise",
+   "backend": "deepl",
+   "cached": false
+  },
+  "서두르다": {
+   "translation": "To rush",
+   "backend": "deepl",
+   "cached": false
+  },
+  "서울": {
+   "translation": "Seoul",
+   "backend": "deepl",
+   "cached": false
+  },
+  "세계": {
+   "translation": "World",
+   "backend": "deepl",
+   "cached": false
+  },
+  "소금": {
+   "translation": "Salt",
+   "backend": "deepl",
+   "cached": false
+  },
+  "소문": {
+   "translation": "Rumor",
+   "backend": "deepl",
+   "cached": false
+  },
+  "속": {
+   "translation": "Inside",
+   "backend": "deepl",
+   "cached": false
+  },
+  "손님": {
+   "translation": "Guest",
+   "backend": "deepl",
+   "cached": false
+  },
+  "수": {
+   "translation": "Wed",
+   "backend": "deepl",
+   "cached": false
+  },
+  "숨": {
+   "translation": "Breath",
+   "backend": "deepl",
+   "cached": false
+  },
+  "쉬다": {
+   "translation": "Rest",
+   "backend": "deepl",
+   "cached": false
+  },
+  "스트레스": {
+   "translation": "Stress",
+   "backend": "deepl",
+   "cached": false
+  },
+  "시": {
+   "translation": "Poem",
+   "backend": "deepl",
+   "cached": false
+  },
+  "시간": {
+   "translation": "Time",
+   "backend": "deepl",
+   "cached": false
+  },
+  "시원하다": {
+   "translation": "It's cool.",
+   "backend": "deepl",
+   "cached": false
+  },
+  "식당": {
+   "translation": "Restaurant",
+   "backend": "deepl",
+   "cached": false
+  },
+  "식빵": {
+   "translation": "White Bread",
+   "backend": "deepl",
+   "cached": false
+  },
+  "식사": {
+   "translation": "Meal",
+   "backend": "deepl",
+   "cached": false
+  },
+  "식재료": {
+   "translation": "Ingredients",
+   "backend": "deepl",
+   "cached": false
+  },
+  "식품": {
+   "translation": "Food",
+   "backend": "deepl",
+   "cached": false
+  },
+  "싶다": {
+   "translation": "I want to...",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아래": {
+   "translation": "Below",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아무것": {
+   "translation": "Nothing",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아시안": {
+   "translation": "Asian",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아이": {
+   "translation": "Child",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아저씨": {
+   "translation": "Sir",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아직": {
+   "translation": "Not yet",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아침": {
+   "translation": "Morning",
+   "backend": "deepl",
+   "cached": false
+  },
+  "아프다": {
+   "translation": "It hurts",
+   "backend": "deepl",
+   "cached": false
+  },
+  "않다": {
+   "translation": "does not",
+   "backend": "deepl",
+   "cached": false
+  },
+  "알리다": {
+   "translation": "To reveal",
+   "backend": "deepl",
+   "cached": false
+  },
+  "압도하다": {
+   "translation": "Overwhelm",
+   "backend": "deepl",
+   "cached": false
+  },
+  "앞": {
+   "translation": "Next",
+   "backend": "deepl",
+   "cached": false
+  },
+  "앞서다": {
+   "translation": "Be ahead",
+   "backend": "deepl",
+   "cached": false
+  },
+  "야외": {
+   "translation": "Outdoors",
+   "backend": "deepl",
+   "cached": false
+  },
+  "약속하다": {
+   "translation": "To promise",
+   "backend": "deepl",
+   "cached": false
+  },
+  "양념": {
+   "translation": "Seasoning",
+   "backend": "deepl",
+   "cached": false
+  },
+  "어렵다": {
+   "translation": "It's hard.",
+   "backend": "deepl",
+   "cached": false
+  },
+  "얼다": {
+   "translation": "Freeze",
+   "backend": "deepl",
+   "cached": false
+  },
+  "얼마": {
+   "translation": "How much",
+   "backend": "deepl",
+   "cached": false
+  },
+  "없다": {
+   "translation": "None",
+   "backend": "deepl",
+   "cached": false
+  },
+  "여기다": {
+   "translation": "Here",
+   "backend": "deepl",
+   "cached": false
+  },
+  "여름": {
+   "translation": "Summer",
+   "backend": "deepl",
+   "cached": false
+  },
+  "열다": {
+   "translation": "Open",
+   "backend": "deepl",
+   "cached": false
+  },
+  "옆": {
+   "translation": "Next to",
+   "backend": "deepl",
+   "cached": false
+  },
+  "오래": {
+   "translation": "A long time",
+   "backend": "deepl",
+   "cached": false
+  },
+  "오전": {
+   "translation": "Morning",
+   "backend": "deepl",
+   "cached": false
+  },
+  "올림픽": {
+   "translation": "Olympics",
+   "backend": "deepl",
+   "cached": false
+  },
+  "옹기": {
+   "translation": "Earthenware",
+   "backend": "deepl",
+   "cached": false
+  },
+  "요리": {
+   "translation": "Cooking",
+   "backend": "deepl",
+   "cached": false
+  },
+  "요즘": {
+   "translation": "Lately",
+   "backend": "deepl",
+   "cached": false
+  },
+  "용기": {
+   "translation": "Courage",
+   "backend": "deepl",
+   "cached": false
+  },
+  "우리": {
+   "translation": "We",
+   "backend": "deepl",
+   "cached": false
+  },
+  "우주": {
+   "translation": "Space",
+   "backend": "deepl",
+   "cached": false
+  },
+  "웃다": {
+   "translation": "Laugh",
+   "backend": "deepl",
+   "cached": false
+  },
+  "월드컵": {
+   "translation": "World Cup",
+   "backend": "deepl",
+   "cached": false
+  },
+  "위": {
+   "translation": "Above",
+   "backend": "deepl",
+   "cached": false
+  },
+  "위하다": {
+   "translation": "To serve",
+   "backend": "deepl",
+   "cached": false
+  },
+  "유산균": {
+   "translation": "Probiotics",
+   "backend": "deepl",
+   "cached": false
+  },
+  "유지하다": {
+   "translation": "Maintain",
+   "backend": "deepl",
+   "cached": false
+  },
+  "육종하다": {
+   "translation": "To breed",
+   "backend": "deepl",
+   "cached": false
+  },
+  "음식": {
+   "translation": "Food",
+   "backend": "deepl",
+   "cached": false
+  },
+  "이후": {
+   "translation": "After that",
+   "backend": "deepl",
+   "cached": false
+  },
+  "인증하다": {
+   "translation": "Certify",
+   "backend": "deepl",
+   "cached": false
+  },
+  "일어나다": {
+   "translation": "To wake up",
+   "backend": "deepl",
+   "cached": false
+  },
+  "일찍": {
+   "translation": "Early",
+   "backend": "deepl",
+   "cached": false
+  },
+  "있다": {
+   "translation": "There is",
+   "backend": "deepl",
+   "cached": false
+  },
+  "작다": {
+   "translation": "Small",
+   "backend": "deepl",
+   "cached": false
+  },
+  "장독대": {
+   "translation": "Jangdokdae",
+   "backend": "deepl",
+   "cached": false
+  },
+  "재료": {
+   "translation": "Ingredients",
+   "backend": "deepl",
+   "cached": false
+  },
+  "저": {
+   "translation": "I",
+   "backend": "deepl",
+   "cached": false
+  },
+  "전": {
+   "translation": "Previously",
+   "backend": "deepl",
+   "cached": false
+  },
+  "전통": {
+   "translation": "Tradition",
+   "backend": "deepl",
+   "cached": false
+  },
+  "절이다": {
+   "translation": "To pickle",
+   "backend": "deepl",
+   "cached": false
+  },
+  "점점": {
+   "translation": "Gradually",
+   "backend": "deepl",
+   "cached": false
+  },
+  "정도": {
+   "translation": "Degree",
+   "backend": "deepl",
+   "cached": false
+  },
+  "정상": {
+   "translation": "Summit",
+   "backend": "deepl",
+   "cached": false
+  },
+  "조금": {
+   "translation": "A little",
+   "backend": "deepl",
+   "cached": false
+  },
+  "조리": {
+   "translation": "Cooking",
+   "backend": "deepl",
+   "cached": false
+  },
+  "졸리다": {
+   "translation": "I'm sleepy",
+   "backend": "deepl",
+   "cached": false
+  },
+  "종류": {
+   "translation": "Types",
+   "backend": "deepl",
+   "cached": false
+  },
+  "좋다": {
+   "translation": "Great",
+   "backend": "deepl",
+   "cached": false
+  },
+  "주말": {
+   "translation": "Weekend",
+   "backend": "deepl",
+   "cached": false
+  },
+  "주인": {
+   "translation": "Owner",
+   "backend": "deepl",
+   "cached": false
+  },
+  "줄": {
+   "translation": "Line",
+   "backend": "deepl",
+   "cached": false
+  },
+  "지나다": {
+   "translation": "Pass by",
+   "backend": "deepl",
+   "cached": false
+  },
+  "지방": {
+   "translation": "Fat",
+   "backend": "deepl",
+   "cached": false
+  },
+  "지정": {
+   "translation": "Designation",
+   "backend": "deepl",
+   "cached": false
+  },
+  "차갑다": {
+   "translation": "It's cold",
+   "backend": "deepl",
+   "cached": false
+  },
+  "차근차근": {
+   "translation": "Step by step",
+   "backend": "deepl",
+   "cached": false
+  },
+  "차다": {
+   "translation": "It's cold",
+   "backend": "deepl",
+   "cached": false
+  },
+  "처음": {
+   "translation": "First",
+   "backend": "deepl",
+   "cached": false
+  },
+  "초": {
+   "translation": "Second",
+   "backend": "deepl",
+   "cached": false
+  },
+  "충분하다": {
+   "translation": "That's enough",
+   "backend": "deepl",
+   "cached": false
+  },
+  "친구": {
+   "translation": "Friend",
+   "backend": "deepl",
+   "cached": false
+  },
+  "크다": {
+   "translation": "Big",
+   "backend": "deepl",
+   "cached": false
+  },
+  "토기": {
+   "translation": "Pottery",
+   "backend": "deepl",
+   "cached": false
+  },
+  "파": {
+   "translation": "Leek",
+   "backend": "deepl",
+   "cached": false
+  },
+  "팔리다": {
+   "translation": "To be sold out",
+   "backend": "deepl",
+   "cached": false
+  },
+  "편하다": {
+   "translation": "Comfortable",
+   "backend": "deepl",
+   "cached": false
+  },
+  "포기하다": {
+   "translation": "To give up",
+   "backend": "deepl",
+   "cached": false
+  },
+  "풀다": {
+   "translation": "Solve",
+   "backend": "deepl",
+   "cached": false
+  },
+  "풀리다": {
+   "translation": "Unravel",
+   "backend": "deepl",
+   "cached": false
+  },
+  "하나": {
+   "translation": "One",
+   "backend": "deepl",
+   "cached": false
+  },
+  "하다": {
+   "translation": "Do",
+   "backend": "deepl",
+   "cached": false
+  },
+  "한국": {
+   "translation": "South Korea",
+   "backend": "deepl",
+   "cached": false
+  },
+  "한국식": {
+   "translation": "Korean-style",
+   "backend": "deepl",
+   "cached": false
+  },
+  "한꺼번에": {
+   "translation": "All at once",
+   "backend": "deepl",
+   "cached": false
+  },
+  "함께": {
+   "translation": "Together",
+   "backend": "deepl",
+   "cached": false
+  },
+  "현대": {
+   "translation": "Hyundai",
+   "backend": "deepl",
+   "cached": false
+  },
+  "훨씬": {
+   "translation": "much",
+   "backend": "deepl",
+   "cached": false
+  },
+  "흘리다": {
+   "translation": "To spill",
+   "backend": "deepl",
+   "cached": false
+  }
+ },
+ "dictionary": {},
+ "usage": {
+  "풀리다|3월 초인데도 날씨가 많이 풀려서 걷기에 딱 좋았어요.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 1,
+      "title": "봄이 오는 산",
+      "text": "바람은 차가웠지만 땀을 흘리고 나니 스트레스가 다 풀리는 것 같았어요.",
+      "score": 0.6384
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "to loosen/become soft (to become less cold). Same sense: 1"
+   }
+  },
+  "눈|그늘진 곳에는 아직 눈이 조금 남아 있어서 미끄러웠어요.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 2,
+      "title": "동네 빵집",
+      "text": "주인 아저씨는 매일 새벽 네 시에 일어나서 졸린 눈을 비비며 빵을 굽는다.",
+      "score": 0.3838
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "snow (snow). Same sense: none."
+   }
+  },
+  "다리|친구는 다리가 아프다고 몇 번이나 쉬자고 했어요.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 1,
+      "title": "봄이 오는 산",
+      "text": "내려오는 길에 작은 다리를 건너서 계곡 옆 식당에 들어갔어요.",
+      "score": 0.5087
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "leg (a limb). Same sense: none."
+   }
+  },
+  "풀리다|바람은 차가웠지만 땀을 흘리고 나니 스트레스가 다 풀리는 것 같았어요.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 1,
+      "title": "봄이 오는 산",
+      "text": "3월 초인데도 날씨가 많이 풀려서 걷기에 딱 좋았어요.",
+      "score": 0.6384
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "풀리다 (to be relieved/to loosen). Same sense: 1"
+   }
+  },
+  "다리|내려오는 길에 작은 다리를 건너서 계곡 옆 식당에 들어갔어요.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 1,
+      "title": "봄이 오는 산",
+      "text": "친구는 다리가 아프다고 몇 번이나 쉬자고 했어요.",
+      "score": 0.5087
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "bridge (a structure for crossing). Same sense: 0."
+   }
+  },
+  "눈|주인 아저씨는 매일 새벽 네 시에 일어나서 졸린 눈을 비비며 빵을 굽는다.": {
+   "usage": {
+    "hits": [
+     {
+      "book_id": 1,
+      "title": "봄이 오는 산",
+      "text": "그늘진 곳에는 아직 눈이 조금 남아 있어서 미끄러웠어요.",
+      "score": 0.3838
+     }
+    ],
+    "pending_books": 0
+   },
+   "explain": {
+    "explanation": "snow (snow). Same sense: 1"
+   }
+  }
+ }
+}

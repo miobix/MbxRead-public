@@ -426,7 +426,7 @@ function ReadPageContent() {
           column every N *rendered* lines — no estimate, correct on any device. */}
       <div
         ref={viewportRef}
-        className="overflow-hidden w-full shrink-0 leading-loose text-lg"
+        className="relative overflow-hidden w-full shrink-0 leading-loose text-lg"
         style={{ height: lineHeight > 0 ? lines * lineHeight : undefined }}
       >
         {win && (

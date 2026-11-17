@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
+  // The GitHub Pages demo lives under /<repo>/; the app itself is served at the root.
+  basePath: process.env.DEMO_BASE_PATH ?? "",
   images: { unoptimized: true },
   // Static export emits e.g. out/read/index.html rather than out/read.html, which
   // is what FastAPI's StaticFiles(html=True) can actually resolve for GET /read.

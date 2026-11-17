@@ -35,6 +35,10 @@ frontend (static export), phone access via Tailscale.
   live `mbxread` database from tests or experiments (tests use `db_url`).
 - Tests must pass offline with no API keys: mock DeepL/krdict/AnkiConnect/embed/Ollama HTTP,
   a temp Postgres DB per test (`db_url` fixture; needs `docker compose up -d db`).
+- **krdict: never burst, never retry.** It blocks this PC's IP for sending requests in a
+  burst (DECISIONS 2026-10-02, again 2026-11-17). Any script that calls it paces requests
+  (≥3 s apart), reuses cached or recorded results, and stops at the first failure; tell
+  the user instead of retrying. The app's own 30-min pause exists for the same reason.
 - The server runs on port **8002** (8000 is taken on this machine by an unrelated
   Android app's Docker-based sync service). The compose Postgres is on **127.0.0.1:5433**
   (5432 is an unrelated native Postgres service; leave it alone).
