@@ -121,7 +121,7 @@ never committed; copy `.env.example`.
 | 3 | CI: GitHub Actions, pytest + `npm run build` + `npm run lint`, required check, image to GHCR | done |
 | 4 | SQLite to Postgres migration, in compose and CI | done; live cutover deferred |
 | 5 | RAG as same-sense usage search: pgvector, keyword/vector/hybrid compared, local LLM explains | done |
-| 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done locally, PR deferred (branch `unit-6-explain-eval`, unpushed) |
+| 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done |
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | before the first deploy |
 | 9+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
