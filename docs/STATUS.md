@@ -124,7 +124,7 @@ never committed; copy `.env.example`.
 | 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done |
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
-| 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done locally (branch `unit-9-audit-fixes`, carries unit 8) |
+| 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
 | 10+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
 **Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
