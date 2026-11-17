@@ -1,4 +1,5 @@
 import psycopg
+import pytest
 
 from server import anki
 
@@ -363,6 +364,122 @@ def test_sync_isolates_per_note_failure(client, monkeypatch):
     terms_by_id = {t["id"]: t for t in client.get("/api/terms").json()}
     assert terms_by_id[good["id"]]["anki_note_id"] == 111
     assert terms_by_id[bad["id"]]["anki_note_id"] is None
+
+
+def test_sync_crash_keeps_ids_already_stamped(client, monkeypatch):
+    """Anki has no rollback: a crash on the second note must not drop the first's id."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    calls = []
+
+    def fake_add_note_model(deck, korean, english, examples):
+        calls.append(korean)
+        if len(calls) == 2:
+            raise KeyError("unexpected reply")
+        return 111
+
+    monkeypatch.setattr(anki, "add_note_model", fake_add_note_model)
+    _create(client, lemma="입다")
+    _create(client, lemma="가다")
+
+    with pytest.raises(KeyError):
+        client.post("/api/anki/sync")
+
+    ids = sorted(t["anki_note_id"] or 0 for t in client.get("/api/terms").json())
+    assert ids == [0, 111]
+
+
+def _edit_behind_syncs_back(db_url, term_id):
+    with psycopg.connect(db_url) as conn:
+        conn.execute(
+            "UPDATE terms SET translation = 'edited', updated = clock_timestamp() WHERE id = %s",
+            (term_id,),
+        )
+
+
+def test_new_term_edited_during_sync_stays_dirty(client, db_url, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    term = _create(client)
+
+    def add_while_user_edits(deck, korean, english, examples):
+        _edit_behind_syncs_back(db_url, term["id"])
+        return 222
+
+    monkeypatch.setattr(anki, "add_note_model", add_while_user_edits)
+    client.post("/api/anki/sync")
+
+    saved = client.get("/api/terms").json()[0]
+    assert saved["anki_note_id"] == 222
+    assert saved["anki_dirty"] is True
+
+
+def test_dirty_term_edited_during_sync_stays_dirty(client, db_url, monkeypatch):
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    monkeypatch.setattr(anki, "add_note_model", lambda deck, k, e, x: 333)
+    term = _create(client)
+    client.post("/api/anki/sync")
+    client.patch(f"/api/terms/{term['id']}", json={"translation": "to put on"})
+
+    monkeypatch.setattr(
+        anki, "update_note_model",
+        lambda note_id, k, e, x: _edit_behind_syncs_back(db_url, term["id"]),
+    )
+    assert client.post("/api/anki/sync").json()["updated"] == 1
+    assert client.get("/api/terms").json()[0]["anki_dirty"] is True
+
+
+def test_add_adopts_an_existing_duplicate_note(monkeypatch):
+    calls = []
+
+    def fake_invoke(action, **params):
+        calls.append((action, params))
+        if action == "addNote":
+            raise anki.AnkiError("cannot create note because it is a duplicate")
+        if action == "findNotes":
+            return [77]
+
+    monkeypatch.setattr(anki, "_invoke", fake_invoke)
+
+    assert anki.add_note_model("Korean", "입다", "to wear", "") == 77
+    assert calls[1] == ("findNotes", {"query": f'"note:{anki.MODEL_NAME}" "Korean:입다"'})
+    assert calls[2] == ("updateNoteFields", {"note": {
+        "id": 77, "fields": {"Korean": "입다", "English": "to wear", "Examples": ""},
+    }})
+
+
+def test_add_keeps_the_duplicate_error_when_no_single_match(monkeypatch):
+    def fake_invoke(action, **params):
+        if action == "addNote":
+            raise anki.AnkiError("cannot create note because it is a duplicate")
+        return []
+
+    monkeypatch.setattr(anki, "_invoke", fake_invoke)
+    with pytest.raises(anki.AnkiError, match="duplicate"):
+        anki.add_note_model("Korean", "입다", "to wear", "")
+
+
+def test_search_literal_escapes_anki_specials():
+    assert anki._search_literal('a"b*c_d\\') == 'a\\"b\\*c\\_d\\\\'
+
+
+def test_invoke_wraps_a_non_json_reply(monkeypatch):
+    import httpx
+
+    class NotJson:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            raise ValueError("Expecting value")
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: NotJson())
+    with pytest.raises(anki.AnkiError, match="isn't JSON"):
+        anki.ping()
 
 
 def test_sync_ignores_known_and_ignored_terms(client, monkeypatch):

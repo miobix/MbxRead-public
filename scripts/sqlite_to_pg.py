@@ -1,17 +1,19 @@
 """One-off cutover: copy a pre-unit-4 reader.db (and optionally translate_cache.sqlite3)
 into an empty Postgres database. Ids are kept, so terms keep their anki_note_id links.
 
-    .venv\\Scripts\\python.exe scripts/sqlite_to_pg.py reader.db [translate_cache.sqlite3]
+    .venv\\Scripts\\python.exe -m scripts.sqlite_to_pg TARGET_URL reader.db [translate_cache.sqlite3]
 
-Target: DATABASE_URL (default: the compose db). Refuses a target that already has data.
+The target URL is required, never a default. Refuses missing source files and a target
+that already has data; the source files are opened read-only.
 """
 import sqlite3
 import sys
+from pathlib import Path
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 
 from server import db
-from translate_svc import config
 
 # FK order. (sqlite table, postgres table, extra select expressions)
 TABLES = [
@@ -51,6 +53,9 @@ def _copy(src: sqlite3.Connection, dst: psycopg.Connection, s_table, d_table, ex
 
 
 def migrate(reader_db: str, cache_db: str | None, url: str) -> dict[str, int]:
+    for path in filter(None, (reader_db, cache_db)):
+        if not Path(path).is_file():
+            raise SystemExit(f"no such SQLite file: {path}")
     db.init_db(url)
     counts = {}
     # SQLite's CURRENT_TIMESTAMP text is UTC with no offset.
@@ -63,7 +68,7 @@ def migrate(reader_db: str, cache_db: str | None, url: str) -> dict[str, int]:
         dst.execute("DELETE FROM vocab_levels")
         jobs = [(reader_db, TABLES)] + ([(cache_db, CACHE_TABLES)] if cache_db else [])
         for path, tables in jobs:
-            src = sqlite3.connect(path)
+            src = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
             try:
                 for s_table, d_table, extra in tables:
                     counts[d_table] = _copy(src, dst, s_table, d_table, extra)
@@ -78,8 +83,11 @@ def migrate(reader_db: str, cache_db: str | None, url: str) -> dict[str, int]:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) not in (3, 4):
         raise SystemExit(__doc__)
-    for table, n in migrate(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None,
-                            config.DATABASE_URL).items():
+    target = sys.argv[1]
+    info = conninfo_to_dict(target)
+    print(f"target: {info.get('host')}:{info.get('port')}/{info.get('dbname')}")
+    for table, n in migrate(sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None,
+                            target).items():
         print(f"{table:16} {n}")

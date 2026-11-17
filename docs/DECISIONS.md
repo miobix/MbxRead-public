@@ -1963,3 +1963,95 @@ Evidence first, then code. Findings, each with what was done:
   `exist_ok`-style overwrite paths (the per-book rebuild is intended); eval scripts use
   uuid scratch databases dropped in `finally`.
 - **Not checked:** behaviour under a large library (only 10 books exist); GPU path.
+
+## 2026-11-17 — Unit 8: blind audits + ponytail audit
+
+Six fresh-context agents, each given only the repo path, its target and safety rules (no
+session history, no design rationale), ran in parallel; `/ponytail-audit` ran in the main
+session. The main session deduped, verified the top claims against the code, and wrote the
+pick list: `docs/UNIT_8_AUDIT.md` (21 items + ponytail). No fixes in this unit.
+
+- **Strongest signal:** Anki sync commits once at the end, so a mid-run crash orphans notes
+  Anki already created (three agents found it independently). Two agents each found the
+  missing `lemma` dirty trigger and the reseeding of deleted feeds (three for the feeds).
+- **Lemma audit, borderline cases for the user** (137 sentences, 388 tokens): auxiliary
+  absorbed into the main verb (도와줬어요 → 돕다, 물어봤어요 → 묻다, 지어졌다 → 짓다) while
+  추워졌다 → 춥다 but 빨개졌어요 → 빨개지다 (kiwi lexicalizes some -아지다 only); separate
+  VX tokens (보다, 있다, 주다) share a lemma with the VV; 그건 → 그거 but 그게 → 그것;
+  거예요 → 거; numeral determiners (세 명) drop the numeral; homographs get one lemma.
+  Irregulars, passives/causatives, honorifics, contractions: all correct.
+- **Ponytail:** lean; four small cuts (one-backend translator registry, import CLIs,
+  `scraper` CHECK value, `method` on `/api/usage`) and ebooklib → stdlib, merged with the
+  EPUB zip-bomb fix.
+
+**Incident: the fresh-setup agent wrote to the compose `mbxread` db (5433).** In its
+clone, with no `DATABASE_URL` in `.env`, it ran `python -m scripts.sqlite_to_pg --help`;
+the script took `--help` as a SQLite path, created an empty file, passed the "target is
+empty" check and committed `DELETE FROM feeds` and `DELETE FROM vocab_levels` on the code
+default URL. Checked after: books, terms, settings and sentences were already 0 (unit 4
+cutover deferred, the daily app is still the private repo's tray on SQLite, PID traced,
+`reader.db` untouched). Lost: the 15 seeded feeds and the NIKL vocab rows, both rebuilt by
+`init_db` on the next app start against that db. Root causes, both now fix-list items: the
+script has no existence check (item 3) and every tool's default URL is the live db.
+Lesson for future blind agents: give each one its own `DATABASE_URL` explicitly and say
+which commands may write; "don't touch 5433" was not enough because the default pointed
+there silently.
+
+**Which agents earned their keep** (trial of the audit tooling):
+- Vulnerabilities: high value, unique findings (LAN exposure, EPUB bomb, Anki HTML), ~100k
+  tokens.
+- Lemma: high value per token (~70k), a domain nobody else covers, concrete wrapper fixes.
+- Error handling, user mistakes, data integrity: each solid, but they overlapped heavily on
+  Anki sync and seed feeds. The overlap was good corroboration; next time merge data
+  integrity into error handling and keep user mistakes as the UI-facing one.
+- Fresh setup: the slowest (~10 min) and the only one to break a rule, but it found real
+  doc drift (README import section, ANKI.md note type, GPU requirement, `npm ci`) and
+  caused, then reported, the item 3 footgun. Keep it, sandboxed harder.
+- Ponytail audit: small yield on an already-pruned repo; cheap enough to keep.
+
+## 2026-11-17 — Unit 9: audit fixes (items 1, 3-6 of `UNIT_8_AUDIT.md`)
+
+User's picks from the unit 8 list. Units 8 and 9 ship as one PR: an audit-only PR has
+nothing to review but a list of problems (deviation from one-PR-per-unit, user's call).
+
+- **Item 2 (LAN exposure, no auth) → issue #8, deferred.** Remote access changes with the
+  move off this PC; that decision comes with the deploy.
+  No login for now, not a priority.
+- **Lemma borderline (user):** auxiliary constructions keep the base verb (도와줬어요 →
+  돕다, not 도와주다). The added meaning is grammatical, not a different verb. This is
+  what the tokenizer already does; future lemma audits shouldn't flag it.
+- **Anki sync (item 1):** commit after each added/updated note, so a crash loses at most
+  the note in flight. Dirty is cleared only `WHERE updated` still equals the value read
+  (both paths), so an edit made during sync is synced next time. `_invoke` maps a non-JSON
+  reply to `AnkiError`; timeout 5 s → 15 s (Anki busy with its own sync). On AnkiConnect's
+  "duplicate" error, `add_note_model` adopts the existing note: `findNotes` on this note
+  type + exact `Korean` field (Anki specials `\ " * _` escaped), adopt only on exactly one
+  hit, then push the current fields. This also repairs terms already stuck that way and
+  a word deleted and saved again.
+- **SPEC change:** `lemma` is now a dirty trigger. The old rule (and a test asserting a
+  lemma edit stays clean) predates the two-way model, whose `Korean` field is built from
+  the lemma. Test flipped.
+- **Duplicate import (item 4):** a `SAVEPOINT` around the INSERT in `insert_book`, rolled
+  back on `UniqueViolation`. A plain `conn.rollback()` (the audit's suggestion) would also
+  discard the caller's uncommitted work, e.g. the feed fetch's score write for the
+  previous candidate.
+- **Cutover script (item 3):** refuses a missing source file before touching the target,
+  opens SQLite `mode=ro` (no empty-file creation), takes the target URL as a required
+  first argument (no `DATABASE_URL` fallback to the live db) and prints host/port/db
+  before writing.
+- **EPUB + uploads (item 6):** ebooklib replaced by stdlib `zipfile` + `ElementTree`
+  (container.xml → package spine → documents). Only spine documents are decompressed,
+  read with a bounded `read()` under a 50 MB running text cap, so a bomb hidden in the
+  manifest is never inflated (test: 60 MB of zeros outside the spine). Non-zip or broken
+  package → "Not a readable EPUB file." (502). Uploads capped at 100 MB per file (413;
+  per-file `failed` entry in a subtitle batch). One runtime dependency fewer. The EPUB
+  CLI `__main__` went with the rewrite (ponytail item; the in-app import covers it).
+- **Verified:** 313 tests pass (13 new); every new test fails against the pre-unit-9
+  code (15 failures, the two extra being the existing EPUB tests, whose hand-built fixture
+  ebooklib didn't read). `npm run build` and `npm run lint` clean (no web changes).
+- **Not verified:** duplicate adoption against a live Anki (the `findNotes` field search
+  is mocked; whether Anki matches a `Korean` field that holds `<br>`-separated forms is
+  untested, and a miss falls back to the old "duplicate" failure, no worse than before).
+  The 100 MB cap stops reading into memory, but Starlette still spools an oversized
+  upload to disk first. Container not rebuilt locally; CI's `image` job builds it
+  without ebooklib.

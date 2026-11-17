@@ -1,5 +1,7 @@
 import io
 
+import pytest
+
 from server.article import ArticleError
 from import_tools.yt_subs import NoSubtitlesError
 from server.routes import imports as imports_route
@@ -236,26 +238,34 @@ def test_epub_import_empty_text_returns_502(client, monkeypatch):
     assert client.get("/api/books").json() == []
 
 
-def _make_epub_bytes(chapters: list[list[str]]) -> bytes:
-    """Build a minimal real EPUB in memory. Each chapter is a list of paragraphs."""
-    from ebooklib import epub
+def _make_epub_bytes(chapters: list[list[str]], extra: dict[str, bytes] | None = None) -> bytes:
+    """A minimal real EPUB: package in OEBPS/, manifest listed in reverse so only the
+    spine gives reading order. `extra` adds manifest documents that aren't in the spine."""
+    import zipfile
 
-    book = epub.EpubBook()
-    book.set_identifier("test-id")
-    book.set_title("테스트 책")
-    book.set_language("ko")
-    spine = []
-    for n, paragraphs in enumerate(chapters):
-        doc = epub.EpubHtml(title=f"장 {n}", file_name=f"c{n}.xhtml", lang="ko")
-        body = "".join(f"<p>{p}</p>" for p in paragraphs)
-        doc.content = f"<html><head><title>x</title></head><body>{body}</body></html>"
-        book.add_item(doc)
-        spine.append(doc)
-    book.add_item(epub.EpubNcx())
-    book.add_item(epub.EpubNav())
-    book.spine = spine
+    extra = extra or {}
+    names = [f"c{n}.xhtml" for n in range(len(chapters))]
+    manifest = "".join(
+        f'<item id="{n}" href="{n}" media-type="application/xhtml+xml"/>'
+        for n in reversed(names + list(extra))
+    )
+    spine = "".join(f'<itemref idref="{n}"/>' for n in names)
     buf = io.BytesIO()
-    epub.write_epub(buf, book)
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", (
+            '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">'
+            '<rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>'
+        ))
+        z.writestr("OEBPS/content.opf", (
+            '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+            f"<manifest>{manifest}</manifest><spine>{spine}</spine></package>"
+        ))
+        for name, paragraphs in zip(names, chapters):
+            body = "".join(f"<p>{p}</p>" for p in paragraphs)
+            z.writestr(f"OEBPS/{name}", f"<html><head><title>x</title></head><body>{body}</body></html>")
+        for name, data in extra.items():
+            z.writestr(f"OEBPS/{name}", data)
     return buf.getvalue()
 
 
@@ -270,6 +280,39 @@ def test_epub_extract_reads_spine_text_in_order():
     assert "둘째 장의 내용입니다." in text
     # spine order preserved: first chapter's text precedes the second's
     assert text.index("안녕하세요") < text.index("둘째 장")
+
+
+def test_epub_extract_never_inflates_documents_outside_the_spine():
+    """A zip bomb listed in the manifest but not the spine is never decompressed."""
+    data = _make_epub_bytes([["본문입니다."]], extra={"bomb.xhtml": b"\0" * 60_000_000})
+    assert len(data) < 1_000_000
+    assert imports_route.extract_epub(data) == "본문입니다."
+
+
+def test_epub_extract_refuses_text_over_the_cap(monkeypatch):
+    from import_tools import epub_text
+
+    monkeypatch.setattr(epub_text, "MAX_TEXT_BYTES", 1000)
+    data = _make_epub_bytes([["가" * 2000]])
+    with pytest.raises(epub_text.EpubError, match="more than"):
+        epub_text.extract(data)
+
+
+def test_epub_import_rejects_a_non_zip_file(client):
+    resp = client.post(
+        "/api/import/epub", files={"file": ("x.epub", b"not a zip", "application/epub+zip")}
+    )
+    assert resp.status_code == 502
+    assert resp.json() == {"error": "Not a readable EPUB file."}
+
+
+def test_upload_over_the_cap_is_refused(client, monkeypatch):
+    monkeypatch.setattr(imports_route, "MAX_UPLOAD_BYTES", 10)
+    resp = client.post(
+        "/api/import/pdf", files={"file": ("big.pdf", b"x" * 11, "application/pdf")}
+    )
+    assert resp.status_code == 413
+    assert "over 100 MB" in resp.json()["detail"]
 
 
 def test_epub_import_end_to_end_with_real_extractor(client):
@@ -342,6 +385,19 @@ def test_subtitle_batch_skips_already_imported_files(client):
     assert [s["reason"] for s in body["skipped"]] == ["already imported"]
     assert [b["title"] for b in body["imported"]] == ["new"]
     assert len(client.get("/api/books").json()) == 2
+
+
+def test_subtitle_batch_survives_a_duplicate_sorted_first(client):
+    """A duplicate before a new file used to leave the transaction aborted (500)."""
+    client.post("/api/import/subtitles", files=[_sub("b.ko.srt", _SRT_1)])
+    resp = client.post(
+        "/api/import/subtitles",
+        files=[_sub("a.ko.srt", _SRT_1), _sub("c.ko.srt", _SRT_2)],
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert [s["filename"] for s in body["skipped"]] == ["a.ko.srt"]
+    assert [b["title"] for b in body["imported"]] == ["c"]
 
 
 def test_one_bad_file_does_not_sink_the_batch(client):

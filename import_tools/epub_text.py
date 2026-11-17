@@ -1,20 +1,28 @@
 """Extract text from an EPUB into plain text for import.
 
-An EPUB is zipped XHTML; ``ebooklib`` walks the package and we read each
-document in spine (reading) order, stripping its markup to text with a small
-stdlib ``HTMLParser`` so we don't pull in BeautifulSoup. Accepts a file path
-(CLI) or raw bytes (in-memory upload), mirroring ``pdf_text.extract``.
-
-Usage:
-    python import_tools/epub_text.py book.epub [out.txt]
+An EPUB is zipped XHTML: META-INF/container.xml names the package file, whose spine
+lists the documents in reading order. Each is stripped to text with a small stdlib
+``HTMLParser``. Only spine documents are decompressed, under a running size cap, so a
+zip bomb hidden in the package can't inflate.
 """
 
 import io
-import sys
+import posixpath
+import xml.etree.ElementTree as ET
+import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import unquote
 
-from ebooklib import ITEM_DOCUMENT, epub
+MAX_TEXT_BYTES = 50 * 1024 * 1024
+
+_CONTAINER_NS = "{urn:oasis:names:tc:opendocument:xmlns:container}"
+_OPF_NS = "{http://www.idpf.org/2007/opf}"
+_DOC_TYPES = {"application/xhtml+xml", "text/html"}
+
+
+class EpubError(ValueError):
+    """Raised on a file that isn't a readable EPUB, or one too large once unpacked."""
 
 
 class _TextExtractor(HTMLParser):
@@ -69,38 +77,39 @@ def _html_to_text(html: str) -> str:
     return "\n".join(out).strip()
 
 
-def _documents_in_reading_order(book: epub.EpubBook) -> list:
-    """Spine order if present, else declaration order of document items."""
-    items = []
-    for idref, _ in book.spine:
-        item = book.get_item_with_id(idref)
-        if item is not None and item.get_type() == ITEM_DOCUMENT:
-            items.append(item)
-    if items:
-        return items
-    return list(book.get_items_of_type(ITEM_DOCUMENT))
+def _documents_in_reading_order(z: zipfile.ZipFile) -> list[str]:
+    """Zip paths of the spine's documents, else every document in manifest order."""
+    container = ET.fromstring(z.read("META-INF/container.xml"))
+    opf_path = container.find(f".//{_CONTAINER_NS}rootfile").get("full-path")
+    opf = ET.fromstring(z.read(opf_path))
+    base = posixpath.dirname(opf_path)
+    docs = {
+        item.get("id"): posixpath.normpath(posixpath.join(base, unquote(item.get("href"))))
+        for item in opf.iter(f"{_OPF_NS}item")
+        if item.get("media-type") in _DOC_TYPES
+    }
+    spine = [ref.get("idref") for ref in opf.iter(f"{_OPF_NS}itemref")]
+    return [docs[i] for i in spine if i in docs] or list(docs.values())
 
 
 def extract(epub_source: Path | bytes) -> str:
-    """epub_source is a file path (CLI) or raw EPUB bytes (in-memory upload)."""
-    if isinstance(epub_source, bytes):
-        book = epub.read_epub(io.BytesIO(epub_source))
-    else:
-        book = epub.read_epub(str(epub_source))
+    """epub_source is a file path or raw EPUB bytes (in-memory upload)."""
+    source = io.BytesIO(epub_source) if isinstance(epub_source, bytes) else epub_source
     chunks = []
-    for item in _documents_in_reading_order(book):
-        text = _html_to_text(item.get_content().decode("utf-8", "ignore"))
-        if text:
-            chunks.append(text)
+    total = 0
+    try:
+        z = zipfile.ZipFile(source)
+        names = _documents_in_reading_order(z)
+    except (zipfile.BadZipFile, KeyError, AttributeError, TypeError, ET.ParseError) as e:
+        raise EpubError("Not a readable EPUB file.") from e
+    with z:
+        for name in names:
+            with z.open(name) as f:
+                data = f.read(MAX_TEXT_BYTES - total + 1)
+            total += len(data)
+            if total > MAX_TEXT_BYTES:
+                raise EpubError("This EPUB unpacks to more than 50 MB of text; refusing it.")
+            text = _html_to_text(data.decode("utf-8", "ignore"))
+            if text:
+                chunks.append(text)
     return "\n\n".join(chunks)
-
-
-if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not args:
-        raise SystemExit(__doc__)
-    src = Path(args[0])
-    out = Path(args[1]) if len(args) > 1 else src.with_suffix(".txt")
-    text = extract(src)
-    out.write_text(text, encoding="utf-8")
-    print(f"Saved {len(text)} chars -> {out}")

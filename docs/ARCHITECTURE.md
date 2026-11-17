@@ -115,7 +115,9 @@ fails instead of reaching the live database.
 `translate_cache.sqlite3`) into an empty target, table by table over the columns both
 sides share, with the session in UTC (SQLite's timestamps were naive UTC), replacing the
 seeded feeds/vocab with the old DB's, then resetting identity sequences. It refuses a
-target that already has books, terms or settings. It is the only code that imports
+target that already has books, terms or settings, and a source path that doesn't exist
+(unit 9). The target URL is a required argument, never a default; the source files
+open read-only. It is the only code that imports
 `sqlite3`.
 
 ### Page splitting (`server/paging.py`, Epic 2 — implemented; row-based reader split 2026-07-24)
@@ -277,8 +279,10 @@ isn't detected, judged acceptable for a personal single-user app); PDF on
 re-uploading the identical file always dedupes, a re-export with different bytes
 won't — same rationale); EPUB on `epub:<sha256 of the uploaded bytes>` (same
 byte-hash rationale as PDF). The EPUB path uses `import_tools/epub_text.py`
-(`ebooklib` walks the spine in reading order; a small stdlib `HTMLParser`
-subclass strips each XHTML document to text, so no BeautifulSoup dependency) and
+(stdlib `zipfile` + `ElementTree` read `container.xml`, the package's spine, then
+each spine document in order, under a 50 MB running cap so a zip bomb can't inflate;
+ebooklib was dropped in unit 9 because it inflated every entry. A small stdlib
+`HTMLParser` subclass strips each XHTML document to text) and
 additionally returns `502` when the extracted text is empty (a DRM'd or
 image-only EPUB yields nothing to read). The fetch/extract routes catch their
 exception and return `502 {"error": ...}` (matching `routes/translate.py`'s
@@ -713,15 +717,20 @@ Sync algorithm:
    last; a term with **zero** `term_back_items` (never touched by the Epic 22 popover)
    renders `English`/`Examples` exactly as before this epic — flat `translation`, the
    old `examples` JSON column + sentence. Store the returned id **and stamp
-   `anki_model` with the model name**, clear dirty. On per-note error (e.g. duplicate)
-   record in `failed`, continue.
+   `anki_model` with the model name**, clear dirty unless the term's `updated` moved
+   while Anki was called (edited mid-sync: stays dirty). Commit per note, since Anki
+   can't roll back. On "duplicate" (an earlier sync lost the id, or the term was
+   deleted and saved again), `add_note_model` adopts the one note of this model whose
+   `Korean` field matches (`findNotes`) and updates its fields; zero or several
+   matches keep the error. Other per-note errors: record in `failed`, continue.
 4. Dirty: terms `anki_dirty=1 AND anki_note_id NOT NULL AND anki_model IS NOT 'Korean
    Reader Hanja'` → the two-way model's `Korean`/`English`/`Examples` (same Epic 22
    rendering as above). **Epic 32:** notes synced as the removed hanja model are skipped
    (their fields differ, so an update would fail every sync) and stay as they are in Anki.
    Back chips whose group matches no front entry (old hanja senses) render under the lemma.
    The legacy `Basic` Front/Back path was removed 2026-10-21 (no live notes used it).
-   Every updated note is also moved to the term's deck. On success clear `anki_dirty`.
+   Every updated note is also moved to the term's deck. On success clear `anki_dirty`
+   only `WHERE updated` is still the value read, and commit per note.
 5. Return counts. Never delete Anki notes; `known`/`ignored` terms are simply not
    synced (existing notes left alone).
 
@@ -737,8 +746,8 @@ install; an earlier assumption that it should be renamed "Notes" was wrong), onl
 content built for `English`/`Examples` changed.
 
 **Epic 6 status:** `server/anki.py`'s `_invoke()` is the single choke point for every
-AnkiConnect call (`httpx.post`, 5s timeout) — raises `AnkiError` on transport failure
-or a non-null `error` field in the response body, which `routes/anki_sync.py` turns
+AnkiConnect call (`httpx.post`, 15s timeout since unit 9) — raises `AnkiError` on transport failure,
+a non-JSON reply, or a non-null `error` field in the response body, which `routes/anki_sync.py` turns
 into the 503 (ping) or a per-term `failed` entry (add/update). A term's `deck` column
 defaults to `''` in the schema, but AnkiConnect needs a real deck name, so an empty
 deck falls back to the literal string `"Default"` (Anki's own built-in default deck)
