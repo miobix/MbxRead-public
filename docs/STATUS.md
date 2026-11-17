@@ -160,6 +160,20 @@ aesthetics pass.
 **Repo is private for now (user, 2026-11-17):** GitHub Pages can't deploy and branch
 protection isn't enforced until it is public again; merge on green CI only.
 
+**Next session, in order (user, 2026-11-17):**
+1. **Dictionary pass:** once https://krdict.korean.go.kr loads on this PC, rerun
+   `python -m scripts.build_demo_data` (paced, stops at the first failure, keeps what is
+   recorded); commit the new `web/lib/demo-data.json` on `unit-11-pages-demo`.
+2. **Privacy sweep:** search the working tree *and* full git history (all branches) for
+   personal context about the user (employment, health, money, plans), per the user-level
+   CLAUDE.md rule. Fix the working tree; list what history still holds.
+3. **Re-publish clean** with the `publish-sanitized-repo` skill: scrubbed history, delete
+   and recreate the GitHub repo under the same name, then public again. Losing PR #1-10
+   and CI history is accepted. Afterwards: recreate issue #8, branch protection on `main`
+   (required checks `test`, `web`, `image`), Pages source = GitHub Actions; rebase the
+   local branches onto the new history.
+4. **Open the unit 11 PR**, merge on green, then check the live demo on Pages.
+
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.
 
