@@ -170,9 +170,6 @@ after unit 12. Unit 10 lifts the unit 4 cutover deferral.
 - **Revisit the model containers** (user, unit 5): each model got its own container to
   start with; review what runs where once it has been used for a while.
 
-- **Live sync through Docker not yet exercised:** compose points at
-  `host.docker.internal:8765`, but Anki was closed when unit 2 was verified. Try one sync
-  with Anki open.
 - **Local yt-dlp has no JS runtime** (deno is only in the image). YouTube import works
   today with a deprecation warning; install deno locally if it stops.
 - **Aesthetics later:** the design is dark-mode only, by choice. Deployment comes first.

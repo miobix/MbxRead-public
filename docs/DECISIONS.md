@@ -2123,3 +2123,15 @@ public certificate-transparency logs. Plain-HTTP serve needed no admin-console s
 full); a bare `100.x` IP gets serve's 404 (it routes by hostname); all three LAN
 addresses refuse. Not verified from the phone itself. Docs use placeholders for the
 machine and tailnet names.
+
+## 2026-11-17 — Unit 10, after merge: live checks
+
+- **Phone:** the user opened the app from the phone through the tailnet name.
+- **Live Anki sync through Docker** (open since unit 2): the container reaches AnkiConnect
+  at `host.docker.internal:8765`. Before: Anki held 144 "Korean Reader 2-way" notes,
+  1,416 legacy hanja and 296 Basic; the DB's 1,551 linked terms = 135 two-way + 1,416
+  hanja, and the 12 pending learning terms had no match in Anki. `POST /api/anki/sync`
+  returned added 12, failed 0, promoted 0; Anki then held 156 two-way notes, no terms
+  pending or dirty. The duplicate-adoption path (unit 9) was not exercised: nothing was
+  a duplicate. Sync is triggered from any device; it runs on the server, so it needs
+  Anki desktop open on the PC.
