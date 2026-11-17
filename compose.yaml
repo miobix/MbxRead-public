@@ -1,3 +1,10 @@
+# Docker never rotates json-file logs by default; ollama alone writes ~115 lines per call.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mbxread:
     build: .
@@ -17,6 +24,7 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *logging
 
   db:
     image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
@@ -35,6 +43,7 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    logging: *logging
 
   # Sentence embeddings for same-sense search; weights download into the volume once.
   embed:
@@ -46,6 +55,7 @@ services:
     volumes:
       - mbxread-embed:/data
     restart: unless-stopped
+    logging: *logging
 
   # Local LLM for the sense explanation. Pull the model once:
   #   docker compose exec ollama ollama pull <OLLAMA_MODEL>
@@ -63,6 +73,7 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   mbxread-pg:

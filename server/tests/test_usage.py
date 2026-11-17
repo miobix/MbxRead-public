@@ -63,6 +63,30 @@ def test_index_next_skips_candidates_and_deleting_a_book_cascades(client, conn, 
     assert conn.execute("SELECT count(*) AS n FROM sentences").fetchone()["n"] == 0
 
 
+def test_a_bad_book_is_skipped_but_a_down_service_is_retried(client, conn, db_url, monkeypatch):
+    add_book(client, "나쁜 책이에요.")
+    good = add_book(client, TEXT)
+
+    def down(texts):
+        raise usage.Unavailable("down")
+
+    monkeypatch.setattr(usage, "embed", down)
+    with pytest.raises(usage.Unavailable):
+        usage.index_next(db_url)
+    assert usage.pending_count(conn) == 2
+
+    def picky(texts):
+        if "나쁜" in texts[0]:
+            raise ValueError("bad input")
+        return fake_embed(texts)
+
+    monkeypatch.setattr(usage, "embed", picky)
+    assert usage.index_next(db_url) and usage.index_next(db_url)
+    assert usage.pending_count(conn) == 0
+    rows = conn.execute("SELECT book_id, count(*) AS n FROM sentences GROUP BY book_id").fetchall()
+    assert {r["book_id"]: r["n"] for r in rows} == {good: 5}
+
+
 @pytest.mark.parametrize("method", usage.METHODS)
 def test_search_ranks_same_sense_first_and_excludes_query(client, conn, method):
     usage.index_book(conn, add_book(client, TEXT))
@@ -142,6 +166,12 @@ def test_explain_grounds_prompt_and_caches(client, monkeypatch):
     prompt = fake.calls[0]["messages"][1]["content"]
     assert "1. 버스를 타요." in prompt and "ride: 탈것에 몸을 얹다" in prompt
     assert fake.calls[0]["model"] == config.OLLAMA_MODEL
+
+
+def test_explain_keeps_first_line_without_stray_quotes(client, monkeypatch):
+    monkeypatch.setattr(usage.httpx, "post", FakeOllama(content="eye (sight). Same sense: 1.'\nmore"))
+    monkeypatch.setattr(usage.krdict, "lookup", lambda w, with_examples=False: [])
+    assert client.post("/api/usage/explain", json=EXPLAIN).json()["explanation"] == "eye (sight). Same sense: 1."
 
 
 def test_explain_missing_model_is_a_readable_503(client, monkeypatch):

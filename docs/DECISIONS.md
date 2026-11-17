@@ -1899,3 +1899,67 @@ Evidence first: `scripts/server.log` (1.2 MB, 12.7k lines, 33 restarts since Jul
   explain 3.3 s, cached 0.03 s); image builds at 617 MB. Pinned: pgvector
   `0.8.7-pg18-trixie`, TEI `cpu-1.9.3`, Ollama `0.40.15` (one release behind latest),
   all by digest.
+
+## 2026-11-16 — Unit 6: Explain eval (swapped ahead of the router)
+
+- **Swap (user's call):** the router (now unit 7) only has a job if the local model
+  fails often, so the eval came first.
+- **Method:** `scripts/eval_usage.py --explain`. Same scratch-DB setup as unit 5; for
+  each of the 100 labeled sentences, the default retrieval (vector, top 5) feeds
+  `usage.explain` with a fixed English sense list per lemma instead of krdict
+  (reproducible, no key). Scored deterministically against the labels; no LLM judge,
+  because the labels already are the ground truth for sense and example picks.
+- **Results (`gemma4:e4b`, CPU, median 3.2 s, max 11.8 s):**
+
+  | format | right sense | pick precision | pick recall | rejects wrong-sense examples |
+  |---|---|---|---|---|
+  | 0.98 | 0.96 | 0.93 | 0.85 | 0.95 |
+
+  Of the 4 sense misses, 2 are real (both 차다: 이불을 찬다 and 컵에 가득 찼어요 read as
+  "cold") and the other misses on 눈/다리 were right answers with a stray trailing quote or a
+  second clause. Recall misses are the model citing fewer examples than it could:
+  harmless on a card. Weakest word: 차다 (sense 0.87, precision 0.77), matching unit 5's
+  retrieval weakness.
+- **Fix from the eval:** `explain` keeps the first line and strips stray quotes (the
+  quote would have landed on the Anki card).
+- **Verdict for unit 7 (router): no-go on current evidence.** The cheap model names the
+  right sense ~96-98% of the time; a stronger model could only win on 차다-like cases,
+  ~2 sentences in 100. Revisit if real use shows wrong Explain lines, or the eval grows
+  harder words. The roadmap row stays, marked as not justified.
+- **PR deferred by the user:** committed on branch `unit-6-explain-eval`, not pushed, so
+  the user can review at their own pace. Verified: pytest 299, build and lint clean.
+
+## 2026-11-16 — Hardening pass: units 5-6
+
+Evidence first, then code. Findings, each with what was done:
+
+- **Logs read:** db 1,690 lines, 40 errors, all from the test suite (32 intended
+  `source_ref` conflicts, 4 `terms_lemma_key` conflicts, 4 autovacuums killed by forced
+  drops of test databases): no bug. embed 772 lines, 0 errors. ollama 14,962 lines, 0
+  errors, 0 restarts on any service.
+- **Unbounded growth (fixed):** Ollama logs ~115 lines per request and Docker's
+  json-file driver never rotates. Every compose service now rotates at 10 MB × 3.
+  Ollama volume: rejected candidate models removed in unit 5 (16 GB → 6.6 GB).
+  `sentences` grows with the library and cascades on delete; explain cache rows are tiny.
+- **Poison book (fixed):** a book that failed to index for its own reasons was retried
+  forever and blocked every book behind it. `embed` now raises `Unavailable` only for
+  transport errors and 5xx; `index_next` skips any other per-book failure (logged, stamped
+  indexed, no sentences). Test added for both paths.
+- **Trust boundary (fixed):** usage/explain inputs bounded (lemma 100, sentences 2,000
+  chars, 10 examples).
+- **First-run path exercised:** a database built by the pre-unit-5 schema (commit
+  `ea01a01`) with a book in it: `init_db` adds the extension, column and table; the book
+  shows as pending and is indexed once; a second `init_db` is a no-op. This is the path
+  `mbxread` and the cutover will take.
+- **Real data (read-only on the private `reader.db`):** 10 library books, 6,027 sentences,
+  median 16 chars, longest 204: no unpunctuated transcript blobs. Embedding throughput 43
+  sentences/s on CPU, so the cutover indexes the library in ~2.5 min.
+- **Config drift (documented, ARCHITECTURE):** `gemma4:e4b` is pinned by tag only;
+  deploy check compares ID `dc35e8d9c606`. Changing the embedding model leaves stale
+  vectors; the re-index steps are written down.
+- **Checked, solid:** index loop guarded with backoff to 15 min and cancelled on
+  shutdown; per-pass connections closed by `with`; a failed `index_book` rolls back
+  before its DELETE commits; images pinned by digest, bge-m3 by revision; no
+  `exist_ok`-style overwrite paths (the per-book rebuild is intended); eval scripts use
+  uuid scratch databases dropped in `finally`.
+- **Not checked:** behaviour under a large library (only 10 books exist); GPU path.

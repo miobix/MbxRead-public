@@ -40,10 +40,12 @@ def embed(texts: list[str]) -> list[list[float]]:
                 json={"inputs": texts[i : i + EMBED_BATCH], "truncate": True},
                 timeout=120,
             )
-            r.raise_for_status()
+            if r.status_code >= 500:
+                raise Unavailable(f"embedding service error {r.status_code}")
+            r.raise_for_status()  # 4xx: this input is the problem, not the service
             vectors += r.json()
-    except httpx.HTTPError as e:
-        raise Unavailable(f"embedding service failed: {e}") from e
+    except httpx.TransportError as e:
+        raise Unavailable(f"embedding service unreachable: {e}") from e
     return vectors
 
 
@@ -108,7 +110,18 @@ def index_next(database_url: str | None = None) -> bool:
         ).fetchone()
         if not row:
             return False
-        n = index_book(conn, row["id"])
+        try:
+            n = index_book(conn, row["id"])
+        except Unavailable:
+            raise  # service down: the loop backs off and retries this book
+        except Exception:
+            # ponytail: a bad book is skipped for good (no sentences); re-queue by hand
+            # with UPDATE books SET indexed_at = NULL once fixed.
+            conn.rollback()
+            conn.execute("UPDATE books SET indexed_at = now() WHERE id = %s", (row["id"],))
+            conn.commit()
+            log.exception("usage index: skipped book %s", row["id"])
+            return True
         log.info("usage index: book %s, %s sentences", row["id"], n)
         return True
 
@@ -225,6 +238,7 @@ def explain(lemma: str, sentence: str, examples: list[str]) -> str:
         )
     if r.status_code != 200:
         raise Unavailable(f"LLM service error {r.status_code}: {r.text[:200]}")
-    answer = r.json()["message"]["content"].strip()
+    # gemma sometimes trails a stray quote or a second line (unit 6 eval).
+    answer = r.json()["message"]["content"].strip().splitlines()[0].strip().strip("'\"")
     cache.put(backend, key, answer)
     return answer
