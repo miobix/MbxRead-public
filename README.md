@@ -82,8 +82,9 @@ docker compose up -d --build
   host at `127.0.0.1:5433` for dev runs and tests. Set `TZ` in `.env` (e.g. `Asia/Seoul`):
   it decides which local day a read or a saved word counts for.
 - **Coming from an old SQLite `reader.db`?** With the db up and empty, run once:
-  `.venv\Scripts\python.exe -m scripts.sqlite_to_pg reader.db translate_cache.sqlite3`.
-  It keeps ids (so Anki links survive) and refuses a database that already has data.
+  `.venv\Scripts\python.exe -m scripts.sqlite_to_pg postgresql://mbxread:mbxread@127.0.0.1:5433/mbxread reader.db translate_cache.sqlite3`.
+  It keeps ids (so Anki links survive), prints the target before writing, and refuses a
+  database that already has data or a SQLite path that doesn't exist.
 - **Anki sync** works when Anki runs on the same computer as Docker: compose points the
   server at `host.docker.internal:8765` (`ANKICONNECT_URL`). Docker Desktop (Windows/Mac)
   needs nothing else. On Linux, set AnkiConnect's `webBindAddress` to `0.0.0.0` (Anki →

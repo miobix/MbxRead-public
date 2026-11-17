@@ -113,6 +113,8 @@ def insert_book(
 ) -> dict:
     """Insert the book row and its page slices; DuplicateSourceRef on a source_ref clash."""
     word_count = len(text.split())
+    # A savepoint, so a duplicate doesn't abort the caller's transaction (batch imports).
+    conn.execute("SAVEPOINT insert_book")
     try:
         cur = conn.execute(
             "INSERT INTO books (title, source, topic, tags, source_url, source_ref, "
@@ -124,6 +126,7 @@ def insert_book(
             ),
         )
     except psycopg.errors.UniqueViolation:
+        conn.execute("ROLLBACK TO SAVEPOINT insert_book")
         raise DuplicateSourceRef(source_ref)
     book_id = cur.fetchone()["id"]
     pages = split_pages(text)

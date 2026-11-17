@@ -133,7 +133,7 @@ def test_patch_status_change_after_sync_does_not_mark_dirty(client, db_url):
     assert body["anki_dirty"] is False
 
 
-def test_patch_lemma_change_after_sync_does_not_mark_dirty(client, db_url):
+def test_patch_lemma_change_after_sync_marks_dirty(client, db_url):
     term_id = _create(client).json()["id"]
 
     conn = psycopg.connect(db_url)
@@ -145,7 +145,8 @@ def test_patch_lemma_change_after_sync_does_not_mark_dirty(client, db_url):
     assert resp.status_code == 200
     body = resp.json()
     assert body["lemma"] == "입으시다"
-    assert body["anki_dirty"] is False
+    # The card's Korean field is built from the lemma.
+    assert body["anki_dirty"] is True
 
 
 def test_patch_setting_same_value_after_sync_does_not_mark_dirty(client, db_url):

@@ -39,12 +39,14 @@ def _invoke(action: str, **params) -> object:
         resp = httpx.post(
             ANKICONNECT_URL,
             json={"action": action, "version": 6, "params": params},
-            timeout=5.0,
+            timeout=15.0,
         )
         resp.raise_for_status()
         body = resp.json()
     except httpx.HTTPError as e:
         raise AnkiError("Anki is not running (or AnkiConnect missing)") from e
+    except ValueError as e:
+        raise AnkiError("AnkiConnect sent a reply that isn't JSON") from e
 
     if body.get("error"):
         raise AnkiError(body["error"])
@@ -115,8 +117,25 @@ def ensure_model() -> None:
     _ensure(MODEL_NAME, ["Korean", "English", "Examples"], _CARD_TEMPLATES)
 
 
+def _search_literal(text: str) -> str:
+    return "".join("\\" + c if c in '\\"*_' else c for c in text)
+
+
 def add_note_model(deck: str, korean: str, english: str, examples: str) -> int:
-    return _add(deck, MODEL_NAME, {"Korean": korean, "English": english, "Examples": examples})
+    """Add the note; if Anki already has it (an earlier sync lost the id), adopt and update it."""
+    fields = {"Korean": korean, "English": english, "Examples": examples}
+    try:
+        return _add(deck, MODEL_NAME, fields)
+    except AnkiError as e:
+        if "duplicate" not in str(e):
+            raise
+        found = _invoke(
+            "findNotes", query=f'"note:{MODEL_NAME}" "Korean:{_search_literal(korean)}"'
+        )
+        if len(found or []) != 1:
+            raise
+        _update(found[0], fields)
+        return found[0]
 
 
 def update_note_model(note_id: int, korean: str, english: str, examples: str) -> None:

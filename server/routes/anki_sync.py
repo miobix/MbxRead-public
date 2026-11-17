@@ -143,11 +143,13 @@ def sync(conn: psycopg.Connection = Depends(db_module.get_db)):
         try:
             korean, english, examples = _render_two_way(conn, row)
             note_id = anki.add_note_model(row["deck"] or DEFAULT_DECK, korean, english, examples)
+            # Edited while syncing: the note has the old content, so leave it dirty.
             conn.execute(
-                "UPDATE terms SET anki_note_id = %s, anki_model = %s, anki_dirty = 0 "
-                "WHERE id = %s",
-                (note_id, anki.MODEL_NAME, row["id"]),
+                "UPDATE terms SET anki_note_id = %s, anki_model = %s, "
+                "anki_dirty = CASE WHEN updated = %s THEN 0 ELSE 1 END WHERE id = %s",
+                (note_id, anki.MODEL_NAME, row["updated"], row["id"]),
             )
+            conn.commit()
             added += 1
         except anki.AnkiError as e:
             failed.append({"lemma": row["lemma"], "error": str(e)})
@@ -157,7 +159,11 @@ def sync(conn: psycopg.Connection = Depends(db_module.get_db)):
             korean, english, examples = _render_two_way(conn, row)
             anki.update_note_model(row["anki_note_id"], korean, english, examples)
             anki.move_note_to_deck(row["anki_note_id"], row["deck"] or DEFAULT_DECK)
-            conn.execute("UPDATE terms SET anki_dirty = 0 WHERE id = %s", (row["id"],))
+            conn.execute(
+                "UPDATE terms SET anki_dirty = 0 WHERE id = %s AND updated = %s",
+                (row["id"], row["updated"]),
+            )
+            conn.commit()
             updated += 1
         except anki.AnkiError as e:
             failed.append({"lemma": row["lemma"], "error": str(e)})

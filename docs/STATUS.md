@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose, phone access over Tailscale.
 
-**Test suite: 300 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 313 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -124,12 +124,14 @@ never committed; copy `.env.example`.
 | 6 | Eval: how often the local LLM's Explain line is right, on the unit 5 labeled set | done |
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
-| 9+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
+| 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done locally (branch `unit-9-audit-fixes`, carries unit 8) |
+| 10+ | Later: cloud deploy with Terraform, MLflow, vLLM, Kubernetes, a queue | |
 
 **Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
 daily app for now; don't propose the switch unprompted. When asked: stop the private repo's tray (`C:\Personal\MbxRead`, live
 on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.py` on its
-`reader.db` + `translate_cache.sqlite3` into the empty compose db, `docker compose up -d
+`reader.db` + `translate_cache.sqlite3` into the empty compose db (target URL is the
+script's first argument), `docker compose up -d
 --build`, check counts, turn on Docker Desktop's start-at-sign-in.
 
 **Units 6-7 swapped (user, 2026-11-16).** Unit 6's eval says the router has no job yet
@@ -138,10 +140,12 @@ if real use shows wrong Explain lines; it would be modelled on Strands' decider
 (https://strandsagents.com/blog/amazon-saves-millions-replacing-sonnet-with-strands-decider/).
 Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
-**Unit 8 done (2026-11-17):** six blind agents + `/ponytail-audit`; the ranked pick list is
-`docs/UNIT_8_AUDIT.md` (ephemeral, archive once the fix unit ships). Next: the user picks
-items for the fix unit. Agent trial notes and an incident (an agent emptied the compose
-db's `feeds`/`vocab_levels`; `init_db` rebuilds them on next start): `DECISIONS.md`.
+**Units 8-9 (2026-11-17):** six blind agents + `/ponytail-audit` produced the pick list
+`docs/UNIT_8_AUDIT.md`; unit 9 fixed items 1 and 3-6. One PR for both units. Item 2 (LAN
+exposure, no auth) is issue #8, deferred to the move off this PC, when remote access
+changes anyway; a login is not a priority. The rest
+of the list is open for later units. Agent trial notes and the audit incident:
+`DECISIONS.md`.
 Phone / accessibility audit deliberately left out: front-end only, belongs with the
 aesthetics pass.
 

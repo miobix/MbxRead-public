@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/terms", tags=["terms"])
 Status = Literal["learning", "known", "ignored"]
 # A change to any of these re-syncs the Anki card. JSON columns compare as their
 # stored strings, so they fit the same check.
-_DIRTY_TRIGGER_FIELDS = {"translation", "notes", "deck", "sentence", "examples"}
+_DIRTY_TRIGGER_FIELDS = {"lemma", "translation", "notes", "deck", "sentence", "examples"}
 
 
 class FormIn(BaseModel):

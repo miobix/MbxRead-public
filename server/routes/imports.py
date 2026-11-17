@@ -24,6 +24,17 @@ from .books import DuplicateSourceRef, insert_book
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
+
+async def _read_capped(file: UploadFile) -> bytes:
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"{file.filename or 'This file'} is over 100 MB"
+        )
+    return data
+
 
 class UrlImport(BaseModel):
     url: str
@@ -44,7 +55,7 @@ async def _import_file(
     topic: str,
     tags: str,
 ):
-    content = await file.read()
+    content = await _read_capped(file)
     try:
         text = extract(content)
     except Exception as e:
@@ -159,7 +170,11 @@ async def import_subtitles(
 
     for upload in ordered:
         filename = upload.filename or "untitled.srt"
-        content = await upload.read()
+        try:
+            content = await _read_capped(upload)
+        except HTTPException as e:
+            failed.append({"filename": filename, "error": e.detail})
+            continue
         try:
             text, duration = extract_subtitles(content, filename)
         except Exception as e:  # a malformed file must not sink the rest of the batch

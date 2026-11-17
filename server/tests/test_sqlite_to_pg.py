@@ -57,6 +57,15 @@ def test_migrate_keeps_ids_counts_and_utc(old_db, db_url):
         assert new_id == 43
 
 
+def test_migrate_refuses_a_missing_source_and_creates_nothing(tmp_path, db_url):
+    missing = tmp_path / "--help"
+    with pytest.raises(SystemExit, match="no such SQLite file"):
+        migrate(str(missing), None, db_url)
+    assert not missing.exists()
+    with db.get_connection(db_url) as conn:
+        assert conn.execute("SELECT count(*) AS n FROM feeds").fetchone()["n"] > 0
+
+
 def test_migrate_refuses_a_target_with_data(old_db, db_url):
     migrate(str(old_db), None, db_url)
     with pytest.raises(SystemExit):

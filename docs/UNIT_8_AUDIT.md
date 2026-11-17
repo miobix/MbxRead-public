@@ -1,5 +1,7 @@
 # Unit 8 audit: curated fix list (2026-11-17)
 
+**Status:** items 1, 3, 4, 5, 6 fixed in unit 9; item 2 deferred to issue #8; the rest open.
+
 *Ephemeral.* The pick list from unit 8's six blind audits plus `/ponytail-audit`. The user
 picks; the fixes are a follow-up unit. Move to `archive/` once that unit ships. How the
 audit ran and which agents earned their keep: `DECISIONS.md`, 2026-11-17.

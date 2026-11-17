@@ -135,7 +135,7 @@ Foreign keys ON (`PRAGMA foreign_keys=ON` per connection). Page splitting at imp
 | GET `/api/books/{id}/text` | `?offset=&window=` | `{offset, total_chars, content, tokens, terms}` (see below); replaced `/pages/{n}` (Epic 24, endpoint removed 2026-10-21) |
 | GET `/api/terms` | `?status=&deck=&q=` | `[term]` |
 | POST `/api/terms` | `{lemma, translation, notes?, status?, deck?, sentence?, forms?: [{text,kind}], back_items?: [{group,kind,text,korean_def}]}` | created term (409 if lemma exists); `translation` is derived from `back_items` when non-empty (Epic 22) |
-| PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` |
+| PATCH `/api/terms/{id}` | any editable fields (same `forms`/`back_items` shapes) | updated term; sets `anki_dirty=1` if `lemma/translation/notes/deck/sentence/examples` changed, or `forms`/`back_items` changed, and `anki_note_id` is set; bumps `updated` |
 | DELETE `/api/terms/{id}` | – | 204 |
 | POST `/api/translate` | `{text, backend?}` | `{translation, backend, cached}` (502 + `{error}` on TranslationError) |
 | GET `/api/dict?word=…` | – | krdict entries as JSON list |
