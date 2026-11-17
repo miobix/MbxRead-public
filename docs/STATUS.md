@@ -131,7 +131,7 @@ never committed; copy `.env.example`.
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
 | 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
-| 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done locally (branch `unit-10-the-move`) |
+| 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done (PR #10) |
 | 11 | Public demo on GitHub Pages (static, seeded with real model output) | **next** |
 | 12 | Terraform pipeline with the Docker provider, local + CI | |
 | — | Oracle Always Free | deferred; private only if ever |
