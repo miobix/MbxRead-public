@@ -2080,3 +2080,33 @@ nothing to review but a list of problems (deviation from one-PR-per-unit, user's
   native wheels (kiwipiepy, PyMuPDF, psycopg) and pinned images have arm64 builds; TEI
   needs its separate `cpu-arm64` tag; CI would need a multi-arch build. If it comes back,
   private only (Tailscale, no public ports).
+
+## 2026-11-17 — Unit 10: the move (compose is the daily app, local only)
+
+- **Local only:** compose publishes the app on `127.0.0.1:8002`; `start.ps1` binds
+  `127.0.0.1`. Checked: Docker shows `127.0.0.1:8002->8002`, and the PC's Tailscale
+  address refuses the connection. Settles issue #8 for this setup; the issue stays open
+  for any future remote access.
+- **Cutover done on this PC.** The private repo's tray (5 processes, matched by repo path
+  with the `restart-tray` dry run) stopped; its Startup shortcut moved to
+  `C:\Personal\MbxRead\MbxRead tray.lnk.retired` rather than deleted. No SQLite WAL or
+  journal files were pending. `sqlite_to_pg` into the compose db: books 483, pages 450,
+  terms 1,563, term_forms 38, term_back_items 2,004, settings 5, read_days 17, feeds 15,
+  vocab_levels 5,543, translate_cache 144, krdict_cache 3,390, each equal to a read-only
+  count of the SQLite source (`krdict_state`, 0 rows, isn't copied). 1,551 terms keep
+  their `anki_note_id`. The indexer filled `sentences` for the 10 library books in a few
+  minutes, no tracebacks. `reader.db` stays untouched as a fallback.
+- **Backups:** a `backup` compose service on the `db` image (so `pg_dump` matches the
+  server), `pg_dump -Fc` to a `.tmp` then renamed, so a failed run never replaces a good
+  dump; newest 14 kept; one log line per run; dumps on start and then every 24 h.
+  `BACKUP_DIR` defaults to `./backups` (gitignored). The first dump (2 MB) restored into a
+  scratch db with every table equal to the live one except `sentences`, which the
+  indexer was still filling after the dump; scratch db dropped.
+- **Docs:** README "Moving machines" runbook (db only, `pg_restore --clean`, then the
+  rest); Tailscale phone steps replaced by a short "local only, on purpose" section.
+  LICENSE: MIT, copyright line uses the GitHub handle.
+- Docker Desktop already starts at sign-in (HKCU Run key), so nothing to change there.
+- **Not verified:** the live Anki sync through Docker (Anki was closed; 12 learning terms
+  have no note yet and would be added or adopted on the first sync). The restore runbook
+  ran inside the backup container, not as the exact `docker compose cp` steps in the
+  README.

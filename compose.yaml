@@ -9,8 +9,9 @@ services:
   mbxread:
     build: .
     image: mbxread
+    # Localhost only: no auth, so nothing off this machine may reach it (issue #8).
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     env_file: .env
     environment:
       ANKICONNECT_URL: http://host.docker.internal:8765
@@ -42,6 +43,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  # Nightly pg_dump into BACKUP_DIR; keeps the newest 14. Restore: README, "Moving machines".
+  backup:
+    image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
+    environment:
+      PGHOST: db
+      PGUSER: mbxread
+      PGPASSWORD: ${POSTGRES_PASSWORD:-mbxread}
+      PGDATABASE: mbxread
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          f=/backups/mbxread-$$(date +%F).dump
+          if pg_dump -Fc -f $$f.tmp; then
+            mv $$f.tmp $$f && echo "backup ok: $$f"
+            ls -1t /backups/mbxread-*.dump | tail -n +15 | xargs -r rm --
+          else
+            rm -f $$f.tmp; echo "backup FAILED"
+          fi
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     logging: *logging
 

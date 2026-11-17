@@ -19,7 +19,7 @@ review Queue. "Similar usage" in the word popover finds the word in other librar
 sentences ranked by sense (embeddings) and a local LLM names the sense (unit 5). A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
-all in Docker compose, phone access over Tailscale.
+all in Docker compose, reachable from this machine only (`127.0.0.1`, unit 10).
 
 **Test suite: 313 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
@@ -88,8 +88,10 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 - **Feed fetch is manual:** the Queue's "Fetch new candidates" button (`POST
   /api/feeds/fetch`). Each fetch also expires stale candidates and stamps
   `last_fetch_attempt`.
-- **Tailscale** address: `<machine>.<tailnet>.ts.net` — phone reaches the app at
-  `http://<machine>.<tailnet>.ts.net:8002`.
+- **Local only:** compose publishes 8002 on `127.0.0.1`; no phone or LAN access (no
+  auth, issue #8). Tailscale is still installed on this PC but no longer used by the app.
+- **Backups:** the `backup` service dumps nightly into `./backups` (newest 14 kept);
+  `docker compose logs backup` shows each run. Restore steps: README, "Moving machines".
 - **Reader pagination is client-side.** The browser breaks pages with CSS columns after
   exactly N rendered lines; N lives in **localStorage per device** (`readerLines`, default
   15, editable on `/settings`). The footer shows a percentage, not a page number. Position is
@@ -125,17 +127,15 @@ never committed; copy `.env.example`.
 | 7 | Router: cheap vs strong model, only if unit 6 shows the cheap one fails often | not justified: gemma right ~96% (unit 6) |
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
 | 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
-| 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | **next** |
-| 11 | Public demo on GitHub Pages (static, seeded with real model output) | |
+| 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done locally (branch `unit-10-the-move`) |
+| 11 | Public demo on GitHub Pages (static, seeded with real model output) | **next** |
 | 12 | Terraform pipeline with the Docker provider, local + CI | |
 | — | Oracle Always Free | deferred; private only if ever |
 
-**Unit 4 cutover: deferred by the user (2026-11-16).** The private repo's tray stays the
-daily app for now; don't propose the switch unprompted. When asked: stop the private repo's tray (`C:\Personal\MbxRead`, live
-on 8002) and remove its `MbxRead tray.lnk` Startup shortcut, run `sqlite_to_pg.py` on its
-`reader.db` + `translate_cache.sqlite3` into the empty compose db (target URL is the
-script's first argument), `docker compose up -d
---build`, check counts, turn on Docker Desktop's start-at-sign-in.
+**Cutover done (unit 10, 2026-11-17):** the compose stack is the daily app with the real
+library. The private repo's tray is stopped and its Startup shortcut moved to
+`C:\Personal\MbxRead\MbxRead tray.lnk.retired`; its `reader.db` is untouched, as a
+fallback until the compose app has been used for a while.
 
 **Units 6-7 swapped (user, 2026-11-16).** Unit 6's eval says the router has no job yet
 (`gemma4:e4b` names the right sense ~96% of the time; misses are 차다-like). Revisit only

@@ -10,6 +10,7 @@ web/out/
 .idea/
 scripts/crash.log
 anki_decks/
+backups/
 
 # Source material dropped in the root for a one-off import — copyrighted, and
 # never part of the repo.
