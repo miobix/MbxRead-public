@@ -42,7 +42,9 @@ MbxRead/
 
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
   `fastapi`, `uvicorn`, `httpx` already in `.venv`.
-- Port **8002**, `--host 0.0.0.0` (Tailscale/LAN reachable).
+- Port **8002**, published on `127.0.0.1` only since unit 10 (the app has no auth;
+  issue #8); `tailscale serve --http=8002` forwards it to the user's tailnet for the
+  phone, plain HTTP, no cert.
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
 
@@ -775,14 +777,14 @@ one: rebuilds `web/` only if any source file under `web/` (excluding
 `node_modules`/`.next`/`out`) is newer than the newest file in `web/out` (a plain
 `LastWriteTime` comparison — no build-hash tracking, since a single-user local app
 doesn't need one), then launches `uvicorn server.main:app --host 0.0.0.0 --port 8002`
-in its own window and opens the browser at `http://localhost:8002`. `--host 0.0.0.0`
-(rather than the implicit `127.0.0.1`) is what makes the server reachable from a phone
-over Tailscale/LAN at all — binding to loopback only would make the Tailscale setup in
-`README.md` a dead end.
+in its own window and opens the browser at `http://localhost:8002`. It bound
+`0.0.0.0` for phone access over Tailscale until unit 10, which moved it (and compose)
+to `127.0.0.1`: the app has no auth, and every interface meant the whole LAN (issue #8).
 
 `README.md` rewritten for korean-reader (daily use, `.env` setup, a pointer to
 `ANKI.md`, and full Tailscale phone-access steps: install on PC and phone, find the
-MagicDNS name, the Windows Firewall prompt for `--host 0.0.0.0`, the actual phone URL).
+MagicDNS name, the Windows Firewall prompt for `--host 0.0.0.0`, the actual phone URL;
+removed in unit 10 with phone access).
 Import-tools usage (`yt_subs.py`, `pdf_text.py`) carried over unchanged.
 
 **Not yet done, deliberately:** the user asked for retirement + deployment docs without
@@ -807,11 +809,17 @@ come from the environment (`env_file: .env`); `load_dotenv` finds no `.env` in t
 **Compose** (`compose.yaml`, units 2 and 4): the daily launcher. `docker compose up -d`
 once; `restart: unless-stopped` brings both services back whenever Docker Desktop starts
 (the Windows tray launcher was deleted in unit 4).
-- `mbxread`: the image on 8002, `env_file: .env`, `DATABASE_URL` pointing at `db`,
+- `mbxread`: the image on `127.0.0.1:8002` (unit 10), `env_file: .env`, `DATABASE_URL` pointing at `db`,
   `depends_on: db: service_healthy`. `ANKICONNECT_URL` (`server/anki.py`, default
   `http://127.0.0.1:8765`) is `http://host.docker.internal:8765`, with
   `extra_hosts: host-gateway` so the name also resolves on Linux. Sync reaches Anki only
   on the machine running Docker; elsewhere it returns its 503.
+- `backup` (unit 10): the `db` image, so `pg_dump` matches the server version. A shell
+  loop dumps `-Fc` to `mbxread-<date>.dump.tmp`, renames on success (a failed dump never
+  replaces a good one), deletes all but the newest 14, logs one line, sleeps a day. It
+  dumps on every start too, overwriting that day's file. `BACKUP_DIR` (default
+  `./backups`, gitignored) is bind-mounted at `/backups`. Restore steps: README,
+  "Moving machines".
 - `db`: `pgvector/pgvector:0.8.7-pg18-trixie` pinned by digest (Postgres 18 + the
   `vector` extension, unit 5), user/db `mbxread`, password
   `POSTGRES_PASSWORD` (default `mbxread`), volume `mbxread-pg` at `/var/lib/postgresql`

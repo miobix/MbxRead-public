@@ -3,8 +3,8 @@
 Personal Korean reading app: read texts, tap unknown words, translate them (DeepL),
 hand-enrich the translation, save by **dictionary form (lemma)** so every
 inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAPI +
-Postgres + kiwipiepy backend, Next.js frontend (static export), one server, phone access
-via Tailscale.
+Postgres + kiwipiepy backend, Next.js frontend (static export), one server, all in Docker
+compose, published on localhost only, with phone access through Tailscale.
 
 ## Daily use
 
@@ -44,30 +44,39 @@ See **`ANKI.md`** for the full setup and daily-use guide. Short version: Anki de
 with the AnkiConnect add-on (code `2055492159`) installed and open; no CORS
 configuration needed, since the sync call is server-to-server, not from the browser.
 
-### 3. Phone access via Tailscale
+### 3. Phone access through Tailscale
 
-Tailscale gives your phone a private, always-the-same address to this PC without
-opening anything to the public internet.
+The app has no login, so compose publishes it on `127.0.0.1:8002` only: your LAN can't
+reach it. Tailscale forwards it to your own devices, and the Tailscale sign-in is the
+access control.
 
-1. **Install Tailscale on this PC**: https://tailscale.com/download, run the installer,
-   sign in (any of Google/Microsoft/GitHub/email works — use the same account on your
-   phone in the next step).
-2. **Install Tailscale on your phone**: search "Tailscale" in the App Store / Play
-   Store, sign in with the same account.
-3. **Find this PC's Tailscale name**: open the Tailscale app/tray icon on the PC, or
-   run `tailscale status` in a terminal — look for this machine's entry, something like
-   `your-pc-name`. Its full address is `your-pc-name.<tailnet-name>.ts.net` (also
-   visible in the admin console at https://login.tailscale.com/admin/machines).
-4. **Windows Firewall**: the first time the server starts and binds to all interfaces
-   (`--host 0.0.0.0`), Windows will prompt to allow it through the firewall — allow it
-   for **Private networks**. If you miss the prompt, add an inbound rule for TCP 8002
-   (Windows Defender Firewall → Advanced Settings → Inbound Rules → New Rule → Port →
-   TCP 8002 → Allow).
-5. **On your phone**, with Tailscale connected, open
-   `http://<your-pc-name>.<tailnet-name>.ts.net:8002`.
+1. Install Tailscale on the PC and the phone (https://tailscale.com/download), signed in
+   with the same account.
+2. On the PC, once: `tailscale serve --bg --http=8002 localhost:8002`. It survives
+   reboots; `tailscale serve status` shows it, `tailscale serve --http=8002 off` removes
+   it.
+3. On the phone, with Tailscale connected: `http://<pc-name>:8002` (or the full
+   `http://<pc-name>.<tailnet>.ts.net:8002`). Use the name, not the `100.x` IP: serve
+   routes by hostname and answers a bare IP with 404.
 
-Both devices need Tailscale running and signed into the same account for this to work;
-neither the app nor port 8002 is ever exposed to the public internet.
+Plain HTTP on purpose: the traffic already rides Tailscale's encrypted tunnel, and a
+Tailscale HTTPS certificate would publish the machine's `ts.net` name in public
+certificate-transparency logs. Never use `tailscale funnel` here: that makes it public.
+
+## Moving machines
+
+1. Install Docker Desktop (turn on "Start when you sign in") and git; clone this repo.
+2. Copy your `.env` over (or fill a new one from `.env.example`).
+3. Start only the database: `docker compose up -d --wait db`.
+4. Restore the newest dump from the old machine's `backups/` (adjust the file name):
+   ```
+   docker compose cp mbxread-2026-11-17.dump db:/tmp/restore.dump
+   docker compose exec db pg_restore -U mbxread -d mbxread --clean --if-exists /tmp/restore.dump
+   ```
+5. `docker compose up -d --build`, open `http://localhost:8002`, check your library.
+   For the phone, redo the `tailscale serve` step (One-time setup, 3).
+6. Pull the LLM once (`docker compose exec ollama ollama pull gemma4:e4b`); `embed`
+   downloads its own weights on first start.
 
 ## Run with Docker
 
@@ -94,6 +103,9 @@ docker compose up -d --build
   (sentence embeddings, downloads ~2 GB of weights on first start) and `ollama` (local
   LLM). Pull its model once: `docker compose exec ollama ollama pull gemma4:e4b`. New
   library books are indexed in the background.
+- **Backups:** the `backup` service writes `mbxread-<date>.dump` (`pg_dump -Fc`) once a
+  day into `BACKUP_DIR` (default `./backups`, set it in `.env` to keep them elsewhere)
+  and keeps the newest 14. `docker compose logs backup` shows each run.
 - Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
   pytest) and `docker compose up -d db`. Tests need that db too (each test gets its own
   throwaway database). The image installs `requirements.txt` only.

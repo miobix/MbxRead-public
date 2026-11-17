@@ -2055,3 +2055,71 @@ nothing to review but a list of problems (deviation from one-PR-per-unit, user's
   The 100 MB cap stops reading into memory, but Starlette still spools an oversized
   upload to disk first. Container not rebuilt locally; CI's `image` job builds it
   without ebooklib.
+
+## 2026-11-17 — Roadmap after unit 9: units 10-12, no paid hosting
+
+- **No paid hosting or model serving (user).** A VPS with room for the models
+  (bge-m3 + gemma4) costs roughly €15-25/month, and the small tiers can't hold them; the
+  models already run free on the user's own hardware. So the app stays local.
+- **Unit 10, the move:** compose becomes the daily app, published on `127.0.0.1` only,
+  which settles issue #8 for this setup without a login (phone access dropped by the user;
+  Tailscale's free plan can restore it later, still with no login). The unit 4 cutover
+  happens on this PC so the later move is a tested dump/restore. Nightly `pg_dump`, 14
+  kept. LICENSE. CSV export dropped from the plan: local Anki keeps syncing.
+- **Unit 11, Pages demo** instead of a public live app: a public app would need a login,
+  HTTPS and the audit's hardening list; a static demo needs none. Samples: two
+  Claude-written texts designed to show the features (proofread by the user) and one
+  credited Korean Wikipedia excerpt (CC BY-SA). Similar usage and Explain are seeded with
+  real local-model output for a few words, labeled as not live (user's condition).
+  Codespaces skipped: Pages covers visitors.
+- **Unit 12, Terraform with the Docker provider:** infrastructure-as-code practice with no
+  cloud, in its own environment so it never manages the daily compose stack; CI runs an
+  apply/health/destroy cycle per PR. Roadmap ends here.
+- **Oracle Always Free, deferred.** Checked 2026-11-17: 2 ARM OCPUs / 12 GB (halved in
+  mid-2026), idle reclaim after 7 days under 20% CPU, network and memory. MbxRead's
+  native wheels (kiwipiepy, PyMuPDF, psycopg) and pinned images have arm64 builds; TEI
+  needs its separate `cpu-arm64` tag; CI would need a multi-arch build. If it comes back,
+  private only (Tailscale, no public ports).
+
+## 2026-11-17 — Unit 10: the move (compose is the daily app, local only)
+
+- **Local only:** compose publishes the app on `127.0.0.1:8002`; `start.ps1` binds
+  `127.0.0.1`. Checked: Docker shows `127.0.0.1:8002->8002`, and the PC's Tailscale
+  address refuses the connection. Settles issue #8 for this setup; the issue stays open
+  for any future remote access.
+- **Cutover done on this PC.** The private repo's tray (5 processes, matched by repo path
+  with the `restart-tray` dry run) stopped; its Startup shortcut moved to
+  `C:\Personal\MbxRead\MbxRead tray.lnk.retired` rather than deleted. No SQLite WAL or
+  journal files were pending. `sqlite_to_pg` into the compose db: books 483, pages 450,
+  terms 1,563, term_forms 38, term_back_items 2,004, settings 5, read_days 17, feeds 15,
+  vocab_levels 5,543, translate_cache 144, krdict_cache 3,390, each equal to a read-only
+  count of the SQLite source (`krdict_state`, 0 rows, isn't copied). 1,551 terms keep
+  their `anki_note_id`. The indexer filled `sentences` for the 10 library books in a few
+  minutes, no tracebacks. `reader.db` stays untouched as a fallback.
+- **Backups:** a `backup` compose service on the `db` image (so `pg_dump` matches the
+  server), `pg_dump -Fc` to a `.tmp` then renamed, so a failed run never replaces a good
+  dump; newest 14 kept; one log line per run; dumps on start and then every 24 h.
+  `BACKUP_DIR` defaults to `./backups` (gitignored). The first dump (2 MB) restored into a
+  scratch db with every table equal to the live one except `sentences`, which the
+  indexer was still filling after the dump; scratch db dropped.
+- **Docs:** README "Moving machines" runbook (db only, `pg_restore --clean`, then the
+  rest); Tailscale phone steps replaced by a short "local only, on purpose" section.
+  LICENSE: MIT, copyright line uses the GitHub handle.
+- Docker Desktop already starts at sign-in (HKCU Run key), so nothing to change there.
+- **Not verified:** the live Anki sync through Docker (Anki was closed; 12 learning terms
+  have no note yet and would be added or adopted on the first sync). The restore runbook
+  ran inside the backup container, not as the exact `docker compose cp` steps in the
+  README.
+
+## 2026-11-17 — Unit 10, follow-up: phone access back through tailscale serve
+
+Dropping the phone bought almost nothing: issue #8 came from publishing on every
+interface, not from the phone. Compose stays on `127.0.0.1`; `tailscale serve --bg
+--http=8002 localhost:8002` forwards it to the tailnet, so the Tailscale sign-in is the
+access control and the app still needs no login. Plain HTTP (user): the traffic is inside
+Tailscale's WireGuard tunnel, and an HTTPS cert would put the machine's `ts.net` name in
+public certificate-transparency logs. Plain-HTTP serve needed no admin-console switch
+(HTTPS serve did). Verified: the app answers through the tailnet hostname (short and
+full); a bare `100.x` IP gets serve's 404 (it routes by hostname); all three LAN
+addresses refuse. Not verified from the phone itself. Docs use placeholders for the
+machine and tailnet names.

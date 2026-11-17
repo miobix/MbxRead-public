@@ -34,7 +34,7 @@ if ($null -eq $outputTime -or ($null -ne $sourceTime -and $sourceTime -gt $outpu
 docker compose -f (Join-Path $root "compose.yaml") up -d --wait db
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "& '$py' -m uvicorn server.main:app --host 0.0.0.0 --port 8002" -WorkingDirectory $root
+    "& '$py' -m uvicorn server.main:app --host 127.0.0.1 --port 8002" -WorkingDirectory $root
 
 Start-Sleep -Seconds 3
 Start-Process "http://localhost:8002"
