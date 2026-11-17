@@ -19,7 +19,7 @@ review Queue. "Similar usage" in the word popover finds the word in other librar
 sentences ranked by sense (embeddings) and a local LLM names the sense (unit 5). A difficulty scorer (personal coverage + a NIKL-vocab general signal) tells you
 a text's cost before you commit. A `/stats` screen tracks reading and vocabulary growth.
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
-all in Docker compose, reachable from this machine only (`127.0.0.1`, unit 10).
+all in Docker compose on `127.0.0.1`, phone access through `tailscale serve` (unit 10).
 
 **Test suite: 313 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
@@ -88,8 +88,12 @@ Later work is numbered as units in the roadmap below (naming: `docs/README.md`).
 - **Feed fetch is manual:** the Queue's "Fetch new candidates" button (`POST
   /api/feeds/fetch`). Each fetch also expires stale candidates and stamps
   `last_fetch_attempt`.
-- **Local only:** compose publishes 8002 on `127.0.0.1`; no phone or LAN access (no
-  auth, issue #8). Tailscale is still installed on this PC but no longer used by the app.
+- **Network:** compose publishes 8002 on `127.0.0.1` only (no auth; the LAN can't reach
+  it). `tailscale serve --bg --http=8002 localhost:8002` forwards it to the tailnet: the
+  phone opens `http://<pc-name>:8002`. Plain HTTP by choice (no cert, so the `ts.net`
+  name stays out of certificate-transparency logs). Serve routes by hostname: a bare
+  `100.x` IP gets 404. This PC's Tailscale reports a DNS-config health warning ("Unable
+  to remove the file to be replaced"); harmless so far.
 - **Backups:** the `backup` service dumps nightly into `./backups` (newest 14 kept);
   `docker compose logs backup` shows each run. Restore steps: README, "Moving machines".
 - **Reader pagination is client-side.** The browser breaks pages with CSS columns after

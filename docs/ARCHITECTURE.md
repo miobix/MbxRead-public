@@ -43,7 +43,8 @@ MbxRead/
 - New Python deps: `kiwipiepy` (no system deps, works on Windows), plus existing
   `fastapi`, `uvicorn`, `httpx` already in `.venv`.
 - Port **8002**, published on `127.0.0.1` only since unit 10 (the app has no auth;
-  issue #8).
+  issue #8); `tailscale serve --http=8002` forwards it to the user's tailnet for the
+  phone, plain HTTP, no cert.
 - Node.js required for the `web/` build. If Node is missing on the machine, tell the
   user to install Node LTS and stop (`needs input`), don't work around it.
 

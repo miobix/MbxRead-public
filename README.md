@@ -4,7 +4,7 @@ Personal Korean reading app: read texts, tap unknown words, translate them (Deep
 hand-enrich the translation, save by **dictionary form (lemma)** so every
 inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAPI +
 Postgres + kiwipiepy backend, Next.js frontend (static export), one server, all in Docker
-compose, reachable only from the machine it runs on.
+compose, published on localhost only, with phone access through Tailscale.
 
 ## Daily use
 
@@ -44,12 +44,24 @@ See **`ANKI.md`** for the full setup and daily-use guide. Short version: Anki de
 with the AnkiConnect add-on (code `2055492159`) installed and open; no CORS
 configuration needed, since the sync call is server-to-server, not from the browser.
 
-### 3. Local only, on purpose
+### 3. Phone access through Tailscale
 
-The app has no login, so compose publishes it on `127.0.0.1:8002` only: other devices,
-your LAN and your phone can't reach it. To use it from another device, put it on a
-private network you control (e.g. `tailscale serve` on your tailnet) rather than
-opening the port; issue #8 has the options.
+The app has no login, so compose publishes it on `127.0.0.1:8002` only: your LAN can't
+reach it. Tailscale forwards it to your own devices, and the Tailscale sign-in is the
+access control.
+
+1. Install Tailscale on the PC and the phone (https://tailscale.com/download), signed in
+   with the same account.
+2. On the PC, once: `tailscale serve --bg --http=8002 localhost:8002`. It survives
+   reboots; `tailscale serve status` shows it, `tailscale serve --http=8002 off` removes
+   it.
+3. On the phone, with Tailscale connected: `http://<pc-name>:8002` (or the full
+   `http://<pc-name>.<tailnet>.ts.net:8002`). Use the name, not the `100.x` IP: serve
+   routes by hostname and answers a bare IP with 404.
+
+Plain HTTP on purpose: the traffic already rides Tailscale's encrypted tunnel, and a
+Tailscale HTTPS certificate would publish the machine's `ts.net` name in public
+certificate-transparency logs. Never use `tailscale funnel` here: that makes it public.
 
 ## Moving machines
 
@@ -62,6 +74,7 @@ opening the port; issue #8 has the options.
    docker compose exec db pg_restore -U mbxread -d mbxread --clean --if-exists /tmp/restore.dump
    ```
 5. `docker compose up -d --build`, open `http://localhost:8002`, check your library.
+   For the phone, redo the `tailscale serve` step (One-time setup, 3).
 6. Pull the LLM once (`docker compose exec ollama ollama pull gemma4:e4b`); `embed`
    downloads its own weights on first start.
 

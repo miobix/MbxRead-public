@@ -2110,3 +2110,16 @@ nothing to review but a list of problems (deviation from one-PR-per-unit, user's
   have no note yet and would be added or adopted on the first sync). The restore runbook
   ran inside the backup container, not as the exact `docker compose cp` steps in the
   README.
+
+## 2026-11-17 — Unit 10, follow-up: phone access back through tailscale serve
+
+Dropping the phone bought almost nothing: issue #8 came from publishing on every
+interface, not from the phone. Compose stays on `127.0.0.1`; `tailscale serve --bg
+--http=8002 localhost:8002` forwards it to the tailnet, so the Tailscale sign-in is the
+access control and the app still needs no login. Plain HTTP (user): the traffic is inside
+Tailscale's WireGuard tunnel, and an HTTPS cert would put the machine's `ts.net` name in
+public certificate-transparency logs. Plain-HTTP serve needed no admin-console switch
+(HTTPS serve did). Verified: the app answers through the tailnet hostname (short and
+full); a bare `100.x` IP gets serve's 404 (it routes by hostname); all three LAN
+addresses refuse. Not verified from the phone itself. Docs use placeholders for the
+machine and tailnet names.
