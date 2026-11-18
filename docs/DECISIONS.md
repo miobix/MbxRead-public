@@ -2234,3 +2234,9 @@ merged).
   (besides the shared pinned ones), and the daily app on 8002 stayed healthy throughout.
   `enable_models=true` checked by `plan` only (12 resources): applying it downloads
   ~2 GB of bge-m3 weights into a fresh volume. The CI run is not verified until the PR.
+
+## 2026-11-18 — Unit 12: CI verified
+
+The `infra` job ran green on PR #3 (apply, health, destroy in 1m19s on `ubuntu-24.04`),
+which settles the "not verified until the PR" line above. It is not a required check on
+`main` yet.
