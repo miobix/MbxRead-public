@@ -2256,3 +2256,23 @@ which settles the "not verified until the PR" line above. It is not a required c
 - **README drops:** the YouTube/PDF CLI import steps (the app imports them itself since
   Epic 12), the SQLite migration note (one-off, still in ARCHITECTURE), and the personal
   daily-use notes. LICENSE (MIT) is linked from a License section.
+
+## 2026-11-18 — Unit 14: Host and Origin checks (issue #1, part 2)
+
+- **`infra` is a required check on `main`** (user): it runs in parallel and is faster than
+  `test`, and it is the only check that proves the stack starts and answers health.
+- **Fix:** Starlette's `TrustedHostMiddleware` plus an Origin check on writes, both from
+  one list (`127.0.0.1`, `localhost`, env `ALLOWED_HOSTS`). Origin hostnames are compared,
+  not full origins, so ports don't matter (`next dev` on 3000, the app on 8002, the
+  Tailscale name on 8002). A missing `Origin` passes: browsers send it on every
+  cross-site POST, and non-browser clients can't be attacked through a visitor's browser.
+  Reads are not Origin-checked: a cross-site page can't read the response without CORS,
+  which the app never grants, and the Host check stops rebinding.
+- **Login stays deferred** (issue #1 keeps it): Tailscale already limits who can reach the
+  app to the user's own devices.
+- **Phone access needs the PC's short and full Tailscale names** in `ALLOWED_HOSTS`: the
+  phone's Origin carries that name whether or not serve rewrites the Host. Set in `.env`
+  only, never in the repo. Not yet checked from the phone.
+- **Verified:** 11 new tests (foreign Host 400; allowed hosts 200; `evil.example`, `null`
+  and a `127.0.0.1.evil.example` Origin refused on POST; no Origin, localhost:3000 and the
+  extra host pass); full suite 326.

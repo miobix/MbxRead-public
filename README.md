@@ -34,6 +34,7 @@ starts.
 | `KRDICT_API_KEY` | Dictionary, examples | Free at https://krdict.korean.go.kr/openApi/openApiInfo |
 | `TZ` | Stats | Your IANA time zone (e.g. `Asia/Seoul`): which day a read counts for |
 | `POSTGRES_PASSWORD` | optional | Default `mbxread`; the db listens on `127.0.0.1` only |
+| `ALLOWED_HOSTS` | Phone access | Extra host names the app answers to, comma-separated |
 | `BACKUP_DIR` | optional | Where nightly dumps go (default `./backups`) |
 
 Without keys the app still runs: Translate says the DeepL key is missing, and Dictionary
@@ -52,8 +53,13 @@ comes back empty. Restart after editing: `docker compose up -d`.
 - **Phone access:** the app has no login, so it is published on `127.0.0.1` only. Use
   Tailscale to reach it from your own devices: install it on the computer and the phone
   (same account), run `tailscale serve --bg --http=8002 localhost:8002` once on the
-  computer, then open `http://<computer-name>:8002` on the phone. Never use
-  `tailscale funnel`: that makes it public.
+  computer, add the computer's Tailscale names to `.env`
+  (`ALLOWED_HOSTS=<computer-name>,<computer-name>.<tailnet>.ts.net`) and restart, then
+  open `http://<computer-name>:8002` on the phone. Never use `tailscale funnel`: that
+  makes it public.
+- **Host and Origin checks:** the app answers only to `127.0.0.1`, `localhost` and
+  `ALLOWED_HOSTS`, and refuses writes (POST/PUT/PATCH/DELETE) sent from any other site's
+  page. A request with no `Origin` header (curl, scripts) still works.
 
 ## Backups and moving machines
 

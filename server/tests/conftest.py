@@ -63,5 +63,5 @@ def db_url(_admin, monkeypatch):
 @pytest.fixture
 def client(db_url):
     app = create_app(db_url)
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         yield c

@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose on `127.0.0.1`, phone access through `tailscale serve` (unit 10).
 
-**Test suite: 315 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 326 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -135,6 +135,7 @@ never committed; copy `.env.example`.
 | 11 | Public demo on GitHub Pages (static, seeded with real model output) | done (PR #2), live on Pages |
 | 12 | Terraform pipeline with the Docker provider, local + CI | done (`infra/`, CI job `infra`) |
 | 13 | Finishing: README as the run-it-locally guide, `docs/FEATURES.md` as the project explainer (screenshots, diagrams, demo link) | done |
+| 14 | Host/Origin checks (issue #1, part 2): `TrustedHostMiddleware` + refuse cross-site writes; `ALLOWED_HOSTS` in `.env` | done |
 | — | Oracle Always Free | deferred; private only if ever |
 
 **Cutover done (unit 10, 2026-11-17):** the compose stack is the daily app with the real
@@ -150,8 +151,8 @@ Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
 **Units 8-9 (2026-11-17):** six blind agents + `/ponytail-audit` produced the pick list
 `docs/UNIT_8_AUDIT.md`; unit 9 fixed items 1 and 3-6. One PR for both units. Item 2 (LAN
-exposure, no auth) is issue #1, deferred to the move off this PC, when remote access
-changes anyway; a login is not a priority. The rest
+exposure, no auth) is issue #1: its Host/Origin part was fixed in unit 14; the login
+stays deferred until remote access goes beyond the user's own tailnet. The rest
 of the list is open for later units. Agent trial notes and the audit incident:
 `DECISIONS.md`.
 Phone / accessibility audit deliberately left out: front-end only, belongs with the
@@ -159,14 +160,16 @@ aesthetics pass.
 
 **Re-published 2026-11-18:** `miobix/MbxRead-public` was recreated, public, from a
 rewritten history (DECISIONS 2026-11-18); old PRs #1-10 and issue #8 are gone. Ruleset on
-`main` (PR required, checks `test`, `web`, `image`); Pages from GitHub Actions; audit item 2
+`main` (PR required, checks `test`, `web`, `image`, `infra`); Pages from GitHub Actions; audit item 2
 is issue #1. The GHCR package `mbxread` grants the new repo Write under "Manage Actions
 access" (a recreated repo loses it).
 
 **Live demo:** https://miobix.github.io/MbxRead-public/ (unit 11, PR #2, deployed by the
 `pages` job on every push to `main`).
 
-**Next:** the roadmap is complete. Open choice: make the `infra` CI job a required check on `main`.
+**Next:** the roadmap is complete; nothing scheduled. `infra` is a required check on `main`
+(2026-11-18). **Phone access needs `ALLOWED_HOSTS`** in `.env` (the PC's Tailscale short
+and full names) since unit 14, or the app answers the phone with 400.
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.
