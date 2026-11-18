@@ -2276,3 +2276,10 @@ which settles the "not verified until the PR" line above. It is not a required c
 - **Verified:** 11 new tests (foreign Host 400; allowed hosts 200; `evil.example`, `null`
   and a `127.0.0.1.evil.example` Origin refused on POST; no Origin, localhost:3000 and the
   extra host pass); full suite 326.
+
+## 2026-11-18 — Unit 14: live check
+
+Rebuilt the daily app from the unit 14 branch without `ALLOWED_HOSTS`: the phone and a
+curl through the Tailscale name got "Invalid host header" (400), so Tailscale serve
+passes the original Host through. With both Tailscale names in `.env`: 127.0.0.1, the
+short and the full name answer 200, a foreign Host 400. Issue #1 now tracks the login only.
