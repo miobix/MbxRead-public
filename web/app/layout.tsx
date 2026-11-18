@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+import DemoBanner from "./DemoBanner";
+import { IS_DEMO } from "@/lib/demo";
 
 const noto = Noto_Sans_KR({
   subsets: ["latin"],
@@ -21,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${noto.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-paper text-ink font-sans">
+        {IS_DEMO && <DemoBanner />}
         {children}
       </body>
     </html>

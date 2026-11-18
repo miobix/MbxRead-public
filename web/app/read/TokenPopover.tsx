@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IS_DEMO } from "@/lib/demo";
 import {
   api,
   type BackItem,
@@ -445,6 +446,11 @@ export function TokenPopover({
 
         {usage && (
           <div className="flex flex-col gap-2 text-sm">
+            {IS_DEMO && (
+              <p className="text-xs text-muted">
+                Demo: not live. Seeded with real output from the app&apos;s local models.
+              </p>
+            )}
             {usage.hits.length === 0 ? (
               <p className="text-muted">No other sentences with {lemma} in your library yet.</p>
             ) : (

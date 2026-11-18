@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose on `127.0.0.1`, phone access through `tailscale serve` (unit 10).
 
-**Test suite: 313 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 315 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -132,8 +132,9 @@ never committed; copy `.env.example`.
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
 | 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
 | 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done (PR #10) |
-| 11 | Public demo on GitHub Pages (static, seeded with real model output) | **next** |
+| 11 | Public demo on GitHub Pages (static, seeded with real model output) | built with dictionary data (branch `unit-11-pages-demo`); Pages must be enabled |
 | 12 | Terraform pipeline with the Docker provider, local + CI | |
+| 13 | Finishing: README as both the run-it-locally guide and a project explainer (screenshots, demo link) | |
 | — | Oracle Always Free | deferred; private only if ever |
 
 **Cutover done (unit 10, 2026-11-17):** the compose stack is the daily app with the real
@@ -149,12 +150,21 @@ Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
 **Units 8-9 (2026-11-17):** six blind agents + `/ponytail-audit` produced the pick list
 `docs/UNIT_8_AUDIT.md`; unit 9 fixed items 1 and 3-6. One PR for both units. Item 2 (LAN
-exposure, no auth) is issue #8, deferred to the move off this PC, when remote access
+exposure, no auth) is issue #1, deferred to the move off this PC, when remote access
 changes anyway; a login is not a priority. The rest
 of the list is open for later units. Agent trial notes and the audit incident:
 `DECISIONS.md`.
 Phone / accessibility audit deliberately left out: front-end only, belongs with the
 aesthetics pass.
+
+**Re-published 2026-11-18:** `miobix/MbxRead-public` was recreated, public, from a
+rewritten history (DECISIONS 2026-11-18); old PRs #1-10 and issue #8 are gone. Only `main`
+is pushed; `unit-11-pages-demo` is local.
+
+**Next, in order:**
+1. **Ruleset on `main`** (GitHub UI) with required checks `test`, `web`, `image`. Pages
+   source is GitHub Actions; audit item 2 is issue #1.
+2. **Open the unit 11 PR**, merge on green, then check the live demo on Pages.
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.

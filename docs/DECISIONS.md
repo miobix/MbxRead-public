@@ -2135,3 +2135,72 @@ machine and tailnet names.
   pending or dirty. The duplicate-adoption path (unit 9) was not exercised: nothing was
   a duplicate. Sync is triggered from any device; it runs on the server, so it needs
   Anki desktop open on the PC.
+
+## 2026-11-17 — krdict flood, again (unit 11 demo data)
+
+`scripts/build_demo_data.py` looked up krdict for every demo lemma back to back with no
+delay, and on failure retried after clearing the app's 30-min pause in its scratch db.
+Across four runs that was roughly 20 requests in a few minutes, several of them retries
+into the timeout. krdict then refused connections from this PC (ConnectTimeout after 21 s,
+also outside the app): most likely the IP block the 2026-10-02 entry describes. The rule
+from then ("don't retry; tell the user") lived in the private repo's `/hanja` skill,
+which Epic 32 removed, so nothing in this repo's instructions carried it. Now a hard rule
+in `CLAUDE.md`. The script now paces krdict (3 s), never retries, stops at the first
+failure, and reuses entries already recorded in `demo-data.json`, so a rerun only asks
+for what is missing. Effect on the daily app: uncached dictionary lookups fail from this PC
+until the block lifts; cached entries and DeepL still work. The demo data was written
+without dictionary entries; the dictionary pass reruns only after the user confirms krdict
+loads from this PC.
+
+## 2026-11-17 — Unit 11: GitHub Pages demo (built; dictionary and deploy pending)
+
+- **Samples:** `scripts/demo_samples/`: two Claude-written texts (user-proofread, no
+  changes) built to show the features (가다 in six forms across both texts; 풀리다 vs 풀다;
+  다리, 눈 and 풀리다 in two senses each; ㅂ/ㄷ/르 irregulars; 하다 verbs), checked through
+  the real tokenizer first: 단팥빵, 시간쯤 and 하나씩 got wrong lemmas (known wrapper gaps) and
+  were reworded. Third: the intro and 근·현대 section of Korean Wikipedia "김치", revision
+  42547847, verbatim (two typos kept), credited CC BY-SA 4.0; its known misses (사용되기도 →
+  사용하다, compound nouns) show real-world behaviour on purpose.
+- **Recorded, not mocked:** `scripts/build_demo_data.py` records the app's own API
+  responses from a scratch db, so the demo data has exactly the server's shapes. Similar
+  usage and Explain are seeded for 풀리다, 다리 and 눈 (six sentences); the Explain lines
+  are kept as the model produced them, misses included (user).
+- **Demo layer:** one switch in `request()`; a browser-side term store rebuilds the
+  reader's `terms` map so saving a word lights up its other forms with no server.
+- **Bug found by the demo (fixed in the app too):** the reader's viewport had no
+  `position: relative`, so token `offsetLeft` was measured from `<body>` and included the
+  page's side margin; on a window where that margin exceeds half the column width, every
+  token landed one column late (wrong page shown, progress 0% on the last page). One class.
+- **Pinned:** actions/configure-pages v6.0.0, upload-pages-artifact v5.0.0, deploy-pages
+  v5.0.1 (commit SHAs in ci.yml). The `web` job builds the demo variant on every PR.
+- **Verified** in Chrome against the static build served under `/MbxRead-public/`:
+  Library with scores, reader on page 1, translate, save 가다 and see 갈수록/가고 light up,
+  seeded Similar usage + Explain with the not-live note, Terms list, Stats, no console
+  errors. 315 tests (2 new), both builds, lint.
+- **Pending:** the dictionary pass (krdict blocked this PC after the burst logged above;
+  rerun when it loads, paced); Pages needs the repo public and Pages source set to GitHub
+  Actions. Stats in the demo are the recorded empty snapshot.
+- **Repo private for now (user):** Pages can't deploy and branch protection isn't enforced
+  on a private repo on GitHub Free until it is public again.
+
+## 2026-11-18 — Unit 11: dictionary pass, paced per request
+
+The 2026-11-17 fix paced krdict per lemma, but one lookup is a `search` plus a `view` call
+per entry (up to five, for examples), sent back to back: still a burst of up to six
+requests every 3 s. `build_demo_data.py` now swaps `krdict`'s HTTP call for one that keeps
+3 s between every request, and treats a tripped pause after a lookup as a failure (a failed
+`view` call is swallowed into empty examples, so the lemma would otherwise be recorded
+incomplete). The daily app is unchanged: one popover lookup has never tripped the block.
+Run result: all 232 demo lemmas recorded, no failures; 227 with examples, 4 with no
+krdict match.
+
+## 2026-11-18 — Re-published with rewritten history
+
+A sweep of every revision found a few doc sentences about the user rather than the code,
+and one informal plan name. The GitHub repo is recreated under the same name from a
+`git-filter-repo` rewrite (`--replace-text` only, no paths dropped): those sentences now
+read as their current wording or a neutral equivalent, the plan is `term-forms-plan`, and
+unit 13 says "project explainer". Authors are unchanged (all emails are the GitHub
+noreply address). Old PRs #1-10, issue #8 and CI history are lost, as accepted on
+2026-11-17; only `main` and `unit-11-pages-demo` carry over (the other branches were
+merged).

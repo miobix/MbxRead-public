@@ -868,6 +868,30 @@ once; `restart: unless-stopped` brings both services back whenever Docker Deskto
 Image size ~607 MB: ~100 MB is deno, the rest mostly `kiwipiepy_model`, `pymupdf` and
 `numpy`.
 
+## Pages demo (unit 11)
+
+A static build of the same frontend, published to GitHub Pages, with no server.
+- **Switch:** `NEXT_PUBLIC_DEMO=1` at build time. `request()`/`requestForm()` in
+  `web/lib/api.ts` then call `demoRequest()` (`web/lib/demo.ts`) instead of `fetch`.
+  `DEMO_BASE_PATH` sets Next's `basePath` (`/<repo>` on Pages); the app build leaves both
+  unset, and the demo code is compiled out of it apart from one lazy chunk never loaded.
+- **Recorded data:** `web/lib/demo-data.json`, written by `scripts/build_demo_data.py`
+  from the real app: it imports `scripts/demo_samples/*.txt` into a scratch db (with
+  `config.DATABASE_URL` pointed there, so the translate/krdict caches never touch the live
+  db), indexes them with the real `embed`, and records the app's own API responses via
+  `TestClient`: books, text windows (minus `terms`), settings, stats, a DeepL translation
+  and krdict entries per lemma, and Similar usage + Explain for the seeded lemmas, keyed
+  `lemma|sentence` with a Python port of `extractSentence`. krdict calls are paced (3 s),
+  never retried, stop at the first failure, and reuse entries already in the JSON.
+- **Visitor state:** terms, reading offsets and settings live in `localStorage`
+  (`mbxread-demo`, try/catch, falls back to memory). `GET /books/{id}/text` rebuilds the
+  `terms` map in the browser with the server's rule (lemma match wins over a form).
+- **Not in the demo:** import, feeds, Anki sync, scoring new text: a clear error. Stats
+  are the recorded (empty) snapshot. `DemoBanner` explains what is recorded vs live and
+  carries the Wikipedia credit; the usage panel says results are seeded, not live.
+- **Deploy:** the `pages` CI job (push to `main`) builds with the demo flags and deploys
+  `web/out`; the `web` job also builds the demo variant on every PR.
+
 ## CI (unit 3)
 
 `.github/workflows/ci.yml`, on every pull request and every push to `main`, on

@@ -1,3 +1,5 @@
+import { IS_DEMO, demoRequest } from "./demo";
+
 export type BookStatus = "library" | "candidate" | "discarded";
 
 export type Book = {
@@ -248,6 +250,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (IS_DEMO) return demoRequest<T>(path, init);
   const res = await fetch(`/api${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
@@ -259,6 +262,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // right boundary itself; forcing application/json (like `request` does) would
 // break the upload.
 async function requestForm<T>(path: string, formData: FormData): Promise<T> {
+  if (IS_DEMO) return demoRequest<T>(path, { method: "POST" });
   const res = await fetch(`/api${path}`, { method: "POST", body: formData });
   return handleResponse<T>(res);
 }
