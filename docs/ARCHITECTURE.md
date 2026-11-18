@@ -946,5 +946,5 @@ The app has no login, so two checks run before every route:
   always sends one on cross-site writes. `next dev` proxies with `Origin:
   http://localhost:3000`, which passes.
 - Phone access through Tailscale serve: the phone's Origin is `http://<pc-name>:8002`, and
-  the Host is that name too unless serve rewrites it, so both Tailscale names go in
+  the Host is that name too (serve passes it through, checked live), so both Tailscale names go in
   `ALLOWED_HOSTS`. Tests use `base_url="http://127.0.0.1"`.
