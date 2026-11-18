@@ -150,7 +150,7 @@ Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
 **Units 8-9 (2026-11-17):** six blind agents + `/ponytail-audit` produced the pick list
 `docs/UNIT_8_AUDIT.md`; unit 9 fixed items 1 and 3-6. One PR for both units. Item 2 (LAN
-exposure, no auth) is deferred (its issue goes back up after the re-publish) to the move off this PC, when remote access
+exposure, no auth) is issue #1, deferred to the move off this PC, when remote access
 changes anyway; a login is not a priority. The rest
 of the list is open for later units. Agent trial notes and the audit incident:
 `DECISIONS.md`.
@@ -162,10 +162,8 @@ rewritten history (DECISIONS 2026-11-18); old PRs #1-10 and issue #8 are gone. O
 is pushed; `unit-11-pages-demo` is local.
 
 **Next, in order:**
-1. **Repo settings** (GitHub UI): Pages source = GitHub Actions; branch protection on
-   `main` with required checks `test`, `web`, `image`; recreate the LAN/no-auth issue
-   (audit item 2; since unit 10 the port is loopback + `tailscale serve`, so what is left
-   is no auth and no Host/Origin check).
+1. **Ruleset on `main`** (GitHub UI) with required checks `test`, `web`, `image`. Pages
+   source is GitHub Actions; audit item 2 is issue #1.
 2. **Open the unit 11 PR**, merge on green, then check the live demo on Pages.
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
