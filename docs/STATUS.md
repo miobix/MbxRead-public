@@ -187,7 +187,7 @@ after unit 13. Unit 10 lifts the unit 4 cutover deferral.
 
 - **Local yt-dlp has no JS runtime** (deno is only in the image). YouTube import works
   today with a deprecation warning; install deno locally if it stops.
-- **Aesthetics later:** the design is dark-mode only, by choice. Deployment comes first.
+- **Aesthetics later:** light and dark themes follow the system setting (`prefers-color-scheme`); a visual polish pass is still open.
 - **Content idea: early-school basics (2026-10-23).** Everyday terms a Korean picks up in
   elementary school: grammar and linguistics words (자모, 자음, 모음, 받침…), the names of each
   자모 (기역, 니은, 디귿…), school-subject vocabulary. No feature or scope decided yet.
