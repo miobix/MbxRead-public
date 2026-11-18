@@ -150,27 +150,23 @@ Unit 5-6 numbers and failure cases: `docs/DECISIONS.md` (2026-11-16).
 
 **Units 8-9 (2026-11-17):** six blind agents + `/ponytail-audit` produced the pick list
 `docs/UNIT_8_AUDIT.md`; unit 9 fixed items 1 and 3-6. One PR for both units. Item 2 (LAN
-exposure, no auth) is issue #8, deferred to the move off this PC, when remote access
+exposure, no auth) is deferred (its issue goes back up after the re-publish) to the move off this PC, when remote access
 changes anyway; a login is not a priority. The rest
 of the list is open for later units. Agent trial notes and the audit incident:
 `DECISIONS.md`.
 Phone / accessibility audit deliberately left out: front-end only, belongs with the
 aesthetics pass.
 
-**Repo is private for now (user, 2026-11-17):** GitHub Pages can't deploy and branch
-protection isn't enforced until it is public again; merge on green CI only.
+**Re-published 2026-11-18:** `miobix/MbxRead-public` was recreated, public, from a
+rewritten history (DECISIONS 2026-11-18); old PRs #1-10 and issue #8 are gone. Only `main`
+is pushed; `unit-11-pages-demo` is local.
 
-**Next session, in order (user, 2026-11-17):**
-1. ~~Dictionary pass~~ done 2026-11-18 (all 232 lemmas, paced per request).
-2. **Privacy sweep:** search the working tree *and* full git history (all branches) for
-   personal context about the user (employment, health, money, plans), per the user-level
-   CLAUDE.md rule. Fix the working tree; list what history still holds.
-3. **Re-publish clean** with the `publish-sanitized-repo` skill: scrubbed history, delete
-   and recreate the GitHub repo under the same name, then public again. Losing PR #1-10
-   and CI history is accepted. Afterwards: recreate issue #8, branch protection on `main`
-   (required checks `test`, `web`, `image`), Pages source = GitHub Actions; rebase the
-   local branches onto the new history.
-4. **Open the unit 11 PR**, merge on green, then check the live demo on Pages.
+**Next, in order:**
+1. **Repo settings** (GitHub UI): Pages source = GitHub Actions; branch protection on
+   `main` with required checks `test`, `web`, `image`; recreate the LAN/no-auth issue
+   (audit item 2; since unit 10 the port is loopback + `tailscale serve`, so what is left
+   is no auth and no Host/Origin check).
+2. **Open the unit 11 PR**, merge on green, then check the live demo on Pages.
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.
