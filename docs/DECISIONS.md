@@ -2204,3 +2204,33 @@ unit 13 says "project explainer". Authors are unchanged (all emails are the GitH
 noreply address). Old PRs #1-10, issue #8 and CI history are lost, as accepted on
 2026-11-17; only `main` and `unit-11-pages-demo` carry over (the other branches were
 merged).
+
+## 2026-11-18 — Unit 12: Terraform with the Docker provider
+
+- **Layout:** `infra/` root (provider, variables `prefix` / `app_port` / `enable_models`,
+  output `app_url`) and one module `infra/stack/`. Provider `kreuzwerker/docker` 4.7.0
+  exact, `.terraform.lock.hcl` committed with hashes for linux_amd64, windows_amd64 and
+  darwin_arm64. Terraform 1.17.1 locally (winget) and in CI; `hashicorp/setup-terraform`
+  pinned to v4.0.1's SHA.
+- **Separate environment:** prefix `mbxread-tf`, app on `127.0.0.1:18002`, db not
+  published, its own network and volumes. External images reuse compose's digests with
+  `keep_locally`, so `destroy` leaves the images the daily stack runs on.
+- **App image built by Terraform** from the checkout (not pulled from GHCR): a PR's
+  image is never pushed, and the per-PR environment has to run the PR's code. The rebuild
+  trigger is a hash of the files the Dockerfile copies (`__pycache__` excluded so a local
+  test run does not force a rebuild).
+- **No `.env`, fixed db password:** the db is reachable only on the private network and
+  the stack holds no data worth protecting. Keys can be added later as a sensitive
+  variable if the environment is ever used for more than up/health/down.
+- **`enable_models` off by default:** with it on, the embed container downloads bge-m3
+  (~2 GB) into a fresh volume on every apply (destroy deletes it) and ollama starts empty
+  (gemma is a manual pull). CI runners have no GPU for ollama's `gpus = "all"`, and the
+  per-PR check only needs app + db to prove the stack comes up.
+- **CI job `infra`** on pull requests only: fmt, init, validate, apply, health, destroy
+  (`if: always()`). Not a required check yet; add it to the ruleset once it has run green.
+- **Verified on this PC:** `apply` (6 resources, ~43 s with a cached build) next to the
+  running compose stack; `/api/health` ok on 18002; a second `plan` reports no changes;
+  `destroy` removes all six, leaves no `tf` containers, volumes, networks or images
+  (besides the shared pinned ones), and the daily app on 8002 stayed healthy throughout.
+  `enable_models=true` checked by `plan` only (12 resources): applying it downloads
+  ~2 GB of bge-m3 weights into a fresh volume. The CI run is not verified until the PR.

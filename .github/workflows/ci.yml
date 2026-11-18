@@ -90,6 +90,27 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
+  # Ephemeral Terraform environment (unit 12): apply, health check, destroy.
+  infra:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false
+      - run: terraform validate
+      - run: terraform apply -auto-approve -input=false
+      - run: curl -fsS "$(terraform output -raw app_url)/api/health"
+      - if: always()
+        run: terraform destroy -auto-approve -input=false
+
   image:
     needs: [test, web]
     runs-on: ubuntu-24.04

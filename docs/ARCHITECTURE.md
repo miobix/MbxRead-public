@@ -35,6 +35,7 @@ MbxRead/
   requirements-dev.txt     -r requirements.txt + pytest (unit 1)
   Dockerfile, .dockerignore  app image, API + web (units 1-2); see "Container image" below
   compose.yaml             app + Postgres (`db`) + `embed` + `ollama`, the daily launcher (units 2, 4, 5)
+  infra/                   Terraform, Docker provider: a separate, throwaway stack (unit 12)
   start.ps1                dev launcher: compose db + uvicorn with a console
   scripts/sqlite_to_pg.py  one-off cutover from a pre-unit-4 reader.db (unit 4)
   scripts/eval_usage.py    usage-search eval on server/data/usage_eval.tsv (unit 5)
@@ -907,5 +908,28 @@ A static build of the same frontend, published to GitHub Pages, with no server.
   `ghcr.io/miobix/mbxread:latest` and `:<commit sha>`. The image's
   `org.opencontainers.image.source` label links the package to the repo.
 
+- **`infra`** (pull requests only): Terraform 1.17.1, `fmt -check`, `init`, `validate`,
+  `apply`, `curl /api/health`, then `destroy` (always). See "Terraform" below.
+
 Branch protection on `main` requires `test`, `web` and `image`. A newer push to the same
 ref cancels the running workflow.
+
+## Terraform (unit 12)
+
+`infra/main.tf` (root: provider `kreuzwerker/docker` pinned to 4.7.0, lock file committed
+for linux/windows/darwin-arm64; variables `prefix` = `mbxread-tf`, `app_port` = 18002,
+`enable_models` = false; output `app_url`) calls one module, `infra/stack/`:
+
+- network `<prefix>`, volume `<prefix>-pg`; db, embed and ollama images by the same
+  `tag@sha256` pins as `compose.yaml` (`keep_locally`, so destroy never deletes images the
+  daily stack uses).
+- app image `<prefix>-app:local`, built from the repo root (the `.dockerignore` allowlist
+  applies); a hash of the source files is its rebuild trigger.
+- containers `<prefix>-db` (network alias `db`, healthcheck, `wait`), `<prefix>-app`
+  (published on `127.0.0.1:<app_port>`, `wait` on the image's HEALTHCHECK), and with
+  `enable_models` `<prefix>-embed` / `<prefix>-ollama` (`gpus = "all"`) with their volumes.
+- No `.env`: no DeepL key, no Anki route. It is a stack to bring up and tear down, not
+  a second daily app.
+
+State is local (`infra/terraform.tfstate`, gitignored); in CI it dies with the runner.
+Nothing in it names the compose project's containers, volumes or ports.

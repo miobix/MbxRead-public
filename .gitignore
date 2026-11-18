@@ -24,3 +24,7 @@ backups/
 
 # Scratch artifact HTML (design maps, not app code)
 artifacts/
+
+# Terraform (unit 12): local state and provider cache; the lock file is committed.
+infra/.terraform/
+infra/*.tfstate*
