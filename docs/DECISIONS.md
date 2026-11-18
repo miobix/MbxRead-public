@@ -2182,3 +2182,14 @@ loads from this PC.
   Actions. Stats in the demo are the recorded empty snapshot.
 - **Repo private for now (user):** Pages can't deploy and branch protection isn't enforced
   on a private repo on GitHub Free until it is public again.
+
+## 2026-11-18 — Unit 11: dictionary pass, paced per request
+
+The 2026-11-17 fix paced krdict per lemma, but one lookup is a `search` plus a `view` call
+per entry (up to five, for examples), sent back to back: still a burst of up to six
+requests every 3 s. `build_demo_data.py` now swaps `krdict`'s HTTP call for one that keeps
+3 s between every request, and treats a tripped pause after a lookup as a failure (a failed
+`view` call is swallowed into empty examples, so the lemma would otherwise be recorded
+incomplete). The daily app is unchanged: one popover lookup has never tripped the block.
+Run result: all 232 demo lemmas recorded, no failures; 227 with examples, 4 with no
+krdict match.

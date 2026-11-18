@@ -132,7 +132,7 @@ never committed; copy `.env.example`.
 | 8 | Blind audits (six agents) + ponytail audit; one curated fix list | done: pick list in `docs/UNIT_8_AUDIT.md` |
 | 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
 | 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done (PR #10) |
-| 11 | Public demo on GitHub Pages (static, seeded with real model output) | built (branch `unit-11-pages-demo`); dictionary pass waits for krdict; Pages must be enabled |
+| 11 | Public demo on GitHub Pages (static, seeded with real model output) | built with dictionary data (branch `unit-11-pages-demo`); Pages must be enabled |
 | 12 | Terraform pipeline with the Docker provider, local + CI | |
 | 13 | Finishing: README as both the run-it-locally guide and a project explainer (screenshots, demo link) | |
 | — | Oracle Always Free | deferred; private only if ever |
@@ -161,9 +161,7 @@ aesthetics pass.
 protection isn't enforced until it is public again; merge on green CI only.
 
 **Next session, in order (user, 2026-11-17):**
-1. **Dictionary pass:** once https://krdict.korean.go.kr loads on this PC, rerun
-   `python -m scripts.build_demo_data` (paced, stops at the first failure, keeps what is
-   recorded); commit the new `web/lib/demo-data.json` on `unit-11-pages-demo`.
+1. ~~Dictionary pass~~ done 2026-11-18 (all 232 lemmas, paced per request).
 2. **Privacy sweep:** search the working tree *and* full git history (all branches) for
    personal context about the user (employment, health, money, plans), per the user-level
    CLAUDE.md rule. Fix the working tree; list what history still holds.

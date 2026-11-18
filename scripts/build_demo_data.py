@@ -15,8 +15,10 @@ import sys
 import time
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import psycopg
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
@@ -26,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 from server import db, usage  # noqa: E402
 from server.main import create_app  # noqa: E402
 from server.routes.books import _score_and_cache, insert_book  # noqa: E402
-from translate_svc import config  # noqa: E402
+from translate_svc import config, krdict  # noqa: E402
 
 SAMPLES_DIR = ROOT / "scripts" / "demo_samples"
 OUT = ROOT / "web" / "lib" / "demo-data.json"
@@ -72,20 +74,34 @@ def _ok(resp):
 # krdict blocks an IP that sends requests in a burst (DECISIONS, 2026-10-02 "krdict flood").
 KRDICT_PACE_SECONDS = 3
 _krdict_down = False
+_krdict_last = 0.0
+
+
+def _paced_get(*args, **kwargs):
+    # One lookup is a search plus a view call per entry, so pace every request, not every lemma.
+    global _krdict_last
+    time.sleep(max(0.0, _krdict_last + KRDICT_PACE_SECONDS - time.monotonic()))
+    try:
+        return httpx.get(*args, **kwargs)
+    finally:
+        _krdict_last = time.monotonic()
+
+
+krdict.httpx = SimpleNamespace(get=_paced_get)
 
 
 def _dict_lookup(client, lemma: str, recorded: dict) -> list | None:
-    """Reuse an entry an earlier run recorded; else one paced request, never a retry.
+    """Reuse an entry an earlier run recorded; else paced requests, never a retry.
     The first failure stops krdict for the rest of the run. None = not recorded."""
     global _krdict_down
     if lemma in recorded:
         return recorded[lemma]
     if _krdict_down:
         return None
-    time.sleep(KRDICT_PACE_SECONDS)
     resp = client.get("/api/dict", params={"word": lemma})
-    if resp.status_code == 503:
-        print(f"  krdict failed ({resp.json()['error']}); no more krdict calls this run")
+    # A failed view call is swallowed into [] examples but still trips the pause.
+    if resp.status_code == 503 or krdict.blocked_until():
+        print(f"  krdict failed ({resp.text[:200]}); no more krdict calls this run")
         _krdict_down = True
         return None
     return _ok(resp)
