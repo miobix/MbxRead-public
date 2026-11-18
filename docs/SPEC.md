@@ -655,6 +655,21 @@ engineer from another team needs to see what the app does and how, without runni
 **Accept:** both render on GitHub (images, Mermaid); every command in the README matches
 the repo.
 
+### Unit 14 — Host and Origin checks (issue #1, part 2)
+
+**Why:** with no login, any web page open in a browser on the same machine could send
+cross-site POSTs to `127.0.0.1:8002` (imports, uploads) or read it through DNS rebinding.
+
+**How:** `TrustedHostMiddleware` with `127.0.0.1`, `localhost` and `ALLOWED_HOSTS` (env,
+comma-separated, lowercased); a middleware that answers 403 to a non-GET/HEAD/OPTIONS
+request whose `Origin` hostname is not in that list (`null` included). No `Origin`
+header passes (curl, scripts, server-to-server).
+
+**Out of scope:** a login (issue #1 keeps it, deferred).
+
+**Accept:** tests for foreign Host, allowed hosts, cross-site and same-site writes; the
+compose app, the healthcheck, `next dev` and phone access through Tailscale keep working.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

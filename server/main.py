@@ -4,8 +4,11 @@ import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from translate_svc import config
@@ -74,6 +77,19 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     app = FastAPI(title="MbxRead", lifespan=lifespan)
     app.state.database_url = database_url
+    # No login: refuse foreign Host headers (DNS rebinding) and cross-site writes.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
+
+    @app.middleware("http")
+    async def same_origin_writes(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if (
+            request.method not in ("GET", "HEAD", "OPTIONS")
+            and origin is not None
+            and urlsplit(origin).hostname not in config.ALLOWED_HOSTS
+        ):
+            return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
+        return await call_next(request)
 
     @app.get("/api/health")
     def health():

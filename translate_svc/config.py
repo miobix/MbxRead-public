@@ -18,3 +18,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mbxread:mbxread@127.0.0.1
 EMBED_URL = os.getenv("EMBED_URL", "").rstrip("/")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
+
+# Host names the app answers to; add others (e.g. a Tailscale name) comma-separated.
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"] + [
+    h.strip().lower() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()
+]

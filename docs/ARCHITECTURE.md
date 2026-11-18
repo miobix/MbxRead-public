@@ -933,3 +933,18 @@ for linux/windows/darwin-arm64; variables `prefix` = `mbxread-tf`, `app_port` = 
 
 State is local (`infra/terraform.tfstate`, gitignored); in CI it dies with the runner.
 Nothing in it names the compose project's containers, volumes or ports.
+
+## Request guard (unit 14, `server/main.py`)
+
+The app has no login, so two checks run before every route:
+
+- **Host:** `TrustedHostMiddleware`, allowed `127.0.0.1`, `localhost` and
+  `config.ALLOWED_HOSTS` (env `ALLOWED_HOSTS`, comma-separated). Anything else gets 400,
+  which defeats DNS rebinding (the browser sends the attacker's name as Host).
+- **Origin on writes:** POST/PUT/PATCH/DELETE with an `Origin` whose hostname is not in the
+  same list get 403. No `Origin` passes (curl, the healthcheck, scripts); the browser
+  always sends one on cross-site writes. `next dev` proxies with `Origin:
+  http://localhost:3000`, which passes.
+- Phone access through Tailscale serve: the phone's Origin is `http://<pc-name>:8002`, and
+  the Host is that name too unless serve rewrites it, so both Tailscale names go in
+  `ALLOWED_HOSTS`. Tests use `base_url="http://127.0.0.1"`.
