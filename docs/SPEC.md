@@ -637,6 +637,24 @@ back, it is private only (Tailscale, no public ports, no login).
 **Accept:** `terraform apply` brings up a working stack beside the daily one, `destroy`
 removes it cleanly, CI runs the same cycle on every PR; ARCHITECTURE section added.
 
+### Unit 13 — Finishing: README and features doc
+
+**Why:** two readers. Someone cloning the repo needs a guide to run and develop it; an
+engineer from another team needs to see what the app does and how, without running it.
+
+**How:**
+1. `README.md`: quick start, `.env` table, optional parts (Anki, models, phone),
+   backups/restore, development, Terraform, layout, license. Links to the demo and
+   `docs/FEATURES.md`.
+2. `docs/FEATURES.md`: the core loop with screenshots taken from the Pages demo (sample
+   data only), Similar usage with its eval numbers, imports/Queue/stats, Mermaid diagrams
+   for the architecture and the delivery pipeline, the stack.
+
+**Out of scope:** new features, screenshots of a real library.
+
+**Accept:** both render on GitHub (images, Mermaid); every command in the README matches
+the repo.
+
 ## 11. End-to-end verification (after Epic 8)
 
 1. `start.ps1` → app on :8002. Import the user's test short story.

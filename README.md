@@ -1,167 +1,125 @@
 # MbxRead
 
-Personal Korean reading app: read texts, tap unknown words, translate them (DeepL),
-hand-enrich the translation, save by **dictionary form (lemma)** so every
-inflection highlights, and bulk-sync saved terms to Anki via AnkiConnect. FastAPI +
-Postgres + kiwipiepy backend, Next.js frontend (static export), one server, all in Docker
-compose, published on localhost only, with phone access through Tailscale.
+A Korean reading app: read real texts, tap unknown words, translate them, build structured
+flashcards saved by **dictionary form** (so every inflection highlights), and sync them to
+Anki. FastAPI + Postgres + kiwipiepy backend, Next.js frontend, local language models, all
+in Docker compose.
 
-## Daily use
+- **What it does and how it works:** [docs/FEATURES.md](docs/FEATURES.md) (screenshots,
+  diagrams, design notes)
+- **Try it without installing:** [live demo](https://miobix.github.io/MbxRead-public/)
+  (static, sample texts)
 
-**Runs in Docker.** `docker compose up -d --build` once (see "Run with Docker"). Both the
-app and its Postgres have `restart: unless-stopped`, so they come back whenever Docker
-Desktop starts; turn on "Start Docker Desktop when you sign in" in Docker Desktop's
-settings and the app is just there at `http://localhost:8002`. Logs: `docker compose logs
--f mbxread`. After pulling changes: `docker compose up -d --build`.
+## Quick start
 
-`start.ps1` is for **development**: it rebuilds `web/` if the frontend source is newer
-than the last build, starts the compose Postgres, then runs the server in a visible
-console (tracebacks live) and opens your browser at `http://localhost:8002`. Stop the
-compose app first (`docker compose stop mbxread`), since both want port 8002.
-
-Keep Anki open if you want to sync terms.
-
-Reading flow: open a book → tap an unknown word (or drag-select a phrase) → Translate
-and/or look it up in the dictionary → edit the translation freely → pick a deck → Save.
-Every inflection of that word's dictionary form highlights from then on. Tap a
-highlighted word to edit it, mark it known, ignore it, or delete it.
-
-## One-time setup
-
-### 1. API keys → `.env`
-
-Copy `.env.example` to `.env` and fill in:
-- **DEEPL_API_KEY** — free at https://www.deepl.com/pro-api ("DeepL API Free", 500k
-  chars/month).
-- **KRDICT_API_KEY** — free at https://krdict.korean.go.kr/openApi/openApiInfo (instant,
-  needs an account).
-
-Restart the server after editing `.env`.
-
-### 2. Anki sync (AnkiConnect)
-
-See **`ANKI.md`** for the full setup and daily-use guide. Short version: Anki desktop
-with the AnkiConnect add-on (code `2055492159`) installed and open; no CORS
-configuration needed, since the sync call is server-to-server, not from the browser.
-
-### 3. Phone access through Tailscale
-
-The app has no login, so compose publishes it on `127.0.0.1:8002` only: your LAN can't
-reach it. Tailscale forwards it to your own devices, and the Tailscale sign-in is the
-access control.
-
-1. Install Tailscale on the PC and the phone (https://tailscale.com/download), signed in
-   with the same account.
-2. On the PC, once: `tailscale serve --bg --http=8002 localhost:8002`. It survives
-   reboots; `tailscale serve status` shows it, `tailscale serve --http=8002 off` removes
-   it.
-3. On the phone, with Tailscale connected: `http://<pc-name>:8002` (or the full
-   `http://<pc-name>.<tailnet>.ts.net:8002`). Use the name, not the `100.x` IP: serve
-   routes by hostname and answers a bare IP with 404.
-
-Plain HTTP on purpose: the traffic already rides Tailscale's encrypted tunnel, and a
-Tailscale HTTPS certificate would publish the machine's `ts.net` name in public
-certificate-transparency logs. Never use `tailscale funnel` here: that makes it public.
-
-## Moving machines
-
-1. Install Docker Desktop (turn on "Start when you sign in") and git; clone this repo.
-2. Copy your `.env` over (or fill a new one from `.env.example`).
-3. Start only the database: `docker compose up -d --wait db`.
-4. Restore the newest dump from the old machine's `backups/` (adjust the file name):
-   ```
-   docker compose cp mbxread-2026-11-17.dump db:/tmp/restore.dump
-   docker compose exec db pg_restore -U mbxread -d mbxread --clean --if-exists /tmp/restore.dump
-   ```
-5. `docker compose up -d --build`, open `http://localhost:8002`, check your library.
-   For the phone, redo the `tailscale serve` step (One-time setup, 3).
-6. Pull the LLM once (`docker compose exec ollama ollama pull gemma4:e4b`); `embed`
-   downloads its own weights on first start.
-
-## Run with Docker
+Needs Docker (Docker Desktop on Windows/Mac) and git.
 
 ```
-cp .env.example .env      # then fill in your keys
+git clone https://github.com/miobix/MbxRead-public.git
+cd MbxRead-public
+cp .env.example .env      # fill in the keys you have (see Configuration)
 docker compose up -d --build
 ```
 
-- Open `http://localhost:8002`. One container serves the web UI and the API
-  (`/api/health` for a check).
-- Your data lives in Postgres (the `db` service, volume `mbxread-pg`), reachable from the
-  host at `127.0.0.1:5433` for dev runs and tests. Set `TZ` in `.env` (e.g. `Asia/Seoul`):
-  it decides which local day a read or a saved word counts for.
-- **Coming from an old SQLite `reader.db`?** With the db up and empty, run once:
-  `.venv\Scripts\python.exe -m scripts.sqlite_to_pg postgresql://mbxread:mbxread@127.0.0.1:5433/mbxread reader.db translate_cache.sqlite3`.
-  It keeps ids (so Anki links survive), prints the target before writing, and refuses a
-  database that already has data or a SQLite path that doesn't exist.
-- **Anki sync** works when Anki runs on the same computer as Docker: compose points the
-  server at `host.docker.internal:8765` (`ANKICONNECT_URL`). Docker Desktop (Windows/Mac)
-  needs nothing else. On Linux, set AnkiConnect's `webBindAddress` to `0.0.0.0` (Anki →
-  Tools → Add-ons → AnkiConnect → Config), since its default `127.0.0.1` refuses
-  connections from containers.
-- **Similar usage** (popover button) needs two more services that compose starts: `embed`
-  (sentence embeddings, downloads ~2 GB of weights on first start) and `ollama` (local
-  LLM). Pull its model once: `docker compose exec ollama ollama pull gemma4:e4b`. New
-  library books are indexed in the background.
-- **Backups:** the `backup` service writes `mbxread-<date>.dump` (`pg_dump -Fc`) once a
-  day into `BACKUP_DIR` (default `./backups`, set it in `.env` to keep them elsewhere)
-  and keeps the newest 14. `docker compose logs backup` shows each run.
-- Running locally instead: `pip install -r requirements-dev.txt` (runtime deps plus
-  pytest) and `docker compose up -d db`. Tests need that db too (each test gets its own
-  throwaway database). The image installs `requirements.txt` only.
+Open `http://localhost:8002`. Check health at `/api/health`; logs with
+`docker compose logs -f mbxread`. After pulling changes, run `docker compose up -d --build`
+again. Every service has `restart: unless-stopped`, so the app comes back whenever Docker
+starts.
 
-## Terraform (practice environment)
+## Configuration (`.env`)
 
-`infra/` describes a second, throwaway copy of the stack with Terraform and the Docker
-provider: network, Postgres volume, the app image built from this checkout, containers
-`mbxread-tf-*`, app on `http://127.0.0.1:18002`. It never touches the daily compose stack,
-and its database starts empty.
+| Variable | Needed for | |
+|---|---|---|
+| `DEEPL_API_KEY` | Translate | Free at https://www.deepl.com/pro-api (500k chars/month) |
+| `KRDICT_API_KEY` | Dictionary, examples | Free at https://krdict.korean.go.kr/openApi/openApiInfo |
+| `TZ` | Stats | Your IANA time zone (e.g. `Asia/Seoul`): which day a read counts for |
+| `POSTGRES_PASSWORD` | optional | Default `mbxread`; the db listens on `127.0.0.1` only |
+| `BACKUP_DIR` | optional | Where nightly dumps go (default `./backups`) |
+
+Without keys the app still runs: Translate says the DeepL key is missing, and Dictionary
+comes back empty. Restart after editing: `docker compose up -d`.
+
+## Optional parts
+
+- **Anki sync:** Anki desktop with the AnkiConnect add-on (code `2055492159`), open on the
+  same computer. Compose reaches it at `host.docker.internal:8765`. On Linux, set
+  AnkiConnect's `webBindAddress` to `0.0.0.0` (its default refuses containers). Full
+  guide: [ANKI.md](ANKI.md).
+- **Similar usage** (find a word's other uses by sense, and a local LLM's explanation):
+  compose starts `embed` (downloads ~2 GB of bge-m3 weights on first start) and `ollama`.
+  Pull the LLM once: `docker compose exec ollama ollama pull gemma4:e4b`. Library texts are
+  indexed in the background. Without these the rest of the app works normally.
+- **Phone access:** the app has no login, so it is published on `127.0.0.1` only. Use
+  Tailscale to reach it from your own devices: install it on the computer and the phone
+  (same account), run `tailscale serve --bg --http=8002 localhost:8002` once on the
+  computer, then open `http://<computer-name>:8002` on the phone. Never use
+  `tailscale funnel`: that makes it public.
+
+## Backups and moving machines
+
+The `backup` service writes `mbxread-<date>.dump` (`pg_dump -Fc`) daily into `BACKUP_DIR`
+and keeps the newest 14 (`docker compose logs backup` shows each run).
+
+To restore on a new machine: clone, copy `.env`, then
+
+```
+docker compose up -d --wait db
+docker compose cp mbxread-2026-11-17.dump db:/tmp/restore.dump
+docker compose exec db pg_restore -U mbxread -d mbxread --clean --if-exists /tmp/restore.dump
+docker compose up -d --build
+```
+
+and pull the LLM again (see Optional parts).
+
+## Development
+
+```
+python -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt     # Windows: .venv\Scripts\pip
+docker compose up -d db                            # tests and dev runs use it (127.0.0.1:5433)
+.venv/bin/python -m pytest server/tests -q         # offline: every external service is mocked
+cd web && npm ci && npm run lint && npm run build
+```
+
+- Tests create a throwaway database per test, so they never touch your data.
+- Dev server: stop the compose app (`docker compose stop mbxread`), then
+  `uvicorn server.main:app --port 8002` from the repo root; it serves `web/out`. On
+  Windows, `start.ps1` does that, rebuilding `web/` first if it's stale.
+- `requirements.txt` is what the image installs; test-only deps go in
+  `requirements-dev.txt`.
+- Contributor docs live in `docs/`: start with `docs/STATUS.md`; `docs/README.md`
+  explains what each doc is for.
+
+## Terraform
+
+`infra/` describes a second, disposable copy of the stack with Terraform and the Docker
+provider (containers `mbxread-tf-*`, app on `http://127.0.0.1:18002`, empty database). It
+never touches the compose stack.
 
 ```
 cd infra
 terraform init
-terraform apply      # -var enable_models=true adds embed + ollama
+terraform apply      # -var enable_models=true adds embed + ollama (downloads model weights)
 terraform destroy
 ```
 
 CI runs the same apply, health check and destroy on every pull request.
 
-## Importing texts
-
-- **Paste or upload**: in the app, "+ Add" → paste text or upload a `.txt` file.
-- **YouTube**: `.venv\Scripts\python import_tools\yt_subs.py "https://youtube.com/watch?v=..."`
-  → creates a cleaned `.txt` (manual Korean subs preferred, auto-subs as fallback).
-  Paste the result into the app.
-- **PDF**: `.venv\Scripts\python import_tools\pdf_text.py book.pdf --pages 1-30` →
-  `.txt`. Paste the result into the app.
-
-## Fetching content
-
-The Queue (`/queue`) pulls new candidates from your feeds with the "Fetch new
-candidates" button (`POST /api/feeds/fetch`). Fetching is manual; there is no
-scheduled job.
-
-- **Queue candidate retention** (in `/settings`): how many days an unpromoted,
-  undiscarded candidate sits in the Queue before a fetch auto-discards it (default
-  7 days). Checked on every fetch.
-- The time of the last fetch *attempt* is stored (`GET /api/settings` →
-  `last_fetch_attempt`) and shown on the Queue page.
-
 ## Layout
 
 ```
-server/                 FastAPI app (port 8002): API routes, Postgres schema, tokenizer
-web/                    Next.js frontend, built to web/out and served by server/main.py
-translate_svc/          DeepL translation + cache + krdict, imported as a library
-import_tools/           yt_subs.py, pdf_text.py
-docs/                   architecture/spec/decision docs — read docs/STATUS.md first if developing
-scripts/sqlite_to_pg.py one-off copy of an old SQLite reader.db into Postgres
-start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
-Dockerfile              app image, API + web (see "Run with Docker"); .dockerignore is an allowlist
-compose.yaml            app + Postgres + embed + ollama, .env, the route to desktop Anki: the daily launcher
-infra/                  Terraform (Docker provider): a throwaway copy of the stack, also run in CI
-requirements.txt        runtime deps (what the image installs)
-requirements-dev.txt    + pytest, for local use
-ANKI.md                 Anki sync setup and daily-use guide
-.env                    your API keys (copy from .env.example)
+server/          FastAPI app: API routes, Postgres schema, tokenizer, usage search
+web/             Next.js frontend, built to web/out and served by the app
+translate_svc/   DeepL, krdict and their caches, used as a library
+import_tools/    YouTube subtitles and PDF text extraction (also usable as CLIs)
+scripts/         one-off and eval scripts (demo data, usage eval, SQLite migration)
+infra/           Terraform: the disposable stack, also run in CI
+docs/            features, architecture, spec, decision log, status
+compose.yaml     app + Postgres + embed + ollama + backup
+Dockerfile       the app image (API + web); .dockerignore is an allowlist
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). The Korean Wikipedia excerpt in the demo is CC BY-SA, credited
+in the demo itself.

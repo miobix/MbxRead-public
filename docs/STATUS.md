@@ -134,7 +134,7 @@ never committed; copy `.env.example`.
 | 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done (PR #10) |
 | 11 | Public demo on GitHub Pages (static, seeded with real model output) | done (PR #2), live on Pages |
 | 12 | Terraform pipeline with the Docker provider, local + CI | done (`infra/`, CI job `infra`) |
-| 13 | Finishing: README as both the run-it-locally guide and a project explainer (screenshots, demo link) | |
+| 13 | Finishing: README as the run-it-locally guide, `docs/FEATURES.md` as the project explainer (screenshots, diagrams, demo link) | done |
 | — | Oracle Always Free | deferred; private only if ever |
 
 **Cutover done (unit 10, 2026-11-17):** the compose stack is the daily app with the real
@@ -166,13 +166,13 @@ access" (a recreated repo loses it).
 **Live demo:** https://miobix.github.io/MbxRead-public/ (unit 11, PR #2, deployed by the
 `pages` job on every push to `main`).
 
-**Next:** unit 13 (README as guide + project explainer).
+**Next:** the roadmap is complete. Open choice: make the `infra` CI job a required check on `main`.
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.
 
-**Units 10-12 (user, 2026-11-17):** scope in SPEC. No paid hosting; the roadmap ends
-after unit 12. Unit 10 lifts the unit 4 cutover deferral.
+**Units 10-13 (user, 2026-11-17):** scope in SPEC. No paid hosting; the roadmap ends
+after unit 13. Unit 10 lifts the unit 4 cutover deferral.
 
 ## Open follow-ups (not blockers)
 
