@@ -133,7 +133,7 @@ never committed; copy `.env.example`.
 | 9 | Audit fixes: Anki sync crash safety, cutover script guard, duplicate-import rollback, lemma re-sync, EPUB/upload caps | done (PR #9, with unit 8) |
 | 10 | The move: compose is the daily app, local only, cutover, nightly backups, LICENSE | done (PR #10) |
 | 11 | Public demo on GitHub Pages (static, seeded with real model output) | done (PR #2), live on Pages |
-| 12 | Terraform pipeline with the Docker provider, local + CI | |
+| 12 | Terraform pipeline with the Docker provider, local + CI | done (`infra/`, CI job `infra`) |
 | 13 | Finishing: README as both the run-it-locally guide and a project explainer (screenshots, demo link) | |
 | — | Oracle Always Free | deferred; private only if ever |
 
@@ -166,7 +166,7 @@ access" (a recreated repo loses it).
 **Live demo:** https://miobix.github.io/MbxRead-public/ (unit 11, PR #2, deployed by the
 `pages` job on every push to `main`).
 
-**Next:** unit 12 (Terraform).
+**Next:** unit 13 (README as guide + project explainer).
 
 **PRs at the user's pace:** the user reviews each unit before it becomes a PR. Finish
 units as local commits on their branch; push and open the PR only when asked.

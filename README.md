@@ -110,6 +110,22 @@ docker compose up -d --build
   pytest) and `docker compose up -d db`. Tests need that db too (each test gets its own
   throwaway database). The image installs `requirements.txt` only.
 
+## Terraform (practice environment)
+
+`infra/` describes a second, throwaway copy of the stack with Terraform and the Docker
+provider: network, Postgres volume, the app image built from this checkout, containers
+`mbxread-tf-*`, app on `http://127.0.0.1:18002`. It never touches the daily compose stack,
+and its database starts empty.
+
+```
+cd infra
+terraform init
+terraform apply      # -var enable_models=true adds embed + ollama
+terraform destroy
+```
+
+CI runs the same apply, health check and destroy on every pull request.
+
 ## Importing texts
 
 - **Paste or upload**: in the app, "+ Add" → paste text or upload a `.txt` file.
@@ -143,6 +159,7 @@ scripts/sqlite_to_pg.py one-off copy of an old SQLite reader.db into Postgres
 start.ps1               dev launcher: rebuilds web/ if stale, visible console, opens browser
 Dockerfile              app image, API + web (see "Run with Docker"); .dockerignore is an allowlist
 compose.yaml            app + Postgres + embed + ollama, .env, the route to desktop Anki: the daily launcher
+infra/                  Terraform (Docker provider): a throwaway copy of the stack, also run in CI
 requirements.txt        runtime deps (what the image installs)
 requirements-dev.txt    + pytest, for local use
 ANKI.md                 Anki sync setup and daily-use guide
