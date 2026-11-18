@@ -2240,3 +2240,19 @@ merged).
 The `infra` job ran green on PR #3 (apply, health, destroy in 1m19s on `ubuntu-24.04`),
 which settles the "not verified until the PR" line above. It is not a required check on
 `main` yet.
+
+## 2026-11-18 — Unit 13: README and features doc, split
+
+- **Split (user):** the roadmap row said one README doing both jobs. It is now two docs:
+  `README.md` for someone who clones the repo (run, configure, develop, license) and
+  `docs/FEATURES.md` for an engineer from another team (what it does, screenshots,
+  diagrams, design notes). Each reader gets a short doc instead of one long one.
+- **Screenshots from the public Pages demo**, captured with headless Chrome
+  (puppeteer-core in a scratch folder, not a repo dependency): sample texts only, so no
+  real library data can end up in the repo. Four kept (library, popover, Similar usage +
+  Explain, highlights after saving); stats, terms and queue are empty in the demo and
+  were left out.
+- **Diagrams in Mermaid**, which GitHub renders natively: no image files to keep in sync.
+- **README drops:** the YouTube/PDF CLI import steps (the app imports them itself since
+  Epic 12), the SQLite migration note (one-off, still in ARCHITECTURE), and the personal
+  daily-use notes. LICENSE (MIT) is linked from a License section.

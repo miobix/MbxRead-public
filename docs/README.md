@@ -9,7 +9,7 @@ The four kinds:
 | **Living state** | Read first, every session, top-to-bottom | **Rewrite in place.** Prune finished work; keep it short. | `STATUS.md` |
 | **Contract** | Read when building the thing it specifies | Update to match reality; log deviations in the log. | `SPEC.md`, `ARCHITECTURE.md` |
 | **Append-only log** | Looked up on demand ("why did we…?"), never read in full | **Never rewrite, never compress.** Growth is correct. | `DECISIONS.md` |
-| **Reference / ephemeral** | On demand; ephemeral ones die once decided | Reference: keep accurate. Ephemeral: **archive when spent.** | `CONTENT_CATALOG.md`, `LEARNED_LESSONS.md`, `archive/` |
+| **Reference / ephemeral** | On demand; ephemeral ones die once decided | Reference: keep accurate. Ephemeral: **archive when spent.** | `FEATURES.md`, `CONTENT_CATALOG.md`, `LEARNED_LESSONS.md`, `archive/` |
 
 **Naming:** epics 0–32 come from solo development, where an *epic* meant one scoped change
 (one session, one commit, one `DECISIONS.md` entry), not the Scrum sense. From the public
@@ -30,6 +30,9 @@ repo on, the same thing is a *unit*: one roadmap item, one PR, numbered as in `S
 - **`DECISIONS.md`** — *Append-only log.* One dated entry per non-obvious decision, with the
   why. **Never edit past entries.** This is the project's memory; it's *supposed* to be long.
   It's what lets `STATUS.md` stay short — the history lives here, not there.
+- **`FEATURES.md`** — *Reference.* The project explainer for readers outside the project:
+  what the app does, screenshots (from the Pages demo), diagrams, design notes. Keep it
+  accurate when a feature changes; screenshots live in `docs/img/`.
 - **`CONTENT_CATALOG.md`** — *Reference.* The curated source roster (feeds, authors, notes).
 - **`LEARNED_LESSONS.md`** — *Reference (meta).* Process lessons from building this project —
   the doc-hygiene and dev-cycle practices worth reusing on the next project.
