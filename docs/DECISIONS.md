@@ -2193,3 +2193,14 @@ requests every 3 s. `build_demo_data.py` now swaps `krdict`'s HTTP call for one 
 incomplete). The daily app is unchanged: one popover lookup has never tripped the block.
 Run result: all 232 demo lemmas recorded, no failures; 227 with examples, 4 with no
 krdict match.
+
+## 2026-11-18 — Re-published with rewritten history
+
+A sweep of every revision found a few doc sentences about the user rather than the code,
+and one informal plan name. The GitHub repo is recreated under the same name from a
+`git-filter-repo` rewrite (`--replace-text` only, no paths dropped): those sentences now
+read as their current wording or a neutral equivalent, the plan is `term-forms-plan`, and
+unit 13 says "project explainer". Authors are unchanged (all emails are the GitHub
+noreply address). Old PRs #1-10, issue #8 and CI history are lost, as accepted on
+2026-11-17; only `main` and `unit-11-pages-demo` carry over (the other branches were
+merged).
