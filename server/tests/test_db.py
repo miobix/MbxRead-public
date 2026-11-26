@@ -48,6 +48,19 @@ def test_feeds_seeded_and_idempotent(db_url):
     assert "My channel" in names
 
 
+def test_deleted_seed_feed_stays_deleted(db_url):
+    with db.get_connection(db_url) as conn:
+        conn.execute(
+            "DELETE FROM feeds WHERE url_or_channel_id = %s",
+            ("https://webzine.inven.co.kr/news/rss.php",),
+        )
+    db.init_db(db_url)
+    with db.get_connection(db_url) as conn:
+        urls = {r["url_or_channel_id"] for r in conn.execute("SELECT url_or_channel_id FROM feeds")}
+    assert "https://webzine.inven.co.kr/news/rss.php" not in urls
+    assert len(urls) == len(db._SEED_FEEDS) - 1
+
+
 def test_source_ref_unique_index_ignores_nulls(db_url):
     with db.get_connection(db_url) as conn:
         conn.execute("INSERT INTO books (title) VALUES ('a')")

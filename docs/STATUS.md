@@ -21,7 +21,7 @@ a text's cost before you commit. A `/stats` screen tracks reading and vocabulary
 FastAPI + Postgres + kiwipiepy backend, Next.js static-export frontend served by FastAPI,
 all in Docker compose on `127.0.0.1`, phone access through `tailscale serve` (unit 10).
 
-**Test suite: 326 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
+**Test suite: 331 passing** (`.venv\Scripts\python.exe -m pytest server/tests -q`; needs
 `docker compose up -d db`).
 `web/`: `npm run build` and `npm run lint` clean.
 
@@ -136,6 +136,7 @@ never committed; copy `.env.example`.
 | 12 | Terraform pipeline with the Docker provider, local + CI | done (`infra/`, CI job `infra`) |
 | 13 | Finishing: README as the run-it-locally guide, `docs/FEATURES.md` as the project explainer (screenshots, diagrams, demo link) | done |
 | 14 | Host/Origin checks (issue #1, part 2): `TrustedHostMiddleware` + refuse cross-site writes; `ALLOWED_HOSTS` in `.env` | done |
+| 15 | Maintenance: audit items 8, 9, 11, 12 (delete confirm, sheets keep unsaved input, seed feeds stay deleted, Anki fields escaped, lemma NFC) | done |
 | — | Oracle Always Free | deferred; private only if ever |
 
 **Cutover done (unit 10, 2026-11-17):** the compose stack is the daily app with the real

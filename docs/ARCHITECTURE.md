@@ -87,8 +87,8 @@ SQLite anywhere in the app.
   column is an `ALTER TABLE … ADD COLUMN IF NOT EXISTS` line in `init_db`. The old
   `_ADDED_COLUMNS` / `PRAGMA table_info` scheme is gone.
 - **Seeds:** `_seed_vocab_levels` bulk-inserts `server/data/vocab_levels.tsv` (~5,543
-  rows) only into an empty table; `_seed_feeds` inserts each roster feed keyed by
-  `url_or_channel_id`, so hand-added or edited feeds survive.
+  rows) only into an empty table; `_seed_feeds` seeds the roster only when `feeds` is
+  empty (unit 15), so deleted or edited seed feeds stay that way.
 - **Constraints:** foreign keys always on (Postgres default) with `ON DELETE CASCADE` on
   `pages`, `term_forms`, `term_back_items`, `read_days`; partial unique index
   `idx_books_source_ref` (NULL source_refs never collide). A duplicate raises

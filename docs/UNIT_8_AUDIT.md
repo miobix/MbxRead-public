@@ -1,6 +1,6 @@
 # Unit 8 audit: curated fix list (2026-11-17)
 
-**Status:** items 1, 3, 4, 5, 6 fixed in unit 9; item 2 deferred to issue #1; the rest open.
+**Status:** items 1, 3, 4, 5, 6 fixed in unit 9; 8, 9, 11, 12 in unit 15; item 2 deferred to issue #1; the rest open.
 
 *Ephemeral.* The pick list from unit 8's six blind audits plus `/ponytail-audit`. The user
 picks; the fixes are a follow-up unit. Move to `archive/` once that unit ships. How the

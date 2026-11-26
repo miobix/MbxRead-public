@@ -84,6 +84,12 @@ export function TokenPopover({
     null
   );
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Anything added or typed since opening; a backdrop tap then leaves the popover open.
+  const snapshot = JSON.stringify({ lemma, deck, forms, backItems, notes, manualFront, manualBack });
+  const [openSnapshot] = useState(snapshot);
+  const dirty = snapshot !== openSnapshot;
 
   // A term never touched by this card builder (no back_items) shows its old flat
   // translation read-only instead of chips.
@@ -386,7 +392,7 @@ export function TokenPopover({
   return (
     <div
       className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
-      onClick={onClose}
+      onClick={dirty ? undefined : onClose}
     >
       <div
         className="w-full sm:max-w-md bg-surface border-t border-border sm:border sm:rounded-lg shadow-[0_-8px_30px_rgb(0_0_0/0.12)] px-6 pt-5 pb-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
@@ -649,13 +655,28 @@ export function TokenPopover({
                 Ignore
               </button>
             )}
-            <button
-              onClick={remove}
-              disabled={busy !== null}
-              className="text-sm text-danger hover:underline underline-offset-4 disabled:opacity-50"
-            >
-              Delete
-            </button>
+            {confirmDelete ? (
+              <>
+                <button
+                  onClick={remove}
+                  disabled={busy !== null}
+                  className="text-sm font-medium text-danger hover:underline underline-offset-4 disabled:opacity-50"
+                >
+                  Delete word and card
+                </button>
+                <button onClick={() => setConfirmDelete(false)} className="btn-quiet">
+                  Keep
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                disabled={busy !== null}
+                className="text-sm text-danger hover:underline underline-offset-4 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            )}
           </div>
         )}
 

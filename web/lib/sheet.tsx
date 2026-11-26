@@ -6,18 +6,21 @@ import { TOPICS } from "@/lib/topics";
 export function Sheet({
   title,
   onClose,
+  dirty = false,
   footer,
   children,
 }: {
   title: string;
   onClose: () => void;
+  /** Unsaved input: a backdrop tap is ignored, Cancel/X still close. */
+  dirty?: boolean;
   footer: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div
       className="fixed inset-0 bg-black/25 flex items-end sm:items-center justify-center z-50"
-      onClick={onClose}
+      onClick={dirty ? undefined : onClose}
     >
       <div
         role="dialog"

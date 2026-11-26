@@ -365,3 +365,33 @@ def test_delete_term(client):
 
 def test_delete_missing_term_404(client):
     assert client.delete("/api/terms/999").status_code == 404
+
+
+def test_lemma_is_trimmed_and_nfc_normalized(client):
+    import unicodedata
+
+    nfd = unicodedata.normalize("NFD", "입다")
+    assert nfd != "입다"
+    resp = _create(client, lemma=f" {nfd} ")
+    assert resp.status_code == 201
+    assert resp.json()["lemma"] == "입다"
+    # Same word in another spelling or with spaces is the same term.
+    assert _create(client, lemma="입다 ").status_code == 409
+    assert client.get("/api/terms/by-lemma", params={"lemma": nfd}).status_code == 200
+
+
+def test_blank_lemma_is_rejected(client):
+    assert _create(client, lemma="   ").status_code == 422
+    term_id = _create(client).json()["id"]
+    assert client.patch(f"/api/terms/{term_id}", json={"lemma": " "}).status_code == 422
+
+
+def test_rename_to_an_nfd_spelling_of_another_lemma_is_409(client):
+    import unicodedata
+
+    _create(client, lemma="입다")
+    other = _create(client, lemma="타다").json()["id"]
+    resp = client.patch(
+        f"/api/terms/{other}", json={"lemma": unicodedata.normalize("NFD", "입다")}
+    )
+    assert resp.status_code == 409
