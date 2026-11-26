@@ -44,6 +44,10 @@ export function AddBookSheet({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScoreResult | null>(null);
   const [checking, setChecking] = useState(false);
+  const dirty = !!(
+    title || text || url || pdfPages || topic || tags ||
+    txtFile.length || pdfFile.length || epubFile.length || subsFiles.length
+  );
 
   const handleTxtFile = async (files: File[]) => {
     setTxtFile(files);
@@ -157,6 +161,7 @@ export function AddBookSheet({
     <Sheet
       title="Add to Library"
       onClose={onClose}
+      dirty={dirty}
       footer={
         <>
           <button
@@ -375,6 +380,7 @@ export function EditBookSheet({
   const [tags, setTags] = useState(book.tags.join(", "));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = title !== book.title || topic !== book.topic || tags !== book.tags.join(", ");
 
   const save = async () => {
     if (!title.trim()) {
@@ -396,6 +402,7 @@ export function EditBookSheet({
     <Sheet
       title="Edit details"
       onClose={onClose}
+      dirty={dirty}
       footer={
         <>
           <button onClick={onClose} className="btn-secondary flex-1">

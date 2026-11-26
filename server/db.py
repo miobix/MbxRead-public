@@ -175,16 +175,14 @@ _SEED_FEEDS: list[tuple[str, str, str, str]] = [
 
 
 def _seed_feeds(conn: psycopg.Connection) -> None:
-    """Insert each seed feed once, keyed by URL, so hand-added or edited feeds survive."""
-    existing = {
-        row["url_or_channel_id"] for row in conn.execute("SELECT url_or_channel_id FROM feeds")
-    }
+    """Seed an empty roster only, so deleted or edited seeds stay that way."""
+    if conn.execute("SELECT 1 FROM feeds LIMIT 1").fetchone():
+        return
     for name, type_, url, topic in _SEED_FEEDS:
-        if url not in existing:
-            conn.execute(
-                "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (%s, %s, %s, %s)",
-                (name, type_, url, topic),
-            )
+        conn.execute(
+            "INSERT INTO feeds (name, type, url_or_channel_id, topic) VALUES (%s, %s, %s, %s)",
+            (name, type_, url, topic),
+        )
 
 
 def _seed_vocab_levels(conn: psycopg.Connection) -> None:

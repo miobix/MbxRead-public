@@ -1,10 +1,11 @@
 """Terms API. See docs/SPEC.md section 5."""
 import json
+import unicodedata
 import psycopg
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel
 
 from .. import db as db_module
 
@@ -14,6 +15,20 @@ Status = Literal["learning", "known", "ignored"]
 # A change to any of these re-syncs the Anki card. JSON columns compare as their
 # stored strings, so they fit the same check.
 _DIRTY_TRIGGER_FIELDS = {"lemma", "translation", "notes", "deck", "sentence", "examples"}
+
+
+def _nfc(value: str) -> str:
+    return unicodedata.normalize("NFC", value).strip()
+
+
+def _clean_lemma(value: str) -> str:
+    lemma = _nfc(value)
+    if not lemma:
+        raise ValueError("lemma is blank")
+    return lemma
+
+
+Lemma = Annotated[str, AfterValidator(_clean_lemma)]
 
 
 class FormIn(BaseModel):
@@ -29,7 +44,7 @@ class BackItemIn(BaseModel):
 
 
 class TermCreate(BaseModel):
-    lemma: str
+    lemma: Lemma
     translation: str
     notes: str = ""
     status: Status = "learning"
@@ -44,7 +59,7 @@ class TermCreate(BaseModel):
 
 
 class TermPatch(BaseModel):
-    lemma: str | None = None
+    lemma: Lemma | None = None
     translation: str | None = None
     notes: str | None = None
     status: Status | None = None
@@ -60,7 +75,7 @@ def _normalize_forms(forms: list[dict], lemma: str) -> list[dict]:
     first-seen `kind`) while keeping order."""
     seen: dict[str, str] = {}
     for f in forms:
-        text = (f.get("text") or "").strip()
+        text = _nfc(f.get("text") or "")
         kind = f.get("kind") or "manual"
         if text and text != lemma:
             seen.setdefault(text, kind)
@@ -191,7 +206,7 @@ def list_terms(
 def get_term_by_lemma(lemma: str, conn: psycopg.Connection = Depends(db_module.get_db)):
     """Exact-lemma lookup (the list's `q` is a fuzzy ILIKE), so the popover can offer to
     add to a word that is already saved."""
-    row = conn.execute("SELECT * FROM terms WHERE lemma = %s", (lemma.strip(),)).fetchone()
+    row = conn.execute("SELECT * FROM terms WHERE lemma = %s", (_nfc(lemma),)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="term not found")
     return _term_dict(conn, row)
@@ -288,9 +303,13 @@ def patch_term(
     if becomes_dirty:
         set_parts.append("anki_dirty = 1")
 
-    conn.execute(
-        f"UPDATE terms SET {', '.join(set_parts)} WHERE id = %s", (*values, term_id)
-    )
+    try:
+        conn.execute(
+            f"UPDATE terms SET {', '.join(set_parts)} WHERE id = %s", (*values, term_id)
+        )
+    except psycopg.errors.UniqueViolation:
+        conn.rollback()
+        raise HTTPException(status_code=409, detail="a term with this lemma already exists")
     if forms_provided:
         _set_forms(conn, term_id, new_forms)
     if back_items_provided:

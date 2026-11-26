@@ -620,3 +620,36 @@ def test_sync_promotion_failure_does_not_fail_sync(client, monkeypatch):
     _create(client)
     assert client.post("/api/anki/sync").json() == {"added": 1, "updated": 0, "failed": [], "promoted": 0}
     assert client.get("/api/terms").json()[0]["status"] == "learning"
+
+
+def test_sync_escapes_html_in_every_field(client, monkeypatch):
+    """Imported text must reach Anki as text: a subtitle line like <img onerror=...> must
+    not become live HTML on the card."""
+    monkeypatch.setattr(anki, "ping", lambda: None)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(anki, "create_deck", lambda deck: None)
+    add_calls = []
+    monkeypatch.setattr(
+        anki, "add_note_model", lambda deck, k, e, x: (add_calls.append((deck, k, e, x)), 1)[1]
+    )
+
+    bad = "<img src=x onerror=alert(1)>"
+    _create(
+        client,
+        lemma="타다",
+        forms=[{"text": f"탔다{bad}", "kind": "manual"}],
+        sentence=f"버스를 {bad} 탔다",
+        notes=f"note {bad}",
+        back_items=[
+            {"group": "", "kind": "dict", "text": f"to ride {bad}", "korean_def": f"def {bad}"},
+        ],
+    )
+    _create(client, lemma="입다", translation=f"to wear {bad}", examples=[f"ex {bad}"])
+    client.post("/api/anki/sync")
+
+    assert len(add_calls) == 2
+    for _deck, *fields in add_calls:
+        for field in fields:
+            assert "<img" not in field
+    esc = "&lt;img src=x onerror=alert(1)&gt;"
+    assert any(esc in f for _d, *fields in add_calls for f in fields)

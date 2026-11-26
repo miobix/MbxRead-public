@@ -1,5 +1,7 @@
 """POST /api/anki/sync. See docs/SPEC.md section 8."""
 import json
+from html import escape
+
 import psycopg
 
 from fastapi import APIRouter, Depends
@@ -20,7 +22,7 @@ def _render_legacy_examples(examples: list[str], sentence: str) -> str:
     parts = [*examples]
     if sentence:
         parts.append(sentence)
-    return "<br>".join(parts)
+    return "<br>".join(escape(p, quote=False) for p in parts)
 
 
 def _front_entries(conn: psycopg.Connection, term_id: int, lemma: str) -> list[dict]:
@@ -34,8 +36,8 @@ def _front_entries(conn: psycopg.Connection, term_id: int, lemma: str) -> list[d
 def _render_korean(front_entries: list[dict]) -> str:
     """One entry renders bare; several render numbered so Back labels can point at them."""
     if len(front_entries) == 1:
-        return front_entries[0]["text"]
-    return "<br>".join(f"{i + 1}. {e['text']}" for i, e in enumerate(front_entries))
+        return escape(front_entries[0]["text"], quote=False)
+    return "<br>".join(f"{i + 1}. {escape(e['text'], quote=False)}" for i, e in enumerate(front_entries))
 
 
 def _label_items(
@@ -63,7 +65,7 @@ def _label_items(
 
 
 def _render_english(labeled: list[tuple[str, dict]]) -> str:
-    return "<br>".join(f"{label} {item['text']}".strip() for label, item in labeled)
+    return "<br>".join(f"{label} {escape(item['text'], quote=False)}".strip() for label, item in labeled)
 
 
 def _render_examples_field(
@@ -71,17 +73,17 @@ def _render_examples_field(
 ) -> str:
     """Sentence, labeled Korean definitions, then notes, as blank-line separated blocks."""
     definitions = [
-        f"{label} {item['korean_def']}".strip()
+        f"{label} {escape(item['korean_def'], quote=False)}".strip()
         for label, item in labeled
         if item["kind"] == "dict" and item["korean_def"]
     ]
     blocks = []
     if sentence:
-        blocks.append([sentence])
+        blocks.append([escape(sentence, quote=False)])
     if definitions:
         blocks.append(definitions)
     if notes:
-        blocks.append([notes])
+        blocks.append([escape(notes, quote=False)])
     return "<br><br>".join("<br>".join(block) for block in blocks)
 
 
@@ -97,7 +99,7 @@ def _render_two_way(conn: psycopg.Connection, row: dict) -> tuple[str, str, str]
         for it in _back_items_for(conn, row["id"])
     ]
     if not back_items:
-        english = row["translation"]
+        english = escape(row["translation"], quote=False)
         examples = _render_legacy_examples(json.loads(row["examples"]), row["sentence"])
     else:
         labeled = _label_items(front_entries, back_items)

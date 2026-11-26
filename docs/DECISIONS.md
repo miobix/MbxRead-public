@@ -2283,3 +2283,32 @@ Rebuilt the daily app from the unit 14 branch without `ALLOWED_HOSTS`: the phone
 curl through the Tailscale name got "Invalid host header" (400), so Tailscale serve
 passes the original Host through. With both Tailscale names in `.env`: 127.0.0.1, the
 short and the full name answer 200, a foreign Host 400. Issue #1 now tracks the login only.
+
+## 2026-11-26 — Unit 15: maintenance, audit items 8, 9, 11, 12
+
+Maintenance-level unit: small fixes from `UNIT_8_AUDIT.md` that need no app usage to find
+or verify. Tokenizer (item 10) and discard undo (item 7) left for their own units.
+
+- **Seed feeds (item 9):** `_seed_feeds` runs only on an empty `feeds` table. Deleting
+  every feed brings the seeds back on the next start; accepted, it reads as a reset.
+- **Anki HTML (item 11):** every card field part goes through `html.escape(quote=False)`
+  before the `<br>` joins. Cards already in Anki change only when their term is next
+  synced dirty.
+- **Lemma normalization (item 12):** `TermCreate`/`TermPatch.lemma` are NFC + strip via a
+  pydantic `AfterValidator`; blank is 422. Forms and the by-lemma lookup use the same
+  NFC. The rename UPDATE catches `UniqueViolation` as 409 (race past the pre-check).
+- **One tap loses work (item 8):** Delete in the word popover is two-step ("Delete word
+  and card" / "Keep"), inline rather than `window.confirm`. `Sheet` takes `dirty`; the
+  popover, Add and Edit sheets ignore backdrop taps while they hold unsaved input, the X
+  and Cancel still close. The popover's dirty is a JSON snapshot of its editable state
+  against the one at open, so lookups (Translate adds a chip) count as work.
+- **Verified:** 331 tests pass; the 5 new ones fail on the pre-unit code. `npm run
+  build` and `lint` clean. In Chrome against a throwaway server (8012, scratch db,
+  keys blanked, dropped after): Delete asks, Keep reverts, confirm deletes and the
+  highlight goes; a popover with typed notes and an edited Edit-details sheet ignore
+  the backdrop; untouched ones close on it.
+- **Live Anki check (user):** daily app rebuilt from the branch; a test term with
+  `<b>bold?</b>` in Notes synced and showed as literal text in Anki; term and note deleted.
+- **Phone and desktop (user):** a popover with text stays open on a backdrop tap, an
+  empty one closes.
+- **Not verified:** the Add sheet's backdrop (same `dirty` path as Edit).
